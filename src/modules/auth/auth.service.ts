@@ -42,3 +42,44 @@ export const loginDriver = async (email: string, password: string) => {
     },
   };
 };
+
+export const loginSeller = async (email: string, password: string) => {
+  const user = await prisma.user.findUnique({
+    where: { email },
+    include: { sellerProfile: true },
+  });
+
+  if (!user || user.role !== "SELLER") {
+    throw new Error("Invalid credentials");
+  }
+
+  if (!user.sellerProfile) {
+    throw new Error("Seller profile not found");
+  }
+
+  const isMatch = await bcrypt.compare(password, user.passwordHash);
+  if (!isMatch) {
+    throw new Error("Invalid credentials");
+  }
+
+  const token = jwt.sign(
+    {
+      userId: user.id,
+      sellerId: user.sellerProfile.id,
+      role: user.role,
+    },
+    process.env.JWT_SECRET!,
+    { expiresIn: "7d" }
+  );
+
+  return {
+    token,
+    seller: {
+      id: user.sellerProfile.id,
+      name: user.name,
+      email: user.email,
+      businessName: user.sellerProfile.businessName,
+      businessAddress: user.sellerProfile.businessAddress,
+    },
+  };
+}
