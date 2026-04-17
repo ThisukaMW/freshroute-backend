@@ -28,7 +28,7 @@ export const loginDriver = async (email: string, password: string) => {
       role: user.role,
     },
     process.env.JWT_SECRET!,
-    { expiresIn: "7d" }
+    { expiresIn: "7d" },
   );
 
   return {
@@ -69,7 +69,7 @@ export const loginSeller = async (email: string, password: string) => {
       role: user.role,
     },
     process.env.JWT_SECRET!,
-    { expiresIn: "7d" }
+    { expiresIn: "7d" },
   );
 
   return {
@@ -82,4 +82,44 @@ export const loginSeller = async (email: string, password: string) => {
       businessAddress: user.sellerProfile.businessAddress,
     },
   };
-}
+};
+
+export const loginBuyer = async (email: string, password: string) => {
+  const user = await prisma.user.findUnique({
+    where: { email },
+    include: { buyerProfile: true },
+  });
+
+  if (!user || user.role !== "BUYER") {
+    throw new Error("Invalid credentials");
+  }
+
+  if (!user.buyerProfile) {
+    throw new Error("Buyer profile not found");
+  }
+
+  const isMatch = await bcrypt.compare(password, user.passwordHash);
+  if (!isMatch) {
+    throw new Error("Invalid credentials");
+  }
+
+  const token = jwt.sign(
+    {
+      userId: user.id,
+      buyerId: user.buyerProfile.id,
+      role: user.role,
+    },
+    process.env.JWT_SECRET!,
+    { expiresIn: "7d" },
+  );
+
+  return {
+    token,
+    buyer: {
+      id: user.buyerProfile.id,
+      name: user.name,
+      email: user.email,
+      deliveryAddress: user.buyerProfile.deliveryAddress,
+    },
+  };
+};

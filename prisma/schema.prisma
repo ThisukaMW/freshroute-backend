@@ -201,7 +201,10 @@ model Buyer {
   deliveryStops   Stop[]      @relation("BuyerDeliveries")
   ratings         Rating[]
 
+
+  cart            Cart?
   @@index([userId])
+  
 }
 
 // ============= PRODUCTS & ORDERS =============
@@ -218,7 +221,7 @@ model Product {
   unit        String          // kg, piece, liter, etc.
   stock       Float
   imageUrl    String?
-
+  lowStock    Int      @default(10)
   status      ProductStatus   @default(PENDING_APPROVAL)
 
   createdAt   DateTime        @default(now())
@@ -226,6 +229,8 @@ model Product {
 
   // Relationships
   orderItems  OrderItem[]
+
+  cartItems   CartItem[]
 
   @@index([sellerId, status])
   @@index([status])
@@ -288,6 +293,47 @@ model OrderItem {
   @@index([orderId])
   @@index([productId])
   @@index([sellerId])
+}
+// Cart and CartItems
+model Cart {
+  id        String      @id @default(uuid())
+  buyerId   String      @unique
+  buyer     Buyer       @relation(fields: [buyerId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  items     CartItem[]
+  promoCode PromoCode? @relation(fields: [promoCodeId], references: [id])
+  promoCodeId String?
+
+  expiresAt DateTime?
+}
+
+model CartItem {
+  id        String    @id @default(uuid())
+  cartId    String
+  cart      Cart      @relation(fields: [cartId], references: [id], onDelete: Cascade)
+
+  productId String
+  product   Product   @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  quantity  Float
+  savedForLater Boolean @default(false)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@unique([cartId, productId])
+}
+
+model PromoCode {
+  id        String   @id @default(uuid())
+  code      String   @unique
+  discount  Float
+  active    Boolean  @default(true)
+
+  carts     Cart[] 
 }
 
 // ============= PAYMENT SYSTEM =============
