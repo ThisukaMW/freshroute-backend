@@ -99,6 +99,18 @@ enum PaymentStatus {
   REFUNDED
 }
 
+// ------ field-admin helper enums ------
+enum InspectionResult {
+  APPROVED
+  REJECTED
+}
+
+enum AssessmentTarget {
+  DRIVER
+  BUYER
+  SELLER
+}
+
 // ============= USER MANAGEMENT =============
 
 model User {
@@ -120,6 +132,7 @@ model User {
   driverProfile Driver?
   sellerProfile Seller?
   buyerProfile  Buyer?
+  fieldAdminProfile FieldAdmin?
   notifications Notification[]
 
   @@index([email])
@@ -204,6 +217,130 @@ model Buyer {
   @@index([userId])
 }
 
+ model Truck{
+
+  id       String      @id @default(uuid())
+
+  vehicleNumber      String?
+  vehicleType        String?
+  vehicleCapacity    Double
+  vehicleBrand       String
+  makeYear           date
+  vehicleHeight      Double
+  VehicleWeight      Double
+  Refregeration      Boolean
+  Tempreture         Double
+
+  isActive      Boolean      @default(true)
+ }
+
+// ============= FIELD ADMIN PROFILE & TASKS =============
+
+model FieldAdmin {
+  id          String          @id @default(uuid())
+  userId      String          @unique
+  user        User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  vehicleNumber String?
+  vehicleType   String?
+  isActive      Boolean      @default(true)
+
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  // relationships to tasks
+  routes               Route[]
+  inspections          ProductInspection[]
+  deliveryVerifications DeliveryVerification[]
+  damageReports        DamageReport[]
+  assessments          Assessment[]
+  refunds              Refund[]
+  reassessments        RouteModification[] @relation("ReassessedBy")
+
+  @@index([userId])
+}
+
+model ProductInspection {
+  id            String       @id @default(uuid())
+  fieldAdminId  String
+  fieldAdmin    FieldAdmin   @relation(fields: [fieldAdminId], references: [id], onDelete: Cascade)
+
+  orderItemId   String?
+  orderItem     OrderItem?   @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+
+  result        InspectionResult
+  notes         String?
+  createdAt     DateTime     @default(now())
+
+  @@index([fieldAdminId])
+  @@index([orderItemId])
+}
+
+model DeliveryVerification {
+  id           String       @id @default(uuid())
+  fieldAdminId String
+  fieldAdmin   FieldAdmin   @relation(fields: [fieldAdminId], references: [id], onDelete: Cascade)
+
+  stopId       String
+  stop         Stop         @relation(fields: [stopId], references: [id], onDelete: Cascade)
+
+  type         StopType
+  verifiedAt   DateTime     @default(now())
+  notes        String?
+
+  @@index([fieldAdminId])
+  @@index([stopId])
+}
+
+model DamageReport {
+  id           String       @id @default(uuid())
+  fieldAdminId String
+  fieldAdmin   FieldAdmin   @relation(fields: [fieldAdminId], references: [id], onDelete: Cascade)
+
+  stopId       String?
+  stop         Stop?        @relation(fields: [stopId], references: [id], onDelete: Cascade)
+
+  description  String
+  images       Json?
+  createdAt    DateTime     @default(now())
+
+  @@index([fieldAdminId])
+  @@index([stopId])
+}
+
+model Assessment {
+  id             String           @id @default(uuid())
+  fieldAdminId   String
+  fieldAdmin     FieldAdmin       @relation(fields: [fieldAdminId], references: [id], onDelete: Cascade)
+
+  targetUserId   String
+  target         AssessmentTarget
+  rating         Int
+  comment        String?
+  createdAt      DateTime         @default(now())
+
+  @@index([fieldAdminId])
+  @@index([targetUserId, target])
+}
+
+model Refund {
+  id            String         @id @default(uuid())
+  orderId       String
+  order         Order          @relation(fields: [orderId], references: [id])
+  initiatedBy   String
+  fieldAdmin    FieldAdmin     @relation(fields: [initiatedBy], references: [id], onDelete: Cascade)
+
+  amount        Float
+  reason        String?
+  status        PaymentStatus  @default(PENDING)
+
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@index([orderId])
+  @@index([initiatedBy])
+}
+
 // ============= PRODUCTS & ORDERS =============
 
 model Product {
@@ -237,6 +374,8 @@ model Order {
   buyer           Buyer           @relation(fields: [buyerId], references: [id], onDelete: Cascade)
 
   orderNumber     String          @unique
+  // refunds initiated by field admins
+  refunds         Refund[]
   status          OrderStatus     @default(PENDING)
   totalAmount     Float
 
@@ -282,6 +421,9 @@ model OrderItem {
   totalPrice  Float
 
   sellerId    String      // Denormalized for easier querying
+
+  // relations from field admin tasks
+  inspections ProductInspection[]
 
   createdAt   DateTime    @default(now())
 
@@ -358,7 +500,8 @@ model Route {
   driverId            String?
   driver              Driver?         @relation(fields: [driverId], references: [id], onDelete: SetNull)
 
-  fieldAdminId        String?         // Field admin accompanying driver
+  fieldAdminId        String?
+  fieldAdmin          FieldAdmin?     @relation(fields: [fieldAdminId], references: [id], onDelete: SetNull)
 
   status              RouteStatus     @default(PLANNED)
 
@@ -426,6 +569,10 @@ model Stop {
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
 
+  // field-admin relations
+  deliveryVerifications DeliveryVerification[]
+  damageReports          DamageReport[]
+
   @@index([routeId, sequenceOrder])
   @@index([sellerId])
   @@index([buyerId])
@@ -440,7 +587,8 @@ model RouteModification {
   type            ModificationType
   reason          String?
 
-  approvedBy      String?           // Field admin user ID
+  approvedBy      String?           // field admin id
+  approvedByFA    FieldAdmin?       @relation("ReassessedBy", fields: [approvedBy], references: [id])
 
   oldData         Json?             // Previous state
   newData         Json?             // New state

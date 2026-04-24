@@ -19,6 +19,7 @@ async function main() {
   await prisma.driverSession.deleteMany();
   await prisma.routeModification.deleteMany();
   await prisma.orderItem.deleteMany();
+  await prisma.refund.deleteMany();
   await prisma.payment.deleteMany();
   await prisma.order.deleteMany();
   await prisma.stop.deleteMany();
@@ -75,6 +76,25 @@ async function main() {
       latitude: 6.9271,
       longitude: 79.8612,
       isApproved: true,
+    },
+  });
+
+  // ─── FieldAdmin ─────────────────────────────────────
+
+  const fieldAdminUser = await prisma.user.create({
+    data: {
+      email: "fieldadmin@freshroute.com",
+      name: "Field Admin",
+      role: "FIELD_ADMIN",
+      passwordHash,
+    },
+  });
+
+  const fieldAdmin = await prisma.fieldAdmin.create({
+    data: {
+      userId: fieldAdminUser.id,
+      vehicleNumber: "FA-001",
+      vehicleType: "Truck",
     },
   });
 
@@ -192,6 +212,7 @@ async function main() {
       routeNumber: "RT-2024-0218-042",
       batchId: batch.id,
       driverId: mike.id,
+      fieldAdminId: fieldAdmin.id,
       status: "IN_PROGRESS",
       totalDistance: 16.6,
       estimatedDuration: 87,
@@ -204,6 +225,7 @@ async function main() {
   // ─── Create orders + stops ────────────────────────────────────────────────────
   const now = new Date();
 
+  let firstOrder: any = null;
   for (let i = 0; i < buyers.length; i++) {
     const buyerInfo = buyerData[i]!;
     const buyer = buyers[i]!;
@@ -247,11 +269,15 @@ async function main() {
       },
     });
 
+    if (i === 0) {
+      firstOrder = order;
+    }
+
     // Create 1-4 order items
     const itemCount = buyerInfo.items;
     for (let j = 0; j < itemCount; j++) {
       const product = products[j % products.length]!;
-      await prisma.orderItem.create({
+      const orderItem = await prisma.orderItem.create({
         data: {
           orderId: order.id,
           productId: product.id,
@@ -261,8 +287,90 @@ async function main() {
           sellerId: seller.id,
         },
       });
+
+      // create a product inspection for the first item of first order
+      if (i === 0 && j === 0) {
+        await prisma.productInspection.create({
+          data: {
+            fieldAdminId: fieldAdmin.id,
+            orderItemId: orderItem.id,
+            result: "APPROVED",
+            notes: "Looks good",
+          },
+        });
+      }
     }
   }
+
+  // ─── additional field-admin tasks sample ─────────────────────────────────
+  // verification of first stop
+  const firstStop = await prisma.stop.findFirst({ where: { routeId: route.id } });
+  if (firstStop) {
+    await prisma.deliveryVerification.create({
+      data: {
+        fieldAdminId: fieldAdmin.id,
+        stopId: firstStop.id,
+        type: firstStop.type,
+      },
+    });
+
+    // damage report for third stop if exists
+    const stops = await prisma.stop.findMany({ where: { routeId: route.id }, take: 3, skip: 2 });
+    if (stops.length > 0) {
+      await prisma.damageReport.create({
+        data: {
+          fieldAdminId: fieldAdmin.id,
+          stopId: stops[0].id,
+          description: "Box torn on arrival",
+        },
+      });
+    }
+  }
+
+  // create an assessment for driver and seller
+  await prisma.assessment.create({
+    data: {
+      fieldAdminId: fieldAdmin.id,
+      targetUserId: mikeUser.id,
+      target: "DRIVER",
+      rating: 5,
+      comment: "Excellent adherence to route",
+    },
+  });
+  await prisma.assessment.create({
+    data: {
+      fieldAdminId: fieldAdmin.id,
+      targetUserId: sellerUser.id,
+      target: "SELLER",
+      rating: 4,
+      comment: "Products high quality",
+    },
+  });
+
+  // refund example for first order (simulate cancellation)
+  if (firstOrder) {
+    await prisma.refund.create({
+      data: {
+        orderId: firstOrder.id,
+        initiatedBy: fieldAdmin.id,
+        amount: firstOrder.totalAmount,
+        reason: "Customer cancelled",
+        status: "PROCESSING",
+      },
+    });
+  }
+
+  // route modification approved by field admin
+  await prisma.routeModification.create({
+    data: {
+      routeId: route.id,
+      type: "STOP_ADDED",
+      reason: "Extra delivery requested",
+      approvedBy: fieldAdmin.id,
+      oldData: {},
+      newData: {},
+    },
+  });
 
   console.log("✅ Seed complete!");
   console.log("─────────────────────────────────");
