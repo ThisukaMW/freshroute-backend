@@ -1,46 +1,3 @@
-// import type { Request, Response, NextFunction } from "express";
-
-// import jwt from "jsonwebtoken";
-
-// export interface AuthRequest extends Request {
-//   user: any;
-//   params: any;
-//   body: any;
-//   userId?: string;
-//   driverId?: string;
-//   role?: string;
-// }
-
-// export const protect = (
-//   req: AuthRequest,
-//   res: Response,
-//   next: NextFunction
-// ) => {
-//   const authHeader = req.headers.authorization;
-
-//   if (!authHeader || !authHeader.startsWith("Bearer ")) {
-//     res.status(401).json({ message: "No token provided" });
-//     return;
-//   }
-
-//   const token = authHeader.split(" ")[1];
-
-//   try {
-//     const decoded = jwt.verify(token, process.env.JWT_SECRET!) as {
-//       userId: string;
-//       driverId: string;
-//       role: string;
-//     };
-
-//     req.userId = decoded.userId;
-//     req.driverId = decoded.driverId;
-//     req.role = decoded.role;
-//     next();
-//   } catch {
-//     res.status(401).json({ message: "Invalid or expired token" });
-//   }
-// };
-
 import type { Request, Response, NextFunction, RequestHandler } from "express";
 import jwt from "jsonwebtoken";
 
@@ -82,3 +39,16 @@ export const protect: RequestHandler = (
     res.status(401).json({ message: "Invalid or expired token" });
   }
 };
+
+export const requireAdmin: RequestHandler = (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  const authReq = req as AuthRequest
+  if (authReq.role !== 'admin' && authReq.role !== 'field_admin') {
+    res.status(403).json({ message: 'Access denied. Admins only.' })
+    return
+  }
+  next()
+}

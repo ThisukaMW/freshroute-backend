@@ -34,3 +34,4 @@ export const buyerLogin = async (req: Request, res: Response) => {
     res.status(401).json({ message });
   }
 };
+
