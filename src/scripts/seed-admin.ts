@@ -3,7 +3,7 @@ import prisma from '../config/database.js'
 
 async function main() {
   const email = 'admin@freshroute.com'
-  const password = 'Admin@1234'          // change this
+  const password = 'Admin@1234'        
   const passwordHash = await bcrypt.hash(password, 10)
 
   const existing = await prisma.user.findUnique({ where: { email } })

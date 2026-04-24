@@ -4,6 +4,7 @@ import {
   saveTruck,
   getAllTrucks,
   getTruckById,
+  getAllOrders,          // ← add this
   type CreateTruckInput,
   type TruckType,
   type TemperatureSetting,
@@ -24,35 +25,19 @@ const VALID_TEMPERATURE_SETTINGS: TemperatureSetting[] = [
   "FROZEN",
 ];
 
-// POST /api/v1/trucks
 export const createTruck: RequestHandler = async (req, res) => {
   const authReq = req as AuthRequest;
   try {
     const {
-      truckId,
-      operator,
-      truckType,
-      temperatureSetting,
-      route,
-      fuelNeeded,
-      capacityLbs,
-      palletCapacity,
-      deliveryEfficiencyPercent,
-      avgDelayHours,
+      truckId, operator, truckType, temperatureSetting,
+      route, fuelNeeded, capacityLbs, palletCapacity,
+      deliveryEfficiencyPercent, avgDelayHours,
     } = authReq.body;
 
-    // --- Required field check ---
     const requiredFields: (keyof CreateTruckInput)[] = [
-      "truckId",
-      "operator",
-      "truckType",
-      "temperatureSetting",
-      "route",
-      "fuelNeeded",
-      "capacityLbs",
-      "palletCapacity",
-      "deliveryEfficiencyPercent",
-      "avgDelayHours",
+      "truckId", "operator", "truckType", "temperatureSetting",
+      "route", "fuelNeeded", "capacityLbs", "palletCapacity",
+      "deliveryEfficiencyPercent", "avgDelayHours",
     ];
 
     const missing = requiredFields.filter(
@@ -64,7 +49,6 @@ export const createTruck: RequestHandler = async (req, res) => {
       return;
     }
 
-    // --- Enum validation ---
     if (!VALID_TRUCK_TYPES.includes(truckType)) {
       res.status(400).json({
         message: `Invalid truckType. Must be one of: ${VALID_TRUCK_TYPES.join(", ")}`,
@@ -79,7 +63,6 @@ export const createTruck: RequestHandler = async (req, res) => {
       return;
     }
 
-    // --- Range validation ---
     if (
       typeof deliveryEfficiencyPercent !== "number" ||
       deliveryEfficiencyPercent < 0 ||
@@ -111,7 +94,6 @@ export const createTruck: RequestHandler = async (req, res) => {
   }
 };
 
-// GET /api/v1/trucks
 export const listTrucks: RequestHandler = async (_req, res) => {
   try {
     const data = await getAllTrucks();
@@ -122,14 +104,23 @@ export const listTrucks: RequestHandler = async (_req, res) => {
   }
 };
 
-// GET /api/v1/trucks/:id
-// ✅ Use Express's Request generic to type params properly
 export const truckById: RequestHandler<{ id: string }> = async (req, res) => {
   try {
-    const data = await getTruckById(req.params.id); // ✅ req.params.id is now string, fully typed
+    const data = await getTruckById(req.params.id);
     res.json(data);
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Error";
     res.status(404).json({ message });
+  }
+};
+
+// ── TRANSACTION HISTORY ──────────────────────────────────────────
+export const listAllOrders: RequestHandler = async (_req, res) => {
+  try {
+    const data = await getAllOrders();
+    res.json(data);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Error";
+    res.status(500).json({ message });
   }
 };

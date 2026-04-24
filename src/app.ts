@@ -10,6 +10,7 @@ import orderRoutes from "./modules/order/order.routes.js";
 import productRoutes from "./modules/product/product.route.js";
 import { stripeWebhook } from "./modules/payment/payment.controller.js";
 import userRoutes from "./modules/user/user.route.js";
+import adminRoutes from "./modules/admin/admin.routes.js";
 
 const app = express();
 
@@ -30,5 +31,5 @@ app.use("/api/v1/payments", paymentRoutes);
 app.use("/api/v1/orders", orderRoutes);
 app.use("/api/v1/products", productRoutes);
 app.use("/api/v1/users", userRoutes);
-
+app.use("/api/v1/admin", adminRoutes);
 export default app;

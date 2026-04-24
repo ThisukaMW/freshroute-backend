@@ -85,3 +85,41 @@ export const loginBuyer = async (email: string, password: string) => {
   };
 };
 
+export const loginAdmin = async (email: string, password: string) => {
+  const user = await prisma.user.findUnique({
+    where: { email },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      role: true,
+      passwordHash: true,
+    },
+  });
+
+  if (!user) throw new Error("Invalid credentials");
+
+  if (user.role !== "ADMIN" && user.role !== "FIELD_ADMIN") {
+    throw new Error("Access denied. Admin only.");
+  }
+
+  const valid = await bcrypt.compare(password, user.passwordHash);
+  if (!valid) throw new Error("Invalid credentials");
+
+  const token = jwt.sign(
+    { userId: user.id, role: user.role.toLowerCase() },
+    process.env.JWT_SECRET!,
+    { expiresIn: "7d" }
+  );
+
+  return {
+    token,
+    user: {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role.toLowerCase(),
+    },
+  };
+};
+

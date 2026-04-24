@@ -111,16 +111,14 @@ import {
   createPaymentIntent,
   getAllPayments,
   getPaymentById,
-  getPaymentsByUserId,
   handleWebhookEvent,
-  getAllOrders,
   type CreatePaymentInput,
   type PaymentCurrency,
 } from "./payment.service.js";
 
 const VALID_CURRENCIES: PaymentCurrency[] = ["usd", "lkr"];
 
-// POST /api/v1/payments
+
 export const createPayment: RequestHandler = async (req, res) => {
   const authReq = req as AuthRequest;
 
@@ -171,7 +169,6 @@ export const createPayment: RequestHandler = async (req, res) => {
   }
 };
 
-// POST /api/v1/payments/webhook
 export const stripeWebhook: RequestHandler = async (req, res) => {
   const sig = req.headers["stripe-signature"] as string;
 
@@ -189,7 +186,7 @@ export const stripeWebhook: RequestHandler = async (req, res) => {
   }
 };
 
-// GET /api/v1/payments
+
 export const listPayments: RequestHandler = async (_req, res) => {
   try {
     const data = await getAllPayments();
@@ -200,7 +197,7 @@ export const listPayments: RequestHandler = async (_req, res) => {
   }
 };
 
-// GET /api/v1/payments/:id
+
 export const paymentById: RequestHandler<{ id: string }> = async (req, res) => {
   try {
     const data = await getPaymentById(req.params.id);
@@ -208,33 +205,5 @@ export const paymentById: RequestHandler<{ id: string }> = async (req, res) => {
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Error";
     res.status(404).json({ message });
-  }
-};
-
-// ✅ NEW: GET /api/v1/payments/my-transactions
-export const getUserTransactions: RequestHandler = async (req, res) => {
-  const authReq = req as AuthRequest;
-
-  if (!authReq.userId) {
-    res.status(401).json({ message: "Unauthorized: missing user ID" });
-    return;
-  }
-
-  try {
-    const data = await getPaymentsByUserId(authReq.userId);
-    res.json(data);
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : "Error";
-    res.status(500).json({ message });
-  }
-};
-
-export const listAllOrders: RequestHandler = async (_req, res) => {
-  try {
-    const data = await getAllOrders();
-    res.json(data);
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : "Error";
-    res.status(500).json({ message });
   }
 };

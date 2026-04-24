@@ -11,26 +11,18 @@ export type TruckType =
 export type TemperatureSetting = "AMBIENT" | "CHILLED" | "FROZEN";
 
 export interface CreateTruckInput {
-  // Identity & classification
   truckId: string;
   operator: string;
   truckType: TruckType;
   temperatureSetting: TemperatureSetting;
-
-  // Schedule & route
   route: string;
   fuelNeeded: number;
-
-  // Cargo & loading
   capacityLbs: number;
   palletCapacity: number;
-
-  // Performance metrics
   deliveryEfficiencyPercent: number;
   avgDelayHours: number;
 }
 
-// POST /api/v1/trucks
 export const saveTruck = async (input: CreateTruckInput) => {
   const existing = await prisma.truck.findUnique({
     where: { truckId: input.truckId },
@@ -71,7 +63,6 @@ export const saveTruck = async (input: CreateTruckInput) => {
   };
 };
 
-// GET /api/v1/trucks
 export const getAllTrucks = async () => {
   const trucks = await prisma.truck.findMany({
     orderBy: { createdAt: "desc" },
@@ -93,12 +84,8 @@ export const getAllTrucks = async () => {
   }));
 };
 
-// GET /api/v1/trucks/:id
 export const getTruckById = async (id: string) => {
-  const truck = await prisma.truck.findUnique({
-    where: { id },
-  });
-
+  const truck = await prisma.truck.findUnique({ where: { id } });
   if (!truck) throw new Error("Truck not found");
 
   return {
@@ -115,4 +102,38 @@ export const getTruckById = async (id: string) => {
     avgDelayHours: truck.avgDelayHours,
     createdAt: truck.createdAt,
   };
+};
+
+// ── TRANSACTION HISTORY ──────────────────────────────────────────
+export const getAllOrders = async () => {
+  return prisma.order.findMany({
+    orderBy: { placedAt: "desc" },
+    include: {
+      buyer: {
+        include: {
+          user: {
+            select: { name: true, email: true },
+          },
+        },
+      },
+      items: {
+        include: {
+          product: {
+            select: { name: true, unit: true, category: true },
+          },
+        },
+      },
+      payment: {
+        select: {
+          id: true,
+          status: true,
+          amount: true,
+          currency: true,
+          gatewayPaymentId: true,
+          completedAt: true,
+          createdAt: true,
+        },
+      },
+    },
+  });
 };

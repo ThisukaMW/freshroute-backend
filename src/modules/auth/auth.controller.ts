@@ -1,5 +1,5 @@
 import type { Request, Response } from "express";
-import { loginDriver, loginBuyer } from "./auth.service.js";
+import { loginDriver, loginBuyer, loginAdmin } from "./auth.service.js";
 
 export const driverLogin = async (req: Request, res: Response) => {
   const { email, password } = req.body;
@@ -35,3 +35,20 @@ export const buyerLogin = async (req: Request, res: Response) => {
   }
 };
 
+export const adminLogin = async (req: Request, res: Response) => {
+  const { email, password } = req.body;
+
+  if (!email || !password) {
+    res.status(400).json({ message: "Email and password are required" });
+    return;
+  }
+
+  try {
+    const result = await loginAdmin(email, password);
+    res.json(result);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Login failed";
+    const status = message === "Access denied. Admin only." ? 403 : 401;
+    res.status(status).json({ message });
+  }
+};
