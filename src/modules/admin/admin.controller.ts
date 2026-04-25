@@ -4,7 +4,7 @@ import {
   saveTruck,
   getAllTrucks,
   getTruckById,
-  getAllOrders,          // ← add this
+  getAllOrders,          
   type CreateTruckInput,
   type TruckType,
   type TemperatureSetting,

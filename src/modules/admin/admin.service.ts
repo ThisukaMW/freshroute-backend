@@ -104,7 +104,6 @@ export const getTruckById = async (id: string) => {
   };
 };
 
-// ── TRANSACTION HISTORY ──────────────────────────────────────────
 export const getAllOrders = async () => {
   return prisma.order.findMany({
     orderBy: { placedAt: "desc" },

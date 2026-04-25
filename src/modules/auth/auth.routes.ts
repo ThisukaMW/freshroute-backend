@@ -8,7 +8,6 @@ import {
 
 const router = Router();
 
-// Driver
 router.post("/driver/login", driverLogin);
 
 router.post("/buyer/login", buyerLogin);
