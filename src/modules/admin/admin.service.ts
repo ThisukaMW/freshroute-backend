@@ -133,6 +133,20 @@ export const getAllOrders = async () => {
           createdAt: true,
         },
       },
+// src/modules/admin/admin.service.ts
+    }
+  })};
+
+
+export const findAdminByEmail = async (email: string) => {
+  return prisma.user.findUnique({
+    where: { email },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      role: true,
+      passwordHash: true, // hashed password
     },
   });
 };

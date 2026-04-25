@@ -24,6 +24,7 @@ enum UserStatus {
   ACTIVE
   INACTIVE
   SUSPENDED
+  LOCKED
 }
 
 enum ProductStatus {
@@ -108,10 +109,14 @@ model User {
   name          String
   role          UserRole
   status        UserStatus  @default(ACTIVE)
+  city          String?    
+  address       String?
   passwordHash  String
 
   // Firebase Cloud Messaging token for push notifications
   fcmToken      String?
+  passwordResetToken  String?
+  passwordResetExpiry DateTime?
 
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
@@ -168,9 +173,9 @@ model Seller {
 
   businessName    String
   businessAddress String
-  latitude        Float
-  longitude       Float
-
+  latitude        Float?
+  longitude       Float?
+  verificationDocUrl String? 
   isApproved      Boolean     @default(false)
 
   createdAt       DateTime    @default(now())
@@ -510,8 +515,11 @@ model Rating {
   deliveryRating        Int?     // Delivery speed/accuracy
   productQualityRating  Int?     // Product condition on arrival
   comment               String?
+  isVerifiedPurchase    Boolean  @default(false)
+  isFlagged             Boolean  @default(false)
 
   createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
 
   @@index([driverId])
   @@index([orderId])

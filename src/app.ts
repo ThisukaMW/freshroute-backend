@@ -11,6 +11,12 @@ import productRoutes from "./modules/product/product.route.js";
 import { stripeWebhook } from "./modules/payment/payment.controller.js";
 import userRoutes from "./modules/user/user.route.js";
 import adminRoutes from "./modules/admin/admin.routes.js";
+import dotenv from "dotenv";
+dotenv.config({ override: true });
+import customerRoutes from "./modules/customer/customer.routes.js";
+import vendorRoutes from "./modules/vendor/vendor.routes.js";
+import ratingRoutes from "./modules/rating/rating.routes.js";
+import notificationRoutes from "./modules/notifications/notification.routes.js";
 
 const app = express();
 
@@ -32,4 +38,9 @@ app.use("/api/v1/orders", orderRoutes);
 app.use("/api/v1/products", productRoutes);
 app.use("/api/v1/users", userRoutes);
 app.use("/api/v1/admin", adminRoutes);
+app.use("/api/v1/customer", customerRoutes);
+app.use("/api/v1/vendor", vendorRoutes);
+app.use("/api/v1/rating", ratingRoutes);
+app.use("/api/v1/notifications", notificationRoutes);
+
 export default app;

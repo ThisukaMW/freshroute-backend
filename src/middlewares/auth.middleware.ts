@@ -9,7 +9,7 @@ export interface AuthRequest extends Request {
 }
 
 export const protect: RequestHandler = (
-  req: Request,
+  req: AuthRequest,
   res: Response,
   next: NextFunction
 ) => {
@@ -23,17 +23,17 @@ export const protect: RequestHandler = (
   const token = authHeader.split(" ")[1];
 
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET!) as {
-      userId: string;
-      driverId: string;
-      role: string;
-    };
+    const decoded: any = jwt.verify(token, process.env.JWT_SECRET!);
 
-    const authReq = req as AuthRequest;
-    authReq.userId = decoded.userId;
-    authReq.driverId = decoded.driverId;
-    authReq.role = decoded.role;
+    console.log("DECODED:", decoded); // 👈 add this
 
+    req.userId = decoded.userId || decoded.id || decoded.user?.id;
+    req.driverId = decoded.driverId;
+    req.role = decoded.role;
+
+if (!req.userId) {
+  return res.status(401).json({ message: "Invalid token payload" });
+}
     next();
   } catch {
     res.status(401).json({ message: "Invalid or expired token" });
@@ -41,7 +41,7 @@ export const protect: RequestHandler = (
 };
 
 export const requireAdmin: RequestHandler = (
-  req: Request,
+  req: AuthRequest,
   res: Response,
   next: NextFunction
 ) => {
