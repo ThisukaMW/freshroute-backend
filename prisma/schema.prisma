@@ -99,6 +99,17 @@ enum PaymentStatus {
   REFUNDED
 }
 
+enum HubType {
+  FARM
+  MARKET
+  AGGREGATION_CENTER
+}
+
+enum StorageType {
+  NORMAL
+  COLD
+}
+
 // ------ field-admin helper enums ------
 enum InspectionResult {
   APPROVED
@@ -223,13 +234,13 @@ model Buyer {
 
   vehicleNumber      String?
   vehicleType        String?
-  vehicleCapacity    Double
+  vehicleCapacity    Float
   vehicleBrand       String
-  makeYear           date
-  vehicleHeight      Double
-  VehicleWeight      Double
+  makeYear           DateTime
+  vehicleHeight      Float
+  VehicleWeight      Float
   Refregeration      Boolean
-  Tempreture         Double
+  Tempreture         Float
 
   isActive      Boolean      @default(true)
  }
@@ -258,6 +269,23 @@ model FieldAdmin {
   reassessments        RouteModification[] @relation("ReassessedBy")
 
   @@index([userId])
+}
+
+model Hub {
+  id        String    @id @default(uuid())
+  name      String
+  latitude  Float
+  longitude Float
+  type      HubType
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  orders    Order[]
+  batches   Batch[]
+
+  @@index([type])
+  @@index([latitude, longitude])
 }
 
 model ProductInspection {
@@ -377,12 +405,20 @@ model Order {
   // refunds initiated by field admins
   refunds         Refund[]
   status          OrderStatus     @default(PENDING)
+  isCancelled     Boolean         @default(false)
   totalAmount     Float
+  storageType     StorageType     @default(NORMAL)
+  totalWeight     Float?
+  totalVolume     Float?
 
   deliveryAddress String
   deliveryLat     Float
   deliveryLng     Float
   deliveryNotes   String?
+  deliveryDate    DateTime?
+
+  pickupHubId     String?
+  pickupHub       Hub?            @relation(fields: [pickupHubId], references: [id], onDelete: SetNull)
 
   batchId         String?
   batch           Batch?          @relation(fields: [batchId], references: [id], onDelete: SetNull)
@@ -406,6 +442,8 @@ model Order {
   @@index([batchId])
   @@index([status, placedAt])
   @@index([orderNumber])
+  @@index([status, isCancelled, batchId, deliveryDate])
+  @@index([pickupHubId, storageType])
 }
 
 model OrderItem {
@@ -465,6 +503,11 @@ model Batch {
 
   status          BatchStatus     @default(OPEN)
   trigger         BatchTrigger?
+  storageType     StorageType     @default(NORMAL)
+  dropClusterKey  String
+
+  pickupHubId     String
+  pickupHub       Hub             @relation(fields: [pickupHubId], references: [id], onDelete: Restrict)
 
   scheduledDate   DateTime        // Target delivery date
   timeWindowStart DateTime        // e.g., 10:00 AM
@@ -472,6 +515,9 @@ model Batch {
 
   orderCount      Int             @default(0)
   totalVolume     Float           @default(0) // Total weight/volume
+  capacityUsedWeight Float?       @default(0)
+  capacityUsedVolume Float?       @default(0)
+  maxStopsApplied Int?
 
   openedAt        DateTime        @default(now())
   closedAt        DateTime?
@@ -486,6 +532,8 @@ model Batch {
 
   @@index([status, scheduledDate])
   @@index([scheduledDate, timeWindowStart])
+  @@index([pickupHubId, storageType])
+  @@index([dropClusterKey])
 }
 
 // ============= ROUTING SYSTEM =============

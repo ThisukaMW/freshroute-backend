@@ -4,6 +4,7 @@ import dotenv from "dotenv";
 import authRoutes from "./modules/auth/auth.routes.js";
 import driverRoutes from "./modules/driver/driver.routes.js";
 import fieldAdminRoutes from "./modules/field_admin/fieldadmin.routes.js";
+import aggregatorRoutes from "./modules/Order_Aggregator/aggregator.routes.js";
 
 dotenv.config();
 
@@ -21,5 +22,6 @@ app.get("/api/v1/health", (_req, res) => {
 app.use("/api/v1/auth", authRoutes);
 app.use("/api/v1/driver", driverRoutes);
 app.use("/api/v1/fieldadmin",fieldAdminRoutes);
+app.use("/api/v1/aggregator", aggregatorRoutes);
 
 export default app;

@@ -98,6 +98,36 @@ async function main() {
     },
   });
 
+  // ─── Fixed Pickup Hubs (Phase 1 Aggregator) ───────────────────────────────
+  const hubs = await Promise.all([
+    prisma.hub.create({
+      data: {
+        name: "Dambulla Market Hub",
+        latitude: 7.8567,
+        longitude: 80.6517,
+        type: "MARKET",
+      },
+    }),
+    prisma.hub.create({
+      data: {
+        name: "Central Province Farm Hub",
+        latitude: 7.2906,
+        longitude: 80.6337,
+        type: "FARM",
+      },
+    }),
+    prisma.hub.create({
+      data: {
+        name: "Colombo Regional Aggregation Center",
+        latitude: 6.9271,
+        longitude: 79.8612,
+        type: "AGGREGATION_CENTER",
+      },
+    }),
+  ]);
+
+  const primaryHub = hubs[0]!;
+
   // ─── Products ────────────────────────────────────────────────────────────────
   const products = await Promise.all([
     prisma.product.create({
@@ -198,6 +228,9 @@ async function main() {
       batchNumber: "BATCH-2024-0218-001",
       status: "IN_PROGRESS",
       trigger: "SCHEDULED",
+      storageType: "NORMAL",
+      dropClusterKey: "seed-colombo-cluster-1",
+      pickupHubId: primaryHub.id,
       scheduledDate: today,
       timeWindowStart: today,
       timeWindowEnd: batchEnd,
@@ -258,10 +291,16 @@ async function main() {
         buyerId: buyer.id,
         orderNumber,
         status: isCompleted ? "DELIVERED" : i === 8 ? "IN_TRANSIT" : "ASSIGNED",
+        isCancelled: false,
         totalAmount: buyerInfo.amount,
+        storageType: "NORMAL",
+        totalWeight: 8 + i,
+        totalVolume: 1.5 + i * 0.1,
         deliveryAddress: buyerInfo.address,
         deliveryLat: buyerInfo.lat,
         deliveryLng: buyerInfo.lng,
+        deliveryDate: today,
+        pickupHubId: primaryHub.id,
         batchId: batch.id,
         stopId: stop.id,
         placedAt: new Date(today.getTime() - (12 - i) * 24 * 60 * 60000),
@@ -369,6 +408,127 @@ async function main() {
       approvedBy: fieldAdmin.id,
       oldData: {},
       newData: {},
+    },
+  });
+
+  // ─── Aggregator test orders (eligible + ineligible cases) ─────────────────
+  // These orders are intentionally left unbatched for manual aggregator testing.
+  const aggregatorBaseDate = new Date();
+  aggregatorBaseDate.setHours(9, 0, 0, 0);
+
+  // Eligible
+  const eligibleOrder1 = await prisma.order.create({
+    data: {
+      buyerId: buyers[0]!.id,
+      orderNumber: "ORD-AGG-001",
+      status: "PAID",
+      isCancelled: false,
+      totalAmount: 125.5,
+      storageType: "NORMAL",
+      totalWeight: 42,
+      totalVolume: 5.8,
+      deliveryAddress: "15 Union Place, Colombo 02",
+      deliveryLat: 6.9185,
+      deliveryLng: 79.8581,
+      deliveryDate: aggregatorBaseDate,
+      pickupHubId: primaryHub.id,
+      placedAt: new Date(aggregatorBaseDate.getTime() - 2 * 60 * 60 * 1000),
+    },
+  });
+
+  await prisma.orderItem.create({
+    data: {
+      orderId: eligibleOrder1.id,
+      productId: products[0]!.id,
+      quantity: 6,
+      unitPrice: products[0]!.price,
+      totalPrice: products[0]!.price * 6,
+      sellerId: seller.id,
+    },
+  });
+
+  const eligibleOrder2 = await prisma.order.create({
+    data: {
+      buyerId: buyers[1]!.id,
+      orderNumber: "ORD-AGG-002",
+      status: "PAID",
+      isCancelled: false,
+      totalAmount: 90,
+      storageType: "COLD",
+      totalWeight: 28,
+      totalVolume: 3.1,
+      deliveryAddress: "22 Marine Drive, Colombo 03",
+      deliveryLat: 6.9004,
+      deliveryLng: 79.8492,
+      deliveryDate: new Date(aggregatorBaseDate.getTime() + 30 * 60 * 1000),
+      pickupHubId: primaryHub.id,
+      placedAt: new Date(aggregatorBaseDate.getTime() - 90 * 60 * 1000),
+    },
+  });
+
+  await prisma.orderItem.create({
+    data: {
+      orderId: eligibleOrder2.id,
+      productId: products[1]!.id,
+      quantity: 4,
+      unitPrice: products[1]!.price,
+      totalPrice: products[1]!.price * 4,
+      sellerId: seller.id,
+    },
+  });
+
+  // Ineligible: unpaid
+  await prisma.order.create({
+    data: {
+      buyerId: buyers[2]!.id,
+      orderNumber: "ORD-AGG-003",
+      status: "PENDING",
+      isCancelled: false,
+      totalAmount: 48.5,
+      storageType: "NORMAL",
+      totalWeight: 12,
+      totalVolume: 1.2,
+      deliveryAddress: "18 Station Road, Colombo 04",
+      deliveryLat: 6.8942,
+      deliveryLng: 79.8607,
+      deliveryDate: aggregatorBaseDate,
+      pickupHubId: primaryHub.id,
+    },
+  });
+
+  // Ineligible: cancelled
+  await prisma.order.create({
+    data: {
+      buyerId: buyers[3]!.id,
+      orderNumber: "ORD-AGG-004",
+      status: "PAID",
+      isCancelled: true,
+      totalAmount: 62.75,
+      storageType: "NORMAL",
+      totalWeight: 15,
+      totalVolume: 1.8,
+      deliveryAddress: "44 Duplication Road, Colombo 03",
+      deliveryLat: 6.9068,
+      deliveryLng: 79.857,
+      deliveryDate: aggregatorBaseDate,
+      pickupHubId: primaryHub.id,
+    },
+  });
+
+  // Ineligible: missing capacity metrics
+  await prisma.order.create({
+    data: {
+      buyerId: buyers[4]!.id,
+      orderNumber: "ORD-AGG-005",
+      status: "PAID",
+      isCancelled: false,
+      totalAmount: 77.2,
+      storageType: "NORMAL",
+      deliveryAddress: "9 Lake Crescent, Colombo 07",
+      deliveryLat: 6.9148,
+      deliveryLng: 79.8715,
+      deliveryDate: aggregatorBaseDate,
+      pickupHubId: primaryHub.id,
     },
   });
 
