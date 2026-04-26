@@ -124,7 +124,7 @@ export const createCustomer = async (data: {
   city?: string;
   address?: string;
 }) => {
-  return prisma.user.create({
+  const user = await prisma.user.create({
     data: {
       name: data.name,
       email: data.email,
@@ -135,16 +135,27 @@ export const createCustomer = async (data: {
       address: data.address ?? undefined,
       status: "ACTIVE",
     },
-    select: {
-      id: true,
-      name: true,
-      email: true,
-      role: true,
-      phone: true,
-      city: true,
-      address: true,
+  });
+
+  // Create corresponding Buyer record
+  await prisma.buyer.create({
+    data: {
+      userId: user.id,
+      deliveryAddress: data.address || "To be updated",
+      latitude: 6.9271, // Default to Colombo coordinates
+      longitude: 79.8612,
     },
   });
+
+  return {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    role: user.role,
+    phone: user.phone,
+    city: user.city,
+    address: user.address,
+  };
 };
 
 // ---------------- VENDOR ----------------
