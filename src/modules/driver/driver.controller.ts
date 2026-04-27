@@ -6,6 +6,7 @@ import {
   getActiveRoute,
   getRouteWithStops,
   getDriverOrders,
+  getLiveTrackingSeed,
 } from "./driver.service.js";
 
 export const myProfile = async (req: AuthRequest, res: Response) => {
@@ -59,6 +60,17 @@ export const myRoute = async (req: AuthRequest, res: Response) => {
 export const myOrders = async (req: AuthRequest, res: Response) => {
   try {
     const data = await getDriverOrders(req.driverId!);
+    res.json(data);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Error";
+    res.status(500).json({ message });
+  }
+};
+
+export const myLiveSeed = async (req: AuthRequest, res: Response) => {
+  try {
+    const queryLimit = Number.parseInt(String(req.query.limit ?? "30"), 10);
+    const data = await getLiveTrackingSeed(req.driverId!, queryLimit);
     res.json(data);
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Error";

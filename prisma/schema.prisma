@@ -473,6 +473,7 @@ model DriverLocation {
   currentStopId   String?
 
   @@index([driverId, timestamp(sort: Desc)])
+  @@index([sessionId, timestamp])
   @@index([sessionId])
   @@index([timestamp])
 }
@@ -491,6 +492,7 @@ model DriverSession {
   locations       DriverLocation[]
 
   @@index([driverId, startedAt])
+  @@index([driverId, endedAt, startedAt(sort: Desc)])
 }
 
 // ============= RATING SYSTEM =============

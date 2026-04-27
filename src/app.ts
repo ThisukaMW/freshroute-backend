@@ -8,7 +8,17 @@ dotenv.config();
 
 const app = express();
 
-app.use(cors());
+const isProduction = process.env.NODE_ENV === "production";
+
+app.use(
+  cors({
+    origin: isProduction
+      ? (process.env.CORS_ORIGINS ?? process.env.CLIENT_URL ?? false)
+      : true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  })
+);
 app.use(express.json());
 
 // Health check

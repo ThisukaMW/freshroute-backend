@@ -208,3 +208,75 @@ export const getDriverOrders = async (driverId: string) => {
       actualDelivery: stop.order!.actualDelivery,
     }));
 };
+
+// GET /api/v1/driver/me/live-seed
+// Returns active tracking session + recent points so the map can render
+// immediately before socket updates begin.
+export const getLiveTrackingSeed = async (
+  driverId: string,
+  pointLimit = 30
+) => {
+  const sanitizedLimit = Math.min(Math.max(pointLimit, 1), 200);
+
+  const activeSession = await prisma.driverSession.findFirst({
+    where: { driverId, endedAt: null },
+    orderBy: { startedAt: "desc" },
+    select: {
+      id: true,
+      routeId: true,
+      startedAt: true,
+    },
+  });
+
+  if (!activeSession) {
+    return {
+      session: null,
+      points: [],
+      latestKnownPosition: null,
+      serverTime: new Date().toISOString(),
+    };
+  }
+
+  const latestPoints = await prisma.driverLocation.findMany({
+    where: {
+      driverId,
+      sessionId: activeSession.id,
+    },
+    orderBy: { timestamp: "desc" },
+    take: sanitizedLimit,
+    select: {
+      id: true,
+      latitude: true,
+      longitude: true,
+      accuracy: true,
+      heading: true,
+      speed: true,
+      currentRouteId: true,
+      currentStopId: true,
+      timestamp: true,
+    },
+  });
+
+  const points = latestPoints
+    .reverse()
+    .map((point, index) => ({
+      sequence: index + 1,
+      ...point,
+      serverTimestamp: point.timestamp,
+    }));
+
+  const latestKnownPosition = points.length
+    ? {
+        latitude: points[points.length - 1]!.latitude,
+        longitude: points[points.length - 1]!.longitude,
+        timestamp: points[points.length - 1]!.timestamp,
+      }
+    : null;
+
+  return {
+    session: activeSession,
+    points,
+    latestKnownPosition,
+    serverTime: new Date().toISOString(),
+  };
+};

@@ -6,6 +6,7 @@ import {
   myActiveRoute,
   myRoute,
   myOrders,
+  myLiveSeed,
 } from "./driver.controller.js";
 
 const router = Router();
@@ -27,5 +28,8 @@ router.get("/me/route", myRoute);
 
 // GET /api/v1/driver/me/orders
 router.get("/me/orders", myOrders);
+
+// GET /api/v1/driver/me/live-seed?limit=30
+router.get("/me/live-seed", myLiveSeed);
 
 export default router;

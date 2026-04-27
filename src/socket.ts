@@ -60,6 +60,7 @@ interface SocketErrorPayload {
 // ─── Main setup ───────────────────────────────────────────────────────────────
 
 export const setupSocketHandlers = (io: Server) => {
+  const sequenceBySession = new Map<string, number>();
 
   // ── Auth middleware ─────────────────────────────────────────────────────────
   // Runs before "connection" fires. Verifies JWT and attaches claims to
@@ -70,7 +71,13 @@ export const setupSocketHandlers = (io: Server) => {
     const token = socket.handshake.auth?.token as string | undefined;
 
     if (!token) {
-      return next(new Error("Authentication error: No token provided"));
+      console.error("[socket] connect_error | reason=missing_token");
+      const error = new Error("Authentication error");
+      (error as Error & { data?: SocketErrorPayload }).data = {
+        event: "socket:connect",
+        message: "No token provided",
+      };
+      return next(error);
     }
 
     try {
@@ -84,7 +91,13 @@ export const setupSocketHandlers = (io: Server) => {
       socket.data.role = decoded.role;
       next();
     } catch {
-      next(new Error("Authentication error: Invalid or expired token"));
+      console.error("[socket] connect_error | reason=invalid_or_expired_token");
+      const error = new Error("Authentication error");
+      (error as Error & { data?: SocketErrorPayload }).data = {
+        event: "socket:connect",
+        message: "Invalid or expired token",
+      };
+      next(error);
     }
   });
 
@@ -102,7 +115,22 @@ export const setupSocketHandlers = (io: Server) => {
       const message =
         error instanceof Error ? error.message : "An unexpected error occurred";
       const payload: SocketErrorPayload = { event, message };
+      console.error(
+        `[socket] ${event} rejected | driverId=${driverId} message=${message}`
+      );
       socket.emit("error", payload);
+    };
+
+    const ensureString = (value: unknown, fieldName: string) => {
+      if (typeof value !== "string" || !value.trim()) {
+        throw new Error(`${fieldName} is required`);
+      }
+    };
+
+    const ensureNumber = (value: unknown, fieldName: string) => {
+      if (typeof value !== "number" || !Number.isFinite(value)) {
+        throw new Error(`${fieldName} must be a valid number`);
+      }
     };
 
     // ── driver:session:start ──────────────────────────────────────────────────
@@ -112,9 +140,15 @@ export const setupSocketHandlers = (io: Server) => {
 
     socket.on("driver:session:start", async (payload: SessionStartPayload) => {
       try {
+        console.log(
+          `[socket] session start requested | driverId=${driverId} routeId=${payload?.routeId ?? "none"}`
+        );
+
         const session = await startSession(driverId, payload?.routeId);
         socket.emit("driver:session:started", { sessionId: session.id });
-        console.log(`[socket] session started | sessionId=${session.id} driverId=${driverId}`);
+        console.log(
+          `[socket] session started | sessionId=${session.id} driverId=${driverId}`
+        );
       } catch (error) {
         emitError("driver:session:start", error);
       }
@@ -127,12 +161,36 @@ export const setupSocketHandlers = (io: Server) => {
 
     socket.on("driver:location:update", async (payload: LocationUpdatePayload) => {
       try {
+        ensureString(payload?.sessionId, "sessionId");
+        ensureNumber(payload?.latitude, "latitude");
+        ensureNumber(payload?.longitude, "longitude");
+
+        console.log(
+          `[socket] location update requested | driverId=${driverId} sessionId=${payload.sessionId} lat=${payload.latitude} lng=${payload.longitude}`
+        );
+
         const location = await saveLocation(driverId, payload);
+        const nextSequence = (sequenceBySession.get(payload.sessionId) ?? 0) + 1;
+        sequenceBySession.set(payload.sessionId, nextSequence);
+        const serverTimestamp = new Date().toISOString();
+
+        console.log(
+          `[socket] location accepted | driverId=${driverId} sessionId=${payload.sessionId} locationId=${location.id}`
+        );
+
+        socket.emit("driver:location:accepted", {
+          event: "driver:location:update",
+          sessionId: location.sessionId,
+          locationId: location.id,
+          sequence: nextSequence,
+          serverTimestamp,
+        });
 
         io.to(`driver:${driverId}`).emit("driver:location:updated", {
           driverId,
           id: location.id,
           sessionId: location.sessionId,
+          sequence: nextSequence,
           latitude: location.latitude,
           longitude: location.longitude,
           accuracy: location.accuracy,
@@ -141,6 +199,7 @@ export const setupSocketHandlers = (io: Server) => {
           currentRouteId: location.currentRouteId,
           currentStopId: location.currentStopId,
           timestamp: location.timestamp,
+          serverTimestamp,
         });
       } catch (error) {
         emitError("driver:location:update", error);
@@ -153,7 +212,13 @@ export const setupSocketHandlers = (io: Server) => {
 
     socket.on("driver:session:end", async (payload: SessionEndPayload) => {
       try {
-        await endSession(payload.sessionId);
+        ensureString(payload?.sessionId, "sessionId");
+        console.log(
+          `[socket] session end requested | driverId=${driverId} sessionId=${payload.sessionId}`
+        );
+
+        await endSession(driverId, payload.sessionId);
+        sequenceBySession.delete(payload.sessionId);
 
         socket.emit("driver:session:ended", { sessionId: payload.sessionId });
 
@@ -162,7 +227,9 @@ export const setupSocketHandlers = (io: Server) => {
           sessionId: payload.sessionId,
         });
 
-        console.log(`[socket] session ended | sessionId=${payload.sessionId} driverId=${driverId}`);
+        console.log(
+          `[socket] session ended | sessionId=${payload.sessionId} driverId=${driverId}`
+        );
       } catch (error) {
         emitError("driver:session:end", error);
       }
@@ -205,10 +272,19 @@ export const setupSocketHandlers = (io: Server) => {
       );
 
       try {
+        const openSessions = await prisma.driverSession.findMany({
+          where: { driverId, endedAt: null },
+          select: { id: true },
+        });
+
         await prisma.driverSession.updateMany({
           where: { driverId, endedAt: null },
           data: { endedAt: new Date() },
         });
+
+        for (const session of openSessions) {
+          sequenceBySession.delete(session.id);
+        }
       } catch {
         // Non-critical — log silently, don't crash the server
         console.error(`[socket] Failed to auto-close sessions for driverId=${driverId}`);
