@@ -251,6 +251,9 @@ model Buyer {
   maxWeight          Float          @default(0)
   maxVolume          Float          @default(0)
   maxStops           Int?
+  currentLoadWeight  Float          @default(0)
+  currentLoadVolume  Float          @default(0)
+  currentLoadStops   Int            @default(0)
   storageSupport     TruckStorageSupport @default(NORMAL)
   vehicleBrand       String
   makeYear           DateTime

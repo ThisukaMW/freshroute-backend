@@ -51,6 +51,7 @@ import {
   updateTruck,
   activeRoutes,
   assessmentCandidates,
+  truckLiveLoadDebug,
 } from "./fieldadmin.controller.js";
 
 const router = Router();
@@ -156,6 +157,7 @@ router.post("/reassessment/route", reassessRoute);
 
 // //Truck Capacity Update API
 router.post("/truck/capacity/update", updateTruck);
+router.get("/truck/live-load/debug", truckLiveLoadDebug);
 
 export default router;
 

@@ -1,6 +1,35 @@
 import prisma from "../../config/database.js";
 import { inferInspectionResult, isValidRefundAmount, normalizeApprovedQuantity } from "./fieldadmin.rules.js";
 
+const ACTIVE_LOAD_STATUSES: Array<"BATCHED" | "ASSIGNED" | "IN_TRANSIT"> = ["BATCHED", "ASSIGNED", "IN_TRANSIT"];
+
+const recalculateTruckLiveLoad = async (
+  tx: Pick<typeof prisma, "order" | "truck">,
+  truckId: string
+) => {
+  const activeOrders = await tx.order.findMany({
+    where: {
+      status: { in: ACTIVE_LOAD_STATUSES },
+      batch: { routes: { some: { truckId } } },
+    },
+    select: { totalWeight: true, totalVolume: true },
+  });
+
+  const currentLoadWeight = activeOrders.reduce((sum, order) => sum + (order.totalWeight ?? 0), 0);
+  const currentLoadVolume = activeOrders.reduce((sum, order) => sum + (order.totalVolume ?? 0), 0);
+  const currentLoadStops = activeOrders.length;
+
+  await tx.truck.update({
+    where: { id: truckId },
+    data: {
+      currentLoadWeight,
+      currentLoadVolume,
+      currentLoadStops,
+      isAvailable: currentLoadStops === 0,
+    },
+  });
+};
+
 const ensureFieldAdminExists = async (fieldAdminId: string) => {
   const fieldAdmin = await prisma.fieldAdmin.findUnique({
     where: { id: fieldAdminId },
@@ -225,17 +254,71 @@ export const getRoutes = async (
   statuses?: Array<"PLANNED" | "ASSIGNED" | "STARTED" | "IN_PROGRESS" | "COMPLETED" | "FAILED" | "CANCELLED">
 ) => {
   await ensureFieldAdminExists(fieldAdminId);
-  return prisma.route.findMany({
+  const routes = await prisma.route.findMany({
     where: {
       fieldAdminId,
       ...(statuses ? { status: { in: statuses } } : {}),
     },
     include: {
       driver: { include: { user: { select: { name: true } } } },
-      truck: { select: { id: true, vehicleNumber: true, vehicleType: true } },
+      truck: {
+        select: {
+          id: true,
+          vehicleNumber: true,
+          vehicleType: true,
+          maxWeight: true,
+          maxVolume: true,
+          maxStops: true,
+          currentLoadWeight: true,
+          currentLoadVolume: true,
+          currentLoadStops: true,
+        },
+      },
       _count: { select: { stops: true } },
     },
     orderBy: { scheduledStart: "desc" },
+  });
+
+  const truckIds = Array.from(new Set(routes.map((route) => route.truck?.id).filter(Boolean))) as string[];
+  if (truckIds.length === 0) {
+    return routes;
+  }
+
+  const activeOrders = await prisma.order.findMany({
+    where: {
+      status: { in: ACTIVE_LOAD_STATUSES },
+      batch: { routes: { some: { truckId: { in: truckIds } } } },
+    },
+    select: {
+      totalWeight: true,
+      totalVolume: true,
+      batch: { select: { routes: { select: { truckId: true } } } },
+    },
+  });
+
+  const loadByTruck = new Map<string, { weight: number; volume: number; stops: number }>();
+  for (const order of activeOrders) {
+    const truckId = order.batch?.routes?.[0]?.truckId;
+    if (!truckId) continue;
+    const current = loadByTruck.get(truckId) ?? { weight: 0, volume: 0, stops: 0 };
+    current.weight += order.totalWeight ?? 0;
+    current.volume += order.totalVolume ?? 0;
+    current.stops += 1;
+    loadByTruck.set(truckId, current);
+  }
+
+  return routes.map((route) => {
+    if (!route.truck) return route;
+    const live = loadByTruck.get(route.truck.id) ?? { weight: 0, volume: 0, stops: 0 };
+    return {
+      ...route,
+      truck: {
+        ...route.truck,
+        currentLoadWeight: live.weight,
+        currentLoadVolume: live.volume,
+        currentLoadStops: live.stops,
+      },
+    };
   });
 };
 
@@ -316,27 +399,79 @@ export const markDeliveryComplete = async (
 
   const stop = await prisma.stop.findFirst({
     where: { id: payload.stopId, route: { fieldAdminId } },
-    include: { order: true },
+    include: {
+      order: true,
+      route: { select: { id: true, batchId: true, status: true, truckId: true, driverId: true } },
+    },
   });
 
   if (!stop) {
     throw new Error("Stop not found for this field admin");
   }
 
-  const updatedStop = await prisma.stop.update({
-    where: { id: stop.id },
-    data: { status: "COMPLETED", completedAt: new Date(), notes: payload.notes ?? stop.notes },
+  // When delivery execution starts, move assigned/batched orders in this route batch to IN_TRANSIT.
+  await prisma.order.updateMany({
+    where: {
+      batchId: stop.route.batchId,
+      status: { in: ["ASSIGNED", "BATCHED"] },
+    },
+    data: { status: "IN_TRANSIT" },
   });
 
-  if (stop.order) {
-    await prisma.order.update({
-      where: { id: stop.order.id },
-      data: { status: "DELIVERED", actualDelivery: new Date() },
+  if (stop.route.status === "ASSIGNED" || stop.route.status === "STARTED") {
+    await prisma.route.update({
+      where: { id: stop.route.id },
+      data: { status: "IN_PROGRESS", actualStart: new Date() },
     });
   }
 
-  await prisma.deliveryVerification.create({
-    data: { fieldAdminId, stopId: stop.id, type: stop.type, notes: payload.notes },
+  const updatedStop = await prisma.$transaction(async (tx) => {
+    const completedStop = await tx.stop.update({
+      where: { id: stop.id },
+      data: { status: "COMPLETED", completedAt: new Date(), notes: payload.notes ?? stop.notes },
+    });
+
+    if (stop.order) {
+      await tx.order.update({
+        where: { id: stop.order.id },
+        data: { status: "DELIVERED", actualDelivery: new Date() },
+      });
+    }
+
+    await tx.deliveryVerification.create({
+      data: { fieldAdminId, stopId: stop.id, type: stop.type, notes: payload.notes },
+    });
+
+    if (stop.route.truckId) {
+      await recalculateTruckLiveLoad(tx, stop.route.truckId);
+    }
+
+    const remainingDeliveries = await tx.stop.count({
+      where: {
+        routeId: stop.route.id,
+        type: "DELIVERY",
+        status: { not: "COMPLETED" },
+      },
+    });
+
+    if (remainingDeliveries === 0) {
+      await tx.route.update({
+        where: { id: stop.route.id },
+        data: { status: "COMPLETED", actualEnd: new Date() },
+      });
+
+      if (stop.route.truckId) {
+        await recalculateTruckLiveLoad(tx, stop.route.truckId);
+      }
+      if (stop.route.driverId) {
+        await tx.driver.update({
+          where: { id: stop.route.driverId },
+          data: { isAvailable: true },
+        });
+      }
+    }
+
+    return completedStop;
   });
 
   return updatedStop;
@@ -601,4 +736,129 @@ export const getHistory = async (fieldAdminId: string) => {
   });
 
   return { routes, assessments };
+};
+
+export const getTruckLiveLoadDebug = async (fieldAdminId: string) => {
+  await ensureFieldAdminExists(fieldAdminId);
+
+  const routes = await prisma.route.findMany({
+    where: { fieldAdminId, truckId: { not: null } },
+    select: { id: true, routeNumber: true, truckId: true, status: true },
+  });
+
+  const truckIds = Array.from(new Set(routes.map((route) => route.truckId).filter(Boolean))) as string[];
+  if (truckIds.length === 0) {
+    return [];
+  }
+
+  const trucks = await prisma.truck.findMany({
+    where: { id: { in: truckIds } },
+    select: {
+      id: true,
+      vehicleNumber: true,
+      maxWeight: true,
+      maxVolume: true,
+      maxStops: true,
+      currentLoadWeight: true,
+      currentLoadVolume: true,
+      currentLoadStops: true,
+      isAvailable: true,
+    },
+  });
+
+  const activeOrders = await prisma.order.findMany({
+    where: {
+      status: { in: ["BATCHED", "ASSIGNED", "IN_TRANSIT"] },
+      batch: { routes: { some: { truckId: { in: truckIds } } } },
+    },
+    select: {
+      id: true,
+      orderNumber: true,
+      status: true,
+      totalWeight: true,
+      totalVolume: true,
+      batch: { select: { routes: { select: { id: true, routeNumber: true, truckId: true } } } },
+    },
+  });
+
+  const grouped = new Map<
+    string,
+    {
+      orders: Array<{
+        id: string;
+        orderNumber: string;
+        status: string;
+        totalWeight: number | null;
+        totalVolume: number | null;
+        routeId: string | null;
+        routeNumber: string | null;
+      }>;
+      computedWeight: number;
+      computedVolume: number;
+      computedStops: number;
+    }
+  >();
+
+  for (const order of activeOrders) {
+    const routeRef = order.batch?.routes?.find((route) => route.truckId) ?? null;
+    const truckId = routeRef?.truckId;
+    if (!truckId) continue;
+    const current = grouped.get(truckId) ?? {
+      orders: [],
+      computedWeight: 0,
+      computedVolume: 0,
+      computedStops: 0,
+    };
+    current.orders.push({
+      id: order.id,
+      orderNumber: order.orderNumber,
+      status: order.status,
+      totalWeight: order.totalWeight,
+      totalVolume: order.totalVolume,
+      routeId: routeRef?.id ?? null,
+      routeNumber: routeRef?.routeNumber ?? null,
+    });
+    current.computedWeight += order.totalWeight ?? 0;
+    current.computedVolume += order.totalVolume ?? 0;
+    current.computedStops += 1;
+    grouped.set(truckId, current);
+  }
+
+  return trucks.map((truck) => {
+    const g = grouped.get(truck.id) ?? {
+      orders: [],
+      computedWeight: 0,
+      computedVolume: 0,
+      computedStops: 0,
+    };
+    return {
+      truck: {
+        id: truck.id,
+        vehicleNumber: truck.vehicleNumber,
+        maxWeight: truck.maxWeight,
+        maxVolume: truck.maxVolume,
+        maxStops: truck.maxStops,
+        isAvailable: truck.isAvailable,
+      },
+      persistedLoad: {
+        weight: truck.currentLoadWeight,
+        volume: truck.currentLoadVolume,
+        stops: truck.currentLoadStops,
+      },
+      computedLoadFromActiveOrders: {
+        weight: Number(g.computedWeight.toFixed(2)),
+        volume: Number(g.computedVolume.toFixed(2)),
+        stops: g.computedStops,
+      },
+      loadDelta: {
+        weight: Number((truck.currentLoadWeight - g.computedWeight).toFixed(2)),
+        volume: Number((truck.currentLoadVolume - g.computedVolume).toFixed(2)),
+        stops: truck.currentLoadStops - g.computedStops,
+      },
+      activeOrders: g.orders,
+      assignedRoutes: routes
+        .filter((route) => route.truckId === truck.id)
+        .map((route) => ({ id: route.id, routeNumber: route.routeNumber, status: route.status })),
+    };
+  });
 };

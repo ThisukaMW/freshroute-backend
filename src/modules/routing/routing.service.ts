@@ -1,5 +1,36 @@
 import prisma from "../../config/database.js";
 
+const ACTIVE_LOAD_STATUSES: Array<"BATCHED" | "ASSIGNED" | "IN_TRANSIT"> = ["BATCHED", "ASSIGNED", "IN_TRANSIT"];
+
+const recalculateTruckLiveLoad = async (
+  tx: Pick<typeof prisma, "order" | "truck">,
+  truckId: string
+) => {
+  const activeOrders = await tx.order.findMany({
+    where: {
+      status: { in: ACTIVE_LOAD_STATUSES },
+      batch: { routes: { some: { truckId } } },
+    },
+    select: { totalWeight: true, totalVolume: true },
+  });
+
+  const currentLoadWeight = activeOrders.reduce((sum, order) => sum + (order.totalWeight ?? 0), 0);
+  const currentLoadVolume = activeOrders.reduce((sum, order) => sum + (order.totalVolume ?? 0), 0);
+  const currentLoadStops = activeOrders.length;
+
+  await tx.truck.update({
+    where: { id: truckId },
+    data: {
+      currentLoadWeight,
+      currentLoadVolume,
+      currentLoadStops,
+      isAvailable: currentLoadStops === 0,
+    },
+  });
+
+  return { currentLoadWeight, currentLoadVolume, currentLoadStops };
+};
+
 const ensureRoute = async (routeId: string) => {
   const route = await prisma.route.findUnique({
     where: { id: routeId },
@@ -64,36 +95,44 @@ export const assignRouteBundle = async (payload: {
   if (totalWeight > truck.maxWeight || totalVolume > truck.maxVolume) {
     throw new Error("Truck cannot carry assigned batch weight/volume");
   }
+  const updatedRoute = await prisma.$transaction(async (tx) => {
+    const routeUpdated = await tx.route.update({
+      where: { id: route.id },
+      data: {
+        driverId: driver.id,
+        fieldAdminId: payload.fieldAdminId,
+        truckId: truck.id,
+        status: "ASSIGNED",
+      },
+      include: {
+        batch: { include: { orders: true } },
+        driver: { include: { user: { select: { name: true } } } },
+        fieldAdmin: { include: { user: { select: { name: true } } } },
+        truck: true,
+      },
+    });
 
-  const updatedRoute = await prisma.route.update({
-    where: { id: route.id },
-    data: {
-      driverId: driver.id,
-      fieldAdminId: payload.fieldAdminId,
-      truckId: truck.id,
-      status: "ASSIGNED",
-    },
-    include: {
-      batch: { include: { orders: true } },
-      driver: { include: { user: { select: { name: true } } } },
-      fieldAdmin: { include: { user: { select: { name: true } } } },
-      truck: true,
-    },
-  });
+    await tx.order.updateMany({
+      where: { batchId: route.batchId, status: "BATCHED" },
+      data: { status: "ASSIGNED" },
+    });
 
-  await prisma.order.updateMany({
-    where: { batchId: route.batchId, status: "BATCHED" },
-    data: { status: "ASSIGNED" },
-  });
+    await tx.driver.update({
+      where: { id: driver.id },
+      data: { isAvailable: false },
+    });
 
-  await prisma.driver.update({
-    where: { id: driver.id },
-    data: { isAvailable: false },
-  });
+    const recalculated = await recalculateTruckLiveLoad(tx, truck.id);
+    const freshTruck = await tx.truck.findUniqueOrThrow({ where: { id: truck.id } });
+    if (
+      recalculated.currentLoadWeight > freshTruck.maxWeight ||
+      recalculated.currentLoadVolume > freshTruck.maxVolume ||
+      recalculated.currentLoadStops > (freshTruck.maxStops ?? Number.MAX_SAFE_INTEGER)
+    ) {
+      throw new Error("Truck live load exceeds configured capacity after assignment");
+    }
 
-  await prisma.truck.update({
-    where: { id: truck.id },
-    data: { isAvailable: false },
+    return routeUpdated;
   });
 
   return updatedRoute;

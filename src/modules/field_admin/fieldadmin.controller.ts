@@ -17,6 +17,7 @@ import {
   getRefundEligibleOrders,
   getRefunds,
   getRoutes,
+  getTruckLiveLoadDebug,
   getTaskStops,
   markDeliveryComplete,
   initiateRefund,
@@ -588,6 +589,15 @@ export const dashboardOverview = async (req: AuthRequest, res: Response) => {
 export const assessmentCandidates = async (req: AuthRequest, res: Response) => {
   try {
     const data = await getAssessmentCandidates(req.fieldAdminId!);
+    res.json(data);
+  } catch (error) {
+    fail(res, error, 400);
+  }
+};
+
+export const truckLiveLoadDebug = async (req: AuthRequest, res: Response) => {
+  try {
+    const data = await getTruckLiveLoadDebug(req.fieldAdminId!);
     res.json(data);
   } catch (error) {
     fail(res, error, 400);
