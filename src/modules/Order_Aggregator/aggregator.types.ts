@@ -6,6 +6,7 @@ export interface AggregationRunInput {
   maxStopsPerBatch?: number;
   maxWeightPerBatch?: number;
   maxVolumePerBatch?: number;
+  autoAssignRoutes?: boolean;
   dryRun?: boolean;
 }
 
@@ -24,6 +25,8 @@ export interface CandidateOrder {
   totalVolume: number | null;
   placedAt: Date;
   pickupHubId: string | null;
+  deliveryZoneId: string | null;
+  deliveryZoneCode: string | null;
   sellerLat: number | null;
   sellerLng: number | null;
 }
@@ -37,6 +40,7 @@ export interface RejectedOrderReason {
 export interface ClusteredOrderGroup {
   pickupHubId: string;
   storageType: "NORMAL" | "COLD";
+  deliveryZoneCode: string;
   clusterKey: string;
   orders: CandidateOrder[];
 }
@@ -44,6 +48,7 @@ export interface ClusteredOrderGroup {
 export interface PackedBatchSlice {
   pickupHubId: string;
   storageType: "NORMAL" | "COLD";
+  deliveryZoneCode: string;
   clusterKey: string;
   orders: CandidateOrder[];
   totalWeight: number;
@@ -51,6 +56,7 @@ export interface PackedBatchSlice {
 }
 
 export interface AggregationSummary {
+  runId: string;
   dryRun: boolean;
   windowStart: string;
   windowEnd: string;
@@ -60,6 +66,7 @@ export interface AggregationSummary {
     maxStopsPerBatch: number;
     maxWeightPerBatch: number;
     maxVolumePerBatch: number;
+    autoAssignRoutes: boolean;
   };
   totalCandidatesFetched: number;
   totalEligible: number;

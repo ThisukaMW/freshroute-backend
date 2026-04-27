@@ -1,6 +1,6 @@
 import type { Response } from "express";
 import type { AuthRequest } from "../../middlewares/auth.middleware.js";
-import { runOrderAggregation } from "./aggregator.service.js";
+import { getAggregationRunById, getAggregationRuns, runOrderAggregation } from "./aggregator.service.js";
 
 const toDate = (value: unknown, fallback: Date) => {
   if (typeof value !== "string") return fallback;
@@ -14,7 +14,7 @@ export const runAggregation = async (req: AuthRequest, res: Response) => {
     const start = new Date(now);
     start.setHours(0, 0, 0, 0);
     const end = new Date(now);
-    end.setHours(23, 59, 59, 999);
+    end.setHours(4, 0, 0, 0);
 
     const windowStart = toDate(req.body?.windowStart, start);
     const windowEnd = toDate(req.body?.windowEnd, end);
@@ -29,6 +29,8 @@ export const runAggregation = async (req: AuthRequest, res: Response) => {
       maxStopsPerBatch: req.body?.maxStopsPerBatch,
       maxWeightPerBatch: req.body?.maxWeightPerBatch,
       maxVolumePerBatch: req.body?.maxVolumePerBatch,
+      autoAssignRoutes:
+        typeof req.body?.autoAssignRoutes === "boolean" ? req.body.autoAssignRoutes : undefined,
     });
 
     res.json(data);
@@ -44,7 +46,7 @@ export const previewAggregation = async (req: AuthRequest, res: Response) => {
     const start = new Date(now);
     start.setHours(0, 0, 0, 0);
     const end = new Date(now);
-    end.setHours(23, 59, 59, 999);
+    end.setHours(4, 0, 0, 0);
 
     const windowStart = toDate(req.query.windowStart, start);
     const windowEnd = toDate(req.query.windowEnd, end);
@@ -63,6 +65,36 @@ export const previewAggregation = async (req: AuthRequest, res: Response) => {
     res.json(data);
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Aggregation preview failed";
+    res.status(400).json({ message });
+  }
+};
+
+export const listAggregationRuns = async (req: AuthRequest, res: Response) => {
+  try {
+    const limit = req.query.limit ? Number(req.query.limit) : 20;
+    const runs = await getAggregationRuns(Number.isFinite(limit) ? limit : 20);
+    res.json(runs);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Failed to fetch aggregation runs";
+    res.status(400).json({ message });
+  }
+};
+
+export const getAggregationRun = async (req: AuthRequest, res: Response) => {
+  try {
+    const runId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+    if (!runId) {
+      res.status(400).json({ message: "Aggregation run id is required" });
+      return;
+    }
+    const run = await getAggregationRunById(runId);
+    if (!run) {
+      res.status(404).json({ message: "Aggregation run not found" });
+      return;
+    }
+    res.json(run);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Failed to fetch aggregation run";
     res.status(400).json({ message });
   }
 };

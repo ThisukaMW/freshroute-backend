@@ -7,12 +7,14 @@ import {
   createRouteReassessment,
   getDashboardOverview,
   getAllOrders,
+  getAssessmentCandidates,
   getFieldAdminNotifications,
   getFieldAdminProfile,
   getHistory,
   getInspectionHistory,
   getOrdersByStatus,
   getPaymentHistory,
+  getRefundEligibleOrders,
   getRefunds,
   getRoutes,
   getTaskStops,
@@ -317,6 +319,15 @@ export const paymentRefunds = async (req: AuthRequest, res: Response) => {
   }
 };
 
+export const paymentRefundEligibleOrders = async (req: AuthRequest, res: Response) => {
+  try {
+    const data = await getRefundEligibleOrders(req.fieldAdminId!);
+    res.json(data);
+  } catch (error) {
+    fail(res, error);
+  }
+};
+
 export const paymentRefundInitiate = async (req: AuthRequest, res: Response) => {
   try {
     const { orderId, amount, reason } = req.body as {
@@ -359,10 +370,15 @@ export const settingsSecurity = async (_req: AuthRequest, res: Response) => {
 
 export const qualityConfirm = async (req: AuthRequest, res: Response) => {
   try {
-    const { orderItemId, notes } = req.body as { orderItemId?: string; notes?: string };
+    const { orderItemId, notes, approvedQuantity } = req.body as {
+      orderItemId: string;
+      notes?: string;
+      approvedQuantity?: number;
+    };
     const data = await createInspection(req.fieldAdminId!, {
       orderItemId,
-      result: "APPROVED",
+      result: approvedQuantity !== undefined ? undefined : "APPROVED",
+      approvedQuantity,
       notes,
     });
     res.status(201).json(data);
@@ -382,10 +398,15 @@ export const qualityHistory = async (req: AuthRequest, res: Response) => {
 
 export const qualityFeedback = async (req: AuthRequest, res: Response) => {
   try {
-    const { orderItemId, notes } = req.body as { orderItemId?: string; notes?: string };
+    const { orderItemId, notes, approvedQuantity } = req.body as {
+      orderItemId: string;
+      notes?: string;
+      approvedQuantity?: number;
+    };
     const data = await createInspection(req.fieldAdminId!, {
       orderItemId,
-      result: "APPROVED",
+      result: approvedQuantity !== undefined ? undefined : "APPROVED",
+      approvedQuantity,
       notes,
     });
     res.status(201).json(data);
@@ -396,10 +417,15 @@ export const qualityFeedback = async (req: AuthRequest, res: Response) => {
 
 export const rejectSubmit = async (req: AuthRequest, res: Response) => {
   try {
-    const { orderItemId, notes } = req.body as { orderItemId?: string; notes?: string };
+    const { orderItemId, notes, approvedQuantity } = req.body as {
+      orderItemId: string;
+      notes?: string;
+      approvedQuantity?: number;
+    };
     const data = await createInspection(req.fieldAdminId!, {
       orderItemId,
-      result: "REJECTED",
+      result: approvedQuantity !== undefined ? undefined : "REJECTED",
+      approvedQuantity,
       notes,
     });
     res.status(201).json(data);
@@ -419,10 +445,15 @@ export const rejectHistory = async (req: AuthRequest, res: Response) => {
 
 export const rejectFeedback = async (req: AuthRequest, res: Response) => {
   try {
-    const { orderItemId, notes } = req.body as { orderItemId?: string; notes?: string };
+    const { orderItemId, notes, approvedQuantity } = req.body as {
+      orderItemId: string;
+      notes?: string;
+      approvedQuantity?: number;
+    };
     const data = await createInspection(req.fieldAdminId!, {
       orderItemId,
-      result: "REJECTED",
+      result: approvedQuantity !== undefined ? undefined : "REJECTED",
+      approvedQuantity,
       notes,
     });
     res.status(201).json(data);
@@ -551,5 +582,14 @@ export const dashboardOverview = async (req: AuthRequest, res: Response) => {
     res.json(data);
   } catch (error) {
     fail(res, error);
+  }
+};
+
+export const assessmentCandidates = async (req: AuthRequest, res: Response) => {
+  try {
+    const data = await getAssessmentCandidates(req.fieldAdminId!);
+    res.json(data);
+  } catch (error) {
+    fail(res, error, 400);
   }
 };

@@ -110,10 +110,23 @@ enum StorageType {
   COLD
 }
 
+enum TruckStorageSupport {
+  NORMAL
+  COLD
+  BOTH
+}
+
+enum AggregationRunStatus {
+  COMPLETED
+  COMPLETED_WITH_REJECTIONS
+  FAILED
+}
+
 // ------ field-admin helper enums ------
 enum InspectionResult {
   APPROVED
   REJECTED
+  PARTIAL
 }
 
 enum AssessmentTarget {
@@ -235,6 +248,10 @@ model Buyer {
   vehicleNumber      String?
   vehicleType        String?
   vehicleCapacity    Float
+  maxWeight          Float          @default(0)
+  maxVolume          Float          @default(0)
+  maxStops           Int?
+  storageSupport     TruckStorageSupport @default(NORMAL)
   vehicleBrand       String
   makeYear           DateTime
   vehicleHeight      Float
@@ -243,6 +260,11 @@ model Buyer {
   Tempreture         Float
 
   isActive      Boolean      @default(true)
+  isAvailable   Boolean      @default(true)
+
+  routes        Route[]
+
+  @@index([isActive, isAvailable, storageSupport])
  }
 
 // ============= FIELD ADMIN PROFILE & TASKS =============
@@ -288,6 +310,23 @@ model Hub {
   @@index([latitude, longitude])
 }
 
+model DeliveryZone {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  code        String   @unique
+  minLat      Float
+  maxLat      Float
+  minLng      Float
+  maxLng      Float
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  orders      Order[]
+
+  @@index([isActive])
+}
+
 model ProductInspection {
   id            String       @id @default(uuid())
   fieldAdminId  String
@@ -297,6 +336,9 @@ model ProductInspection {
   orderItem     OrderItem?   @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
 
   result        InspectionResult
+  approvedQuantity Float?
+  totalQuantity Float?
+  unit          String?
   notes         String?
   createdAt     DateTime     @default(now())
 
@@ -420,6 +462,9 @@ model Order {
   pickupHubId     String?
   pickupHub       Hub?            @relation(fields: [pickupHubId], references: [id], onDelete: SetNull)
 
+  deliveryZoneId  String?
+  deliveryZone    DeliveryZone?   @relation(fields: [deliveryZoneId], references: [id], onDelete: SetNull)
+
   batchId         String?
   batch           Batch?          @relation(fields: [batchId], references: [id], onDelete: SetNull)
 
@@ -444,6 +489,7 @@ model Order {
   @@index([orderNumber])
   @@index([status, isCancelled, batchId, deliveryDate])
   @@index([pickupHubId, storageType])
+  @@index([deliveryZoneId])
 }
 
 model OrderItem {
@@ -551,6 +597,9 @@ model Route {
   fieldAdminId        String?
   fieldAdmin          FieldAdmin?     @relation(fields: [fieldAdminId], references: [id], onDelete: SetNull)
 
+  truckId             String?
+  truck               Truck?          @relation(fields: [truckId], references: [id], onDelete: SetNull)
+
   status              RouteStatus     @default(PLANNED)
 
   // Route metrics
@@ -576,6 +625,7 @@ model Route {
 
   @@index([batchId])
   @@index([driverId, status])
+  @@index([truckId, status])
   @@index([status, scheduledStart])
 }
 
@@ -644,6 +694,42 @@ model RouteModification {
   createdAt       DateTime          @default(now())
 
   @@index([routeId, createdAt])
+}
+
+model AggregationRun {
+  id                    String               @id @default(uuid())
+  startedAt             DateTime             @default(now())
+  completedAt           DateTime?
+  dryRun                Boolean              @default(false)
+  status                AggregationRunStatus @default(COMPLETED)
+  windowStart           DateTime
+  windowEnd             DateTime
+  config                Json
+  totalCandidatesFetched Int                 @default(0)
+  totalEligible         Int                  @default(0)
+  totalRejected         Int                  @default(0)
+  totalClusters         Int                  @default(0)
+  totalPackedSlices     Int                  @default(0)
+  batchesCreatedCount   Int                  @default(0)
+  failureReason         String?
+
+  rejections            AggregationRunRejection[]
+
+  @@index([startedAt])
+  @@index([status])
+}
+
+model AggregationRunRejection {
+  id              String         @id @default(uuid())
+  runId           String
+  run             AggregationRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  orderId         String
+  orderNumber     String
+  reason          String
+  createdAt       DateTime       @default(now())
+
+  @@index([runId])
+  @@index([orderId])
 }
 
 // ============= REAL-TIME TRACKING =============

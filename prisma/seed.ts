@@ -15,6 +15,8 @@ async function main() {
   // Clean existing data
   await prisma.notification.deleteMany();
   await prisma.rating.deleteMany();
+  await prisma.aggregationRunRejection.deleteMany();
+  await prisma.aggregationRun.deleteMany();
   await prisma.driverLocation.deleteMany();
   await prisma.driverSession.deleteMany();
   await prisma.routeModification.deleteMany();
@@ -25,6 +27,9 @@ async function main() {
   await prisma.stop.deleteMany();
   await prisma.route.deleteMany();
   await prisma.batch.deleteMany();
+  await prisma.truck.deleteMany();
+  await prisma.deliveryZone.deleteMany();
+  await prisma.hub.deleteMany();
   await prisma.product.deleteMany();
   await prisma.driver.deleteMany();
   await prisma.seller.deleteMany();
@@ -98,6 +103,46 @@ async function main() {
     },
   });
 
+  const truckA = await prisma.truck.create({
+    data: {
+      vehicleNumber: "TRK-042",
+      vehicleType: "Reefer",
+      vehicleCapacity: 500,
+      maxWeight: 500,
+      maxVolume: 120,
+      maxStops: 25,
+      storageSupport: "BOTH",
+      vehicleBrand: "Isuzu",
+      makeYear: new Date("2020-01-01T00:00:00.000Z"),
+      vehicleHeight: 3.5,
+      VehicleWeight: 3200,
+      Refregeration: true,
+      Tempreture: 4,
+      isActive: true,
+      isAvailable: true,
+    },
+  });
+
+  await prisma.truck.create({
+    data: {
+      vehicleNumber: "TRK-051",
+      vehicleType: "Dry Van",
+      vehicleCapacity: 350,
+      maxWeight: 350,
+      maxVolume: 85,
+      maxStops: 18,
+      storageSupport: "NORMAL",
+      vehicleBrand: "Mitsubishi",
+      makeYear: new Date("2021-01-01T00:00:00.000Z"),
+      vehicleHeight: 3.2,
+      VehicleWeight: 2800,
+      Refregeration: false,
+      Tempreture: 18,
+      isActive: true,
+      isAvailable: true,
+    },
+  });
+
   // ─── Fixed Pickup Hubs (Phase 1 Aggregator) ───────────────────────────────
   const hubs = await Promise.all([
     prisma.hub.create({
@@ -127,6 +172,34 @@ async function main() {
   ]);
 
   const primaryHub = hubs[0]!;
+
+  const deliveryZones = await Promise.all([
+    prisma.deliveryZone.create({
+      data: {
+        name: "Colombo North",
+        code: "CMB_NORTH",
+        minLat: 6.92,
+        maxLat: 6.99,
+        minLng: 79.83,
+        maxLng: 79.90,
+        isActive: true,
+      },
+    }),
+    prisma.deliveryZone.create({
+      data: {
+        name: "Colombo South",
+        code: "CMB_SOUTH",
+        minLat: 6.84,
+        maxLat: 6.9199,
+        minLng: 79.83,
+        maxLng: 79.90,
+        isActive: true,
+      },
+    }),
+  ]);
+
+  const colomboNorthZone = deliveryZones[0]!;
+  const colomboSouthZone = deliveryZones[1]!;
 
   // ─── Products ────────────────────────────────────────────────────────────────
   const products = await Promise.all([
@@ -246,6 +319,7 @@ async function main() {
       batchId: batch.id,
       driverId: mike.id,
       fieldAdminId: fieldAdmin.id,
+      truckId: truckA.id,
       status: "IN_PROGRESS",
       totalDistance: 16.6,
       estimatedDuration: 87,
@@ -299,6 +373,7 @@ async function main() {
         deliveryAddress: buyerInfo.address,
         deliveryLat: buyerInfo.lat,
         deliveryLng: buyerInfo.lng,
+        deliveryZoneId: buyerInfo.lat >= 6.92 ? colomboNorthZone.id : colomboSouthZone.id,
         deliveryDate: today,
         pickupHubId: primaryHub.id,
         batchId: batch.id,
@@ -430,6 +505,7 @@ async function main() {
       deliveryAddress: "15 Union Place, Colombo 02",
       deliveryLat: 6.9185,
       deliveryLng: 79.8581,
+      deliveryZoneId: colomboSouthZone.id,
       deliveryDate: aggregatorBaseDate,
       pickupHubId: primaryHub.id,
       placedAt: new Date(aggregatorBaseDate.getTime() - 2 * 60 * 60 * 1000),
@@ -460,6 +536,7 @@ async function main() {
       deliveryAddress: "22 Marine Drive, Colombo 03",
       deliveryLat: 6.9004,
       deliveryLng: 79.8492,
+      deliveryZoneId: colomboSouthZone.id,
       deliveryDate: new Date(aggregatorBaseDate.getTime() + 30 * 60 * 1000),
       pickupHubId: primaryHub.id,
       placedAt: new Date(aggregatorBaseDate.getTime() - 90 * 60 * 1000),
@@ -491,6 +568,7 @@ async function main() {
       deliveryAddress: "18 Station Road, Colombo 04",
       deliveryLat: 6.8942,
       deliveryLng: 79.8607,
+      deliveryZoneId: colomboSouthZone.id,
       deliveryDate: aggregatorBaseDate,
       pickupHubId: primaryHub.id,
     },
@@ -510,6 +588,7 @@ async function main() {
       deliveryAddress: "44 Duplication Road, Colombo 03",
       deliveryLat: 6.9068,
       deliveryLng: 79.857,
+      deliveryZoneId: colomboSouthZone.id,
       deliveryDate: aggregatorBaseDate,
       pickupHubId: primaryHub.id,
     },
@@ -527,6 +606,7 @@ async function main() {
       deliveryAddress: "9 Lake Crescent, Colombo 07",
       deliveryLat: 6.9148,
       deliveryLng: 79.8715,
+      deliveryZoneId: colomboSouthZone.id,
       deliveryDate: aggregatorBaseDate,
       pickupHubId: primaryHub.id,
     },

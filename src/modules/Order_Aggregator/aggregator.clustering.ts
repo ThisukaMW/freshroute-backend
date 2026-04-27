@@ -2,7 +2,7 @@ import clustering from "density-clustering";
 import type { CandidateOrder, ClusteredOrderGroup } from "./aggregator.types.js";
 import { haversineDistanceKm } from "./aggregator.utils.js";
 
-type GroupKey = `${string}|${"NORMAL" | "COLD"}`;
+type GroupKey = `${string}|${"NORMAL" | "COLD"}|${string}`;
 
 export const clusterByDeliveryGeo = (
   orders: CandidateOrder[],
@@ -12,7 +12,9 @@ export const clusterByDeliveryGeo = (
   const grouped = new Map<GroupKey, CandidateOrder[]>();
 
   for (const order of orders) {
-    const key: GroupKey = `${order.pickupHubId!}|${order.storageType}`;
+    const key: GroupKey = `${order.pickupHubId!}|${order.storageType}|${
+      order.deliveryZoneCode ?? "UNZONED"
+    }`;
     const current = grouped.get(key) ?? [];
     current.push(order);
     grouped.set(key, current);
@@ -22,7 +24,11 @@ export const clusterByDeliveryGeo = (
   const dbscan = new clustering.DBSCAN();
 
   for (const [key, groupOrders] of grouped.entries()) {
-    const [pickupHubId, storageType] = key.split("|") as [string, "NORMAL" | "COLD"];
+    const [pickupHubId, storageType, deliveryZoneCode] = key.split("|") as [
+      string,
+      "NORMAL" | "COLD",
+      string,
+    ];
     const points = groupOrders.map((order) => [order.deliveryLat, order.deliveryLng]);
 
     const clusters = dbscan.run(
@@ -36,7 +42,8 @@ export const clusterByDeliveryGeo = (
       result.push({
         pickupHubId,
         storageType,
-        clusterKey: `${pickupHubId}-${storageType}-single`,
+        deliveryZoneCode,
+        clusterKey: `${pickupHubId}-${storageType}-${deliveryZoneCode}-single`,
         orders: [...groupOrders],
       });
       continue;
@@ -48,7 +55,8 @@ export const clusterByDeliveryGeo = (
         result.push({
           pickupHubId,
           storageType,
-          clusterKey: `${pickupHubId}-${storageType}-cluster-${index + 1}`,
+          deliveryZoneCode,
+          clusterKey: `${pickupHubId}-${storageType}-${deliveryZoneCode}-cluster-${index + 1}`,
           orders: clusterOrders,
         });
       }
@@ -62,7 +70,8 @@ export const clusterByDeliveryGeo = (
         result.push({
           pickupHubId,
           storageType,
-          clusterKey: `${pickupHubId}-${storageType}-noise-${noiseOrder.id}`,
+          deliveryZoneCode,
+          clusterKey: `${pickupHubId}-${storageType}-${deliveryZoneCode}-noise-${noiseOrder.id}`,
           orders: [noiseOrder],
         });
       }

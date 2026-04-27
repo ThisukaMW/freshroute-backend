@@ -8,7 +8,8 @@
     "dev": "tsx watch src/server.ts",
     "build": "tsc",
     "start": "node dist/server.ts",
-    "seed": "tsx prisma/seed.ts"
+    "seed": "tsx prisma/seed.ts",
+    "test": "tsx --test src/modules/Order_Aggregator/aggregator.rules.test.ts src/modules/field_admin/fieldadmin.rules.test.ts"
   },
   "keywords": [],
   "author": "",

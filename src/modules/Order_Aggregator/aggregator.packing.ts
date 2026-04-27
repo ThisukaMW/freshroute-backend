@@ -23,6 +23,7 @@ export const splitByCapacity = (
       slices.push({
         pickupHubId: cluster.pickupHubId,
         storageType: cluster.storageType,
+        deliveryZoneCode: cluster.deliveryZoneCode,
         clusterKey: cluster.clusterKey,
         orders: currentOrders,
         totalWeight: parseFloat(currentWeight.toFixed(2)),

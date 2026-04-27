@@ -26,6 +26,7 @@ import {
   paymentInvoices,
   paymentMethods,
   paymentRefundInitiate,
+  paymentRefundEligibleOrders,
   paymentRefunds,
   pendingOrders,
   pendingTasks,
@@ -49,6 +50,7 @@ import {
   truckHistory,
   updateTruck,
   activeRoutes,
+  assessmentCandidates,
 } from "./fieldadmin.controller.js";
 
 const router = Router();
@@ -112,6 +114,7 @@ router.get("/payment/history", paymentHistory);
 router.get("/payment/invoices", paymentInvoices);
 router.get("/payment/methods", paymentMethods);
 router.get("/payment/refunds", paymentRefunds);
+router.get("/payment/refunds/eligible-orders", paymentRefundEligibleOrders);
 // NOTE: added refund initiation endpoint used by refund screen action flow.
 router.post("/payment/refunds/initiate", paymentRefundInitiate);
 
@@ -143,6 +146,7 @@ router.post("/delivery/complete", completeDelivery);
 router.post("/assessment/driver", assessDriver);
 router.post("/assessment/buyer", assessBuyer);
 router.post("/assessment/seller", assessSeller);
+router.get("/assessment/candidates", assessmentCandidates);
 
 // //Report Damage API
 router.post("/report/damage", reportDamage);
