@@ -567,3 +567,72 @@ export const getAggregationRunById = async (runId: string) => {
     },
   });
 };
+
+export const getRouteStartHandoffBundle = async (routeId: string) => {
+  const route = await prisma.route.findUnique({
+    where: { id: routeId },
+    include: {
+      batch: {
+        include: {
+          pickupHub: true,
+          orders: {
+            select: {
+              id: true,
+              orderNumber: true,
+              deliveryAddress: true,
+              deliveryLat: true,
+              deliveryLng: true,
+              totalWeight: true,
+              totalVolume: true,
+              status: true,
+            },
+          },
+        },
+      },
+      stops: {
+        where: { type: "DELIVERY" },
+        select: {
+          id: true,
+          sequenceOrder: true,
+          address: true,
+          latitude: true,
+          longitude: true,
+          status: true,
+          orderId: true,
+        },
+        orderBy: { sequenceOrder: "asc" },
+      },
+    },
+  });
+
+  if (!route) throw new Error("Route not found");
+  if (!route.batch) throw new Error("Route batch not found");
+
+  return {
+    routeId: route.id,
+    routeNumber: route.routeNumber,
+    status: route.status,
+    batchId: route.batch.id,
+    truckId: route.truckId,
+    driverId: route.driverId,
+    fieldAdminId: route.fieldAdminId,
+    pickupHub: route.batch.pickupHub
+      ? {
+          id: route.batch.pickupHub.id,
+          name: route.batch.pickupHub.name,
+          latitude: route.batch.pickupHub.latitude,
+          longitude: route.batch.pickupHub.longitude,
+        }
+      : null,
+    deliveryStops: route.stops,
+    orders: route.batch.orders,
+    batchTotals: {
+      orderCount: route.batch.orderCount,
+      totalWeight: route.batch.capacityUsedWeight ?? 0,
+      totalVolume: route.batch.capacityUsedVolume ?? route.batch.totalVolume ?? 0,
+      maxStopsApplied: route.batch.maxStopsApplied ?? route.batch.orderCount,
+      storageType: route.batch.storageType,
+    },
+    plannedStopOrder: route.stops.map((stop) => stop.id),
+  };
+};

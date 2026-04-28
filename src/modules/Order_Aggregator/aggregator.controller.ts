@@ -1,6 +1,11 @@
 import type { Response } from "express";
 import type { AuthRequest } from "../../middlewares/auth.middleware.js";
-import { getAggregationRunById, getAggregationRuns, runOrderAggregation } from "./aggregator.service.js";
+import {
+  getAggregationRunById,
+  getAggregationRuns,
+  getRouteStartHandoffBundle,
+  runOrderAggregation,
+} from "./aggregator.service.js";
 
 const toDate = (value: unknown, fallback: Date) => {
   if (typeof value !== "string") return fallback;
@@ -115,6 +120,21 @@ export const getAggregationRun = async (req: AuthRequest, res: Response) => {
     res.json(run);
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Failed to fetch aggregation run";
+    res.status(400).json({ message });
+  }
+};
+
+export const getRouteStartHandoff = async (req: AuthRequest, res: Response) => {
+  try {
+    const routeId = Array.isArray(req.params.routeId) ? req.params.routeId[0] : req.params.routeId;
+    if (!routeId) {
+      res.status(400).json({ message: "routeId is required" });
+      return;
+    }
+    const data = await getRouteStartHandoffBundle(routeId);
+    res.json(data);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Failed to fetch route handoff bundle";
     res.status(400).json({ message });
   }
 };
