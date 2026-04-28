@@ -34,7 +34,7 @@ const recalculateTruckLiveLoad = async (
 const ensureRoute = async (routeId: string) => {
   const route = await prisma.route.findUnique({
     where: { id: routeId },
-    include: { batch: { include: { orders: true } } },
+    include: { batch: { include: { orders: true, routes: { select: { id: true } } } } },
   });
   if (!route) {
     throw new Error("Route not found");
@@ -96,6 +96,11 @@ export const assignRouteBundle = async (payload: {
     throw new Error("Truck cannot carry assigned batch weight/volume");
   }
   const updatedRoute = await prisma.$transaction(async (tx) => {
+    // Phase 1 policy enforcement: one batch must execute through one route bundle.
+    if (route.batch.routes.length > 1) {
+      throw new Error("Batch has multiple routes; SINGLE_ROUTE execution policy violated");
+    }
+
     const routeUpdated = await tx.route.update({
       where: { id: route.id },
       data: {
@@ -136,4 +141,72 @@ export const assignRouteBundle = async (payload: {
   });
 
   return updatedRoute;
+};
+
+export const getRouteStartHandoff = async (routeId: string) => {
+  const route = await prisma.route.findUnique({
+    where: { id: routeId },
+    include: {
+      batch: {
+        include: {
+          pickupHub: true,
+          orders: {
+            select: {
+              id: true,
+              orderNumber: true,
+              deliveryAddress: true,
+              deliveryLat: true,
+              deliveryLng: true,
+              totalWeight: true,
+              totalVolume: true,
+            },
+          },
+        },
+      },
+      stops: {
+        where: { type: "DELIVERY" },
+        select: {
+          id: true,
+          sequenceOrder: true,
+          address: true,
+          latitude: true,
+          longitude: true,
+          status: true,
+        },
+        orderBy: { sequenceOrder: "asc" },
+      },
+    },
+  });
+
+  if (!route) {
+    throw new Error("Route not found");
+  }
+  if (!route.batch) {
+    throw new Error("Route batch not found");
+  }
+
+  return {
+    batchId: route.batch.id,
+    routeId: route.id,
+    truckId: route.truckId,
+    driverId: route.driverId,
+    fieldAdminId: route.fieldAdminId,
+    pickupHub: route.batch.pickupHub
+      ? {
+          id: route.batch.pickupHub.id,
+          name: route.batch.pickupHub.name,
+          latitude: route.batch.pickupHub.latitude,
+          longitude: route.batch.pickupHub.longitude,
+        }
+      : null,
+    deliveryStops: route.stops,
+    storageType: route.batch.storageType,
+    batchTotals: {
+      orderCount: route.batch.orderCount,
+      totalWeight: route.batch.capacityUsedWeight ?? 0,
+      totalVolume: route.batch.capacityUsedVolume ?? route.batch.totalVolume ?? 0,
+      maxStopsApplied: route.batch.maxStopsApplied ?? route.batch.orderCount,
+    },
+    plannedStopOrder: route.stops.map((stop) => stop.id),
+  };
 };

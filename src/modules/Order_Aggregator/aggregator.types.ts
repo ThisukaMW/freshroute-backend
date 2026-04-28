@@ -1,6 +1,7 @@
 export interface AggregationRunInput {
   windowStart: Date;
   windowEnd: Date;
+  triggerMode?: "manual" | "payment_event" | "scheduled";
   clusterRadiusKm?: number;
   minPoints?: number;
   maxStopsPerBatch?: number;
@@ -58,9 +59,11 @@ export interface PackedBatchSlice {
 export interface AggregationSummary {
   runId: string;
   dryRun: boolean;
+  triggerMode: "manual" | "payment_event" | "scheduled";
   windowStart: string;
   windowEnd: string;
   config: {
+    triggerMode: "manual" | "payment_event" | "scheduled";
     clusterRadiusKm: number;
     minPoints: number;
     maxStopsPerBatch: number;
@@ -73,6 +76,9 @@ export interface AggregationSummary {
   totalRejected: number;
   totalClusters: number;
   totalPackedSlices: number;
+  totalBatchesCreated: number;
+  totalOrdersBatched: number;
+  totalRoutesAutoAssigned: number;
   batchesCreated: Array<{
     batchId: string;
     batchNumber: string;

@@ -8,6 +8,16 @@ const toDate = (value: unknown, fallback: Date) => {
   return Number.isNaN(parsed.getTime()) ? fallback : parsed;
 };
 
+const normalizeTriggerMode = (value: unknown): "manual" | "payment_event" | "scheduled" => {
+  if (value === "payment_event" || value === "scheduled" || value === "manual") return value;
+  return "manual";
+};
+
+const isAutoTriggerWithinWindow = (now: Date) => {
+  const hour = now.getHours();
+  return hour >= 0 && hour < 4;
+};
+
 export const runAggregation = async (req: AuthRequest, res: Response) => {
   try {
     const now = new Date();
@@ -19,10 +29,20 @@ export const runAggregation = async (req: AuthRequest, res: Response) => {
     const windowStart = toDate(req.body?.windowStart, start);
     const windowEnd = toDate(req.body?.windowEnd, end);
     const dryRun = Boolean(req.body?.dryRun);
+    const triggerMode = normalizeTriggerMode(req.body?.triggerMode);
+
+    if (triggerMode === "scheduled" && !isAutoTriggerWithinWindow(now)) {
+      res.status(400).json({
+        message:
+          "Scheduled batching is allowed only between 00:00 and 04:00 server time.",
+      });
+      return;
+    }
 
     const data = await runOrderAggregation({
       windowStart,
       windowEnd,
+      triggerMode,
       dryRun,
       clusterRadiusKm: req.body?.clusterRadiusKm,
       minPoints: req.body?.minPoints,

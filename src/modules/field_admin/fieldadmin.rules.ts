@@ -14,3 +14,9 @@ export const isValidRefundAmount = (amount: number, totalAmount: number) =>
 
 export const isOwnedByFieldAdmin = (resourceFieldAdminId: string | null | undefined, actorFieldAdminId: string) =>
   Boolean(resourceFieldAdminId) && resourceFieldAdminId === actorFieldAdminId;
+
+export const isRefundWithinRemainingLimit = (
+  existingReservedAmount: number,
+  nextRefundAmount: number,
+  orderTotalAmount: number
+) => existingReservedAmount + nextRefundAmount <= orderTotalAmount;

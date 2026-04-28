@@ -32,3 +32,6 @@ tmpclaude-*
 
 # Test files (optional - you can keep these if you want to commit them)
 test-socket.html
+
+# Markdown notes/summaries
+*.md

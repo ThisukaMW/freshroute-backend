@@ -1,5 +1,10 @@
 import prisma from "../../config/database.js";
-import { inferInspectionResult, isValidRefundAmount, normalizeApprovedQuantity } from "./fieldadmin.rules.js";
+import {
+  inferInspectionResult,
+  isRefundWithinRemainingLimit,
+  isValidRefundAmount,
+  normalizeApprovedQuantity,
+} from "./fieldadmin.rules.js";
 
 const ACTIVE_LOAD_STATUSES: Array<"BATCHED" | "ASSIGNED" | "IN_TRANSIT"> = ["BATCHED", "ASSIGNED", "IN_TRANSIT"];
 
@@ -408,24 +413,27 @@ export const markDeliveryComplete = async (
   if (!stop) {
     throw new Error("Stop not found for this field admin");
   }
-
-  // When delivery execution starts, move assigned/batched orders in this route batch to IN_TRANSIT.
-  await prisma.order.updateMany({
-    where: {
-      batchId: stop.route.batchId,
-      status: { in: ["ASSIGNED", "BATCHED"] },
-    },
-    data: { status: "IN_TRANSIT" },
-  });
-
-  if (stop.route.status === "ASSIGNED" || stop.route.status === "STARTED") {
-    await prisma.route.update({
-      where: { id: stop.route.id },
-      data: { status: "IN_PROGRESS", actualStart: new Date() },
-    });
+  if (stop.status === "COMPLETED") {
+    throw new Error("Stop already completed");
   }
 
   const updatedStop = await prisma.$transaction(async (tx) => {
+    // Route start handoff for execution happens here atomically with first completion action.
+    await tx.order.updateMany({
+      where: {
+        batchId: stop.route.batchId,
+        status: { in: ["ASSIGNED", "BATCHED"] },
+      },
+      data: { status: "IN_TRANSIT" },
+    });
+
+    if (stop.route.status === "ASSIGNED" || stop.route.status === "STARTED") {
+      await tx.route.update({
+        where: { id: stop.route.id },
+        data: { status: "IN_PROGRESS", actualStart: new Date() },
+      });
+    }
+
     const completedStop = await tx.stop.update({
       where: { id: stop.id },
       data: { status: "COMPLETED", completedAt: new Date(), notes: payload.notes ?? stop.notes },
@@ -610,6 +618,13 @@ export const updateTruckCapacity = async (
   payload: { driverId: string; vehicleCapacity: number }
 ) => {
   await ensureFieldAdminExists(fieldAdminId);
+  const ownedRoute = await prisma.route.findFirst({
+    where: { fieldAdminId, driverId: payload.driverId },
+    select: { id: true },
+  });
+  if (!ownedRoute) {
+    throw new Error("Driver is not assigned to this field admin routes");
+  }
   return prisma.driver.update({
     where: { id: payload.driverId },
     data: { vehicleCapacity: payload.vehicleCapacity },
@@ -682,6 +697,18 @@ export const initiateRefund = async (
     throw new Error("Invalid refund amount");
   }
 
+  const existingReserved = await prisma.refund.aggregate({
+    _sum: { amount: true },
+    where: {
+      orderId: payload.orderId,
+      status: { in: ["PENDING", "PROCESSING", "COMPLETED", "REFUNDED"] },
+    },
+  });
+  const alreadyReservedAmount = existingReserved._sum.amount ?? 0;
+  if (!isRefundWithinRemainingLimit(alreadyReservedAmount, payload.amount, order.totalAmount)) {
+    throw new Error("Refund total exceeds order amount");
+  }
+
   return prisma.refund.create({
     data: {
       orderId: payload.orderId,
@@ -735,7 +762,23 @@ export const getHistory = async (fieldAdminId: string) => {
     orderBy: { createdAt: "desc" },
   });
 
-  return { routes, assessments };
+  const targetUserIds = Array.from(new Set(assessments.map((assessment) => assessment.targetUserId)));
+  const assessmentTargets =
+    targetUserIds.length > 0
+      ? await prisma.user.findMany({
+          where: { id: { in: targetUserIds } },
+          select: { id: true, name: true },
+        })
+      : [];
+  const targetNameMap = new Map(assessmentTargets.map((user) => [user.id, user.name]));
+
+  return {
+    routes,
+    assessments: assessments.map((assessment) => ({
+      ...assessment,
+      targetUserName: targetNameMap.get(assessment.targetUserId) ?? null,
+    })),
+  };
 };
 
 export const getTruckLiveLoadDebug = async (fieldAdminId: string) => {

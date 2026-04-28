@@ -1,6 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { canTruckCarrySlice, getEligibilityFailureReason } from "./aggregator.rules.js";
+import {
+  canTruckCarrySlice,
+  getEligibilityFailureReason,
+  pickRoundRobin,
+  reserveResourceById,
+} from "./aggregator.rules.js";
 import type { CandidateOrder } from "./aggregator.types.js";
 
 const baseOrder: CandidateOrder = {
@@ -46,4 +51,24 @@ test("truck fit passes when all constraints satisfied", () => {
     { storageType: "COLD", totalWeight: 20, totalVolume: 4, orderCount: 4 }
   );
   assert.equal(ok, true);
+});
+
+test("reserveResourceById removes selected resource from pool", () => {
+  const pool = [{ id: "t1" }, { id: "t2" }, { id: "t3" }];
+  const picked = reserveResourceById(pool, "t2");
+  assert.equal(picked?.id, "t2");
+  assert.deepEqual(pool.map((item) => item.id), ["t1", "t3"]);
+});
+
+test("pickRoundRobin rotates without reusing same first item", () => {
+  const admins = [{ id: "fa1" }, { id: "fa2" }, { id: "fa3" }];
+  let cursor = 0;
+  const a = pickRoundRobin(admins, cursor);
+  cursor = a.nextCursor;
+  const b = pickRoundRobin(admins, cursor);
+  cursor = b.nextCursor;
+  const c = pickRoundRobin(admins, cursor);
+  assert.equal(a.item?.id, "fa1");
+  assert.equal(b.item?.id, "fa2");
+  assert.equal(c.item?.id, "fa3");
 });

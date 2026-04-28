@@ -9,14 +9,14 @@ import {
 
 const router = Router();
 
-router.use(protect, authorize("ADMIN", "FIELD_ADMIN"));
+router.use(protect);
 
 // Manual trigger for controlled aggregation runs.
-router.post("/run", runAggregation);
+router.post("/run", authorize("ADMIN"), runAggregation);
 // Dry-run endpoint for diagnostics without writes.
-router.get("/preview", previewAggregation);
+router.get("/preview", authorize("ADMIN", "FIELD_ADMIN"), previewAggregation);
 // Observability endpoints for run history and failed reasons.
-router.get("/runs", listAggregationRuns);
-router.get("/runs/:id", getAggregationRun);
+router.get("/runs", authorize("ADMIN", "FIELD_ADMIN"), listAggregationRuns);
+router.get("/runs/:id", authorize("ADMIN", "FIELD_ADMIN"), getAggregationRun);
 
 export default router;
