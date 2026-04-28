@@ -116,6 +116,88 @@ const selectTruckForSlice = (
       })
   );
 
+const splitSliceForTruckFit = (
+  slice: ReturnType<typeof splitByCapacity>[number],
+  trucks: Awaited<ReturnType<typeof getAvailableTrucks>>
+) => {
+  if (selectTruckForSlice(trucks, slice)) {
+    return { fittedSlices: [slice], unattachedOrders: [] as typeof slice.orders };
+  }
+
+  // FFD-style packing: place larger orders first into bins that still fit at least one truck.
+  const sortedOrders = [...slice.orders].sort((a, b) => {
+    const aw = a.totalWeight ?? 0;
+    const bw = b.totalWeight ?? 0;
+    if (bw !== aw) return bw - aw;
+    return (b.totalVolume ?? 0) - (a.totalVolume ?? 0);
+  });
+
+  const bins: Array<ReturnType<typeof splitByCapacity>[number]> = [];
+  const unattached: typeof slice.orders = [];
+
+  for (const order of sortedOrders) {
+    let placed = false;
+    for (const bin of bins) {
+      const candidate = {
+        ...bin,
+        orders: [...bin.orders, order],
+        totalWeight: bin.totalWeight + (order.totalWeight ?? 0),
+        totalVolume: bin.totalVolume + (order.totalVolume ?? 0),
+      };
+      if (selectTruckForSlice(trucks, candidate)) {
+        bin.orders.push(order);
+        bin.totalWeight = parseFloat(candidate.totalWeight.toFixed(2));
+        bin.totalVolume = parseFloat(candidate.totalVolume.toFixed(2));
+        placed = true;
+        break;
+      }
+    }
+
+    if (!placed) {
+      const single = {
+        ...slice,
+        orders: [order],
+        totalWeight: parseFloat(((order.totalWeight ?? 0)).toFixed(2)),
+        totalVolume: parseFloat(((order.totalVolume ?? 0)).toFixed(2)),
+      };
+      if (selectTruckForSlice(trucks, single)) {
+        bins.push(single);
+      } else {
+        unattached.push(order);
+      }
+    }
+  }
+
+  return { fittedSlices: bins, unattachedOrders: unattached };
+};
+
+const makeTruckFeasibleSlices = (
+  slices: ReturnType<typeof splitByCapacity>,
+  trucks: Awaited<ReturnType<typeof getAvailableTrucks>>,
+  rejected: RejectedOrderReason[]
+) => {
+  const feasible: ReturnType<typeof splitByCapacity> = [];
+
+  for (const slice of slices) {
+    if (selectTruckForSlice(trucks, slice)) {
+      feasible.push(slice);
+      continue;
+    }
+
+    const splitResult = splitSliceForTruckFit(slice, trucks);
+    feasible.push(...splitResult.fittedSlices);
+    for (const order of splitResult.unattachedOrders) {
+      rejected.push({
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        reason: "Order cannot fit any available truck profile",
+      });
+    }
+  }
+
+  return feasible;
+};
+
 const getCandidates = async (windowStart: Date, windowEnd: Date): Promise<CandidateOrder[]> => {
   const orders = await prisma.order.findMany({
     where: {
@@ -440,9 +522,10 @@ export const runOrderAggregation = async (input: AggregationRunInput): Promise<A
       maxWeightPerBatch: config.maxWeightPerBatch,
       maxVolumePerBatch: config.maxVolumePerBatch,
     });
+    const truckFeasibleSlices = makeTruckFeasibleSlices(slices, trucks, rejected);
 
     if (dryRun) {
-      for (const slice of slices) {
+      for (const slice of truckFeasibleSlices) {
         const selectedTruck = selectTruckForSlice(trucks, slice);
         if (!selectedTruck) {
           for (const order of slice.orders) {
@@ -459,7 +542,7 @@ export const runOrderAggregation = async (input: AggregationRunInput): Promise<A
     const batchesCreated = dryRun
       ? []
       : await createBatchesAndRoutes(
-          slices,
+          truckFeasibleSlices,
           trucks,
           rejected,
           config.autoAssignRoutes,
@@ -479,7 +562,7 @@ export const runOrderAggregation = async (input: AggregationRunInput): Promise<A
       totalEligible: withGeo.length,
       totalRejected: rejected.length,
       totalClusters: clusters.length,
-      totalPackedSlices: slices.length,
+      totalPackedSlices: truckFeasibleSlices.length,
       totalBatchesCreated: batchesCreated.length,
       totalOrdersBatched: batchesCreated.reduce((sum, batch) => sum + batch.orderIds.length, 0),
       totalRoutesAutoAssigned: config.autoAssignRoutes ? batchesCreated.length : 0,
