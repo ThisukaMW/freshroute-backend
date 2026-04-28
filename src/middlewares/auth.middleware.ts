@@ -22,15 +22,17 @@ export const protect = (
   const token = authHeader.split(" ")[1];
 
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET!) as {
-      userId: string;
-      driverId: string;
-      role: string;
-    };
+    const decoded: any = jwt.verify(token, process.env.JWT_SECRET!);
 
-    req.userId = decoded.userId;
+    console.log("DECODED:", decoded); // 👈 add this
+
+    req.userId = decoded.userId || decoded.id || decoded.user?.id;
     req.driverId = decoded.driverId;
     req.role = decoded.role;
+
+if (!req.userId) {
+  return res.status(401).json({ message: "Invalid token payload" });
+}
     next();
   } catch {
     res.status(401).json({ message: "Invalid or expired token" });

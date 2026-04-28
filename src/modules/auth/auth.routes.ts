@@ -1,9 +1,27 @@
 import { Router } from "express";
-import { driverLogin } from "./auth.controller.js";
+import {
+  loginUserController,
+  registerCustomer,
+  signupVendor,
+  forgotPasswordController,
+  resetPasswordController,
+  secureAccountController,
+} from "./auth.controller.js";
 
 const router = Router();
 
-// POST /api/v1/auth/driver/login
-router.post("/driver/login", driverLogin);
+// Single login for ALL roles (buyer, seller, driver, admin, field_admin)
+router.post("/login", loginUserController);
+
+// Register
+router.post("/customer/register", registerCustomer);
+router.post("/vendor/signup", signupVendor);
+
+// Password reset
+router.post("/forgot-password", forgotPasswordController);
+router.post("/reset-password", resetPasswordController);
+
+// Security — "wasn't me" account lock
+router.post("/secure-account", secureAccountController);
 
 export default router;
