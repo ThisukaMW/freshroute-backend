@@ -2,12 +2,14 @@
 // Database: PostgreSQL with PostGIS extension
 
 generator client {
-  provider = "prisma-client"
+  provider = "prisma-client-js"
   output   = "../src/generated/prisma"
+  previewFeatures = ["driverAdapters"]
 }
 
 datasource db {
   provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 // ============= ENUMS =============
@@ -99,6 +101,12 @@ enum PaymentStatus {
   REFUNDED
 }
 
+enum DeliveryTimeSlot {
+  MORNING      // 6 AM - 12 PM
+  AFTERNOON    // 12 PM - 6 PM
+  EVENING      // 6 PM - 10 PM
+}
+
 // ============= USER MANAGEMENT =============
 
 model User {
@@ -176,6 +184,9 @@ model Seller {
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
 
+  sellerProducts SellerProduct[]
+  cartItems     CartItem[]
+
   // Relationships
   products        Product[]
   pickupStops     Stop[]      @relation("SellerPickups")
@@ -212,7 +223,7 @@ model Buyer {
 model Product {
   id          String          @id @default(uuid())
   sellerId    String
-  seller      Seller          @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  seller      Seller         @relation(fields: [sellerId], references: [id], onDelete: Cascade)
 
   name        String
   description String?
@@ -226,6 +237,9 @@ model Product {
 
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
+  stockHistory    StockHistory[]
+
+  sellerProducts SellerProduct[]
 
   // Relationships
   orderItems  OrderItem[]
@@ -234,6 +248,20 @@ model Product {
 
   @@index([sellerId, status])
   @@index([status])
+}
+
+model SellerProduct {
+  id        String @id @default(uuid())
+  productId String
+  sellerId  String
+
+  price Float
+  stock Float
+
+  product Product @relation(fields: [productId], references: [id])
+  seller  Seller  @relation(fields: [sellerId], references: [id])
+
+  @@unique([productId, sellerId])
 }
 
 model Order {
@@ -249,6 +277,8 @@ model Order {
   deliveryLat     Float
   deliveryLng     Float
   deliveryNotes   String?
+  deliveryTimeSlot DeliveryTimeSlot?
+  specialInstructions String?
 
   batchId         String?
   batch           Batch?          @relation(fields: [batchId], references: [id], onDelete: SetNull)
@@ -317,6 +347,9 @@ model CartItem {
 
   productId String
   product   Product   @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  sellerId  String?
+  seller    Seller?   @relation(fields: [sellerId], references: [id], onDelete: Cascade)
 
   quantity  Float
   savedForLater Boolean @default(false)
@@ -582,4 +615,35 @@ model Notification {
 
   @@index([userId, read])
   @@index([createdAt(sort: Desc)])
+}
+// ============= INVENTORY SYSTEM =============
+
+enum StockChangeType {
+  INITIAL       // Product creation
+  PURCHASE      // Buyer purchases (decreases)
+  RESTOCK       // Seller adds stock (increases)
+  ADJUSTMENT    // Manual correction
+  RETURN        // Customer return (increases)
+}
+
+model StockHistory {
+  id              String            @id @default(uuid())
+  productId       String
+  product         Product           @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  type            StockChangeType   // What type of change
+  quantity        Float             // Amount changed (can be negative)
+  previousStock   Float             // Stock before this change
+  newStock        Float             // Stock after this change
+  
+  reason          String?           // Why changed (optional detail)
+  orderId         String?           // Related order ID if applicable
+  
+  performedBy     String?           // User ID who made change (seller or admin)
+
+  createdAt       DateTime          @default(now())
+
+  @@index([productId, createdAt(sort: Desc)])
+  @@index([type])
+  @@index([orderId])
 }

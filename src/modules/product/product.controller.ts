@@ -66,6 +66,7 @@
 //   }
 // };
 import type { Response } from "express";
+import "express"; // Import for type augmentation with @types/multer
 import type { AuthRequest } from "../../middlewares/auth.middleware.js";
 import {
   createProduct,
@@ -78,6 +79,7 @@ import {
   getProductById,
   getSellersByProductName,
 } from "./product.service.js"
+import { log } from "console";
 
 // =====================================
 // SELLER ADD PRODUCT
@@ -90,12 +92,20 @@ export const addProduct = async (req: AuthRequest, res: Response) => {
       });
     }
 
-    const { name, description, category, price, unit, stock, imageUrl } =
-      req.body;
+    const { name, description, category, price, unit, stock } = req.body;
+
+    // files (images)
+    const files = (req as AuthRequest & { files?: Express.Multer.File[] }).files ?? [];
+    const imageUrls = files.map((file) => file.path);
+
+    // extra fields
+    const variants = JSON.parse(req.body.variants || "[]");
+    const pricingMode = req.body.pricingMode;
+    const taxPercent = Number(req.body.taxPercent || 0);
 
     if (!name || !category || price == null || !unit || stock == null) {
       return res.status(400).json({
-        message: "Missing required fields: name, category, price, unit, stock",
+        message: "Missing required fields",
       });
     }
 
@@ -103,10 +113,10 @@ export const addProduct = async (req: AuthRequest, res: Response) => {
       name: name.trim(),
       description: description ?? null,
       category: category.trim(),
-      price,
+      price: Number(price),
       unit: unit.trim(),
-      stock,
-      imageUrl: imageUrl ?? null,
+      stock: Number(stock),
+      imageUrl: imageUrls?.[0] ?? null, // first image
     };
 
     const product = await createProduct(req.userId!, productData);
@@ -114,7 +124,11 @@ export const addProduct = async (req: AuthRequest, res: Response) => {
     res.status(201).json({
       message: "Product submitted for admin approval",
       product,
+      variants,
+      pricingMode,
+      taxPercent,
     });
+
   } catch (error: any) {
     res.status(500).json({ message: error.message });
   }
@@ -134,7 +148,7 @@ export const editProductController = async (
       });
     }
 
-    const { productId } = req.params;
+    const { productId } = req.params; 
 
     if (typeof productId !== "string") {
       return res.status(400).json({
@@ -142,17 +156,31 @@ export const editProductController = async (
       });
     }
 
-    const updatedProduct = await updateProduct(
+    console.log("📝 Edit request - productId:", productId, "Data:", req.body);
+
+    const updateResult = await updateProduct(
       req.userId!,
       productId,
       req.body
     );
 
+    // Return in the same format as getSellerInventory for consistency
     res.json({
-      message: "Product updated and sent for re-approval",
-      updatedProduct,
+      message: "Product updated successfully",
+      data: {
+        id: updateResult.product.id,
+        name: updateResult.product.name,
+        category: updateResult.product.category,
+        description: updateResult.product.description,
+        sellerPrice: updateResult.sellerProduct.price,
+        sellerStock: updateResult.sellerProduct.stock,
+        aggregateStock: updateResult.product.stock,
+        status: updateResult.product.status,
+        imageUrl: updateResult.product.imageUrl,
+      },
     });
   } catch (error: any) {
+    console.error("❌ Edit product error:", error.message);
     res.status(400).json({
       message: error.message,
     });
@@ -276,6 +304,47 @@ export const getProductByIdController = async (
 // =====================================
 // GET SELLERS FOR A PRODUCT
 // =====================================
+// export const getSellersByProductNameController = async (
+//   req: AuthRequest,
+//   res: Response
+// ) => {
+//   try {
+//     const { productId } = req.params;
+
+//     if (typeof productId !== "string") {
+//       return res.status(400).json({
+//         message: "Invalid product name",
+//       });
+//     }
+
+//     if (typeof productId !== "string") {
+//       return res.status(400).json({
+//         message: "Invalid product ID",
+//       });
+//     }
+
+//     //First get the product to get its name
+//     const product = await getProductById(productId)
+//     console.log("Product found for ID", productId, ":", product);
+
+//     if (!product) {
+//       return res.status(404).json({
+//         message: "Product not found",
+//       });
+//     }
+
+//     // Then get all sellers offering this product
+//     const sellers = await getSellersByProductName(product.name);
+//     // console.log("Product found for name", product.name, ":", sellers);
+
+//     res.json(sellers);
+//   } catch (error) {
+//     res.status(500).json({
+//       message: "Failed to fetch sellers",
+//     });
+//   }
+// };
+
 export const getSellersByProductNameController = async (
   req: AuthRequest,
   res: Response
@@ -284,31 +353,20 @@ export const getSellersByProductNameController = async (
     const { productId } = req.params;
 
     if (typeof productId !== "string") {
-      return res.status(400).json({
-        message: "Invalid product ID",
-      });
+      return res.status(400).json({ message: "Invalid product ID" });
     }
 
-    // First get the product to get its name
-    const product = await getProductById(productId);
+    const sellers = await getSellersByProductName(productId);
 
-    if (!product) {
-      return res.status(404).json({
-        message: "Product not found",
-      });
+    if (!sellers.length) {
+      return res.status(404).json({ message: "No sellers found for this product" });
     }
-
-    // Then get all sellers offering this product
-    const sellers = await getSellersByProductName(product.name);
 
     res.json(sellers);
   } catch (error) {
-    res.status(500).json({
-      message: "Failed to fetch sellers",
-    });
+    res.status(500).json({ message: "Failed to fetch sellers" });
   }
 };
-
 // =====================================
 // VIEW ALL PRODUCTS (ROLE BASED)
 // =====================================
