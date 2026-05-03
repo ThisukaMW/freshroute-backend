@@ -3,6 +3,7 @@ import cors from "cors";
 import dotenv from "dotenv";
 import authRoutes from "./modules/auth/auth.routes.js";
 import driverRoutes from "./modules/driver/driver.routes.js";
+import plannerRoutes from "./modules/planner/planner.routes.js";
 
 dotenv.config();
 
@@ -29,5 +30,6 @@ app.get("/api/v1/health", (_req, res) => {
 // Routes
 app.use("/api/v1/auth", authRoutes);
 app.use("/api/v1/driver", driverRoutes);
+app.use("/api/v1/batches", plannerRoutes);
 
 export default app;
