@@ -1,26 +1,124 @@
 import prisma from "../../config/database.js";
-import { fetchMatrix } from "../../utils/mapbox.js";
 import { haversineDistanceKm } from "../../utils/geo.js";
+import { fetchMatrix } from "../../utils/mapbox.js";
+import {
+  solveRouteWithOrtools,
+  type OrtoolsPlannedStop,
+  type OrtoolsSolveResponse,
+} from "./ortools.client.js";
 
-type Node = {
-  id: string; // unique node id
-  type: "PICKUP" | "DELIVERY";
-  latitude: number;
-  longitude: number;
-  orderId?: string;
-  sellerId?: string;
-  demand?: number;
+type PlannerBatchPlanOptions = {
+  pickupRequiredOrderIds?: string[];
+  readyOrderIds?: string[];
+  vehicleCapacity?: number;
+  depot?: {
+    latitude: number;
+    longitude: number;
+  };
+  timeLimitSeconds?: number;
 };
 
-const AVG_SPEED_KMH = 40; // fallback
+type PlannerNode = {
+  nodeId: string;
+  kind: "PICKUP" | "DELIVERY";
+  latitude: number;
+  longitude: number;
+  loadDelta: number;
+  orderId?: string;
+  pairId?: string;
+  sellerId?: string;
+  buyerId?: string;
+  serviceSeconds: number;
+};
 
-async function buildNodesForBatch(batchId: string): Promise<Node[]> {
+type PlannerDepot = {
+  latitude: number;
+  longitude: number;
+};
+
+type PlannerPoint = PlannerDepot | PlannerNode;
+
+const DEFAULT_SERVICE_SECONDS = 60;
+const DEFAULT_MATRIX_CACHE_TTL_MS = 5 * 60 * 1000;
+const DEFAULT_VEHICLE_CAPACITY = Number(process.env.PLANNER_VEHICLE_CAPACITY ?? "999999");
+
+const roundDemand = (value: number) => Math.max(1, Math.ceil(value));
+
+const asSet = (values?: string[]) => new Set((values ?? []).filter(Boolean));
+
+const buildKey = (point: PlannerPoint) => `${point.longitude.toFixed(6)},${point.latitude.toFixed(6)}`;
+
+const resolveDepot = (nodes: PlannerNode[], explicitDepot?: PlannerDepot): PlannerDepot => {
+  if (explicitDepot) return explicitDepot;
+
+  const envLat = process.env.PLANNER_DEPOT_LAT;
+  const envLng = process.env.PLANNER_DEPOT_LNG;
+  if (envLat && envLng) {
+    return { latitude: Number(envLat), longitude: Number(envLng) };
+  }
+
+  if (nodes.length === 0) {
+    throw new Error("Cannot resolve depot without nodes");
+  }
+
+  const sum = nodes.reduce(
+    (accumulator, node) => ({
+      latitude: accumulator.latitude + node.latitude,
+      longitude: accumulator.longitude + node.longitude,
+    }),
+    { latitude: 0, longitude: 0 }
+  );
+
+  return {
+    latitude: sum.latitude / nodes.length,
+    longitude: sum.longitude / nodes.length,
+  };
+};
+
+const toSquareMatrix = (flat: number[], size: number) => {
+  const matrix: number[][] = [];
+  for (let row = 0; row < size; row++) {
+    matrix.push(flat.slice(row * size, row * size + size));
+  }
+  return matrix;
+};
+
+const buildMatrixFromPoints = async (points: PlannerPoint[]) => {
+  const coords = points.map((point) => [point.longitude, point.latitude] as [number, number]);
+  try {
+    return await fetchMatrix(coords, { cacheTtlMs: DEFAULT_MATRIX_CACHE_TTL_MS });
+  } catch {
+    const size = points.length;
+    const durations: number[] = new Array(size * size).fill(0);
+    const distances: number[] = new Array(size * size).fill(0);
+
+    for (let row = 0; row < size; row++) {
+      for (let col = 0; col < size; col++) {
+        const distanceKm = haversineDistanceKm(
+          points[row].latitude,
+          points[row].longitude,
+          points[col].latitude,
+          points[col].longitude
+        );
+        distances[row * size + col] = distanceKm * 1000;
+        durations[row * size + col] = Math.max(0, Math.round((distanceKm / 40) * 3600));
+      }
+    }
+
+    return { durations, distances };
+  }
+};
+
+const buildNodesForBatch = async (
+  batchId: string,
+  options: PlannerBatchPlanOptions
+): Promise<{ nodes: PlannerNode[]; initialLoad: number; vehicleCapacity: number }> => {
   const batch = await prisma.batch.findUnique({
     where: { id: batchId },
     include: {
       orders: {
         include: {
-          buyer: { include: { user: true } },
+          buyer: true,
           items: true,
         },
       },
@@ -29,183 +127,333 @@ async function buildNodesForBatch(batchId: string): Promise<Node[]> {
 
   if (!batch) throw new Error("Batch not found");
 
-  // Group pickups by seller location
-  const pickupsBySeller = new Map<string, Node>();
-  const nodes: Node[] = [];
+  const pickupRequiredOrderIds = asSet(options.pickupRequiredOrderIds);
+  const readyOrderIds = asSet(options.readyOrderIds);
+  const sellerIds = [...new Set(batch.orders.flatMap((order) => order.items.map((item) => item.sellerId)))];
+  const sellers = await prisma.seller.findMany({
+    where: { id: { in: sellerIds } },
+    select: { id: true, latitude: true, longitude: true },
+  });
+  const sellerById = new Map(sellers.map((seller) => [seller.id, seller]));
+
+  const nodes: PlannerNode[] = [];
+  let initialLoad = 0;
 
   for (const order of batch.orders) {
-    const needsPickup = order.batchId && order.status !== "READY"; // heuristic: READY status
+    const totalQuantity = order.items.reduce((sum, item) => sum + roundDemand(item.quantity), 0);
+    const pickupRequired = pickupRequiredOrderIds.size
+      ? pickupRequiredOrderIds.has(order.id)
+      : readyOrderIds.size
+        ? !readyOrderIds.has(order.id)
+        : false;
 
-    // If an order's items come from multiple sellers, we assume elsewhere they are grouped by your friend.
-    if (needsPickup) {
-      // create pickup per sellerId per orderItems
+    if (pickupRequired) {
+      const quantitiesBySeller = new Map<string, number>();
       for (const item of order.items) {
-        const seller = await prisma.seller.findUnique({ where: { id: item.sellerId } });
-        if (!seller) continue;
-        const key = seller.id;
-        if (!pickupsBySeller.has(key)) {
-          const p: Node = {
-            id: `P-${seller.id}`,
-            type: "PICKUP",
-            latitude: seller.latitude,
-            longitude: seller.longitude,
-            sellerId: seller.id,
-            demand: 0,
-          };
-          pickupsBySeller.set(key, p);
-        }
-        const pnode = pickupsBySeller.get(key)!;
-        pnode.demand = (pnode.demand ?? 0) + item.quantity;
+        quantitiesBySeller.set(
+          item.sellerId,
+          (quantitiesBySeller.get(item.sellerId) ?? 0) + roundDemand(item.quantity)
+        );
       }
 
-      // create delivery node for buyer
-      const buyer = order.buyerId ? await prisma.buyer.findUnique({ where: { id: order.buyerId } }) : null;
+      for (const [sellerId, quantity] of quantitiesBySeller.entries()) {
+        const seller = sellerById.get(sellerId);
+        if (!seller) continue;
+
+        nodes.push({
+          nodeId: `pickup:${order.id}:${sellerId}`,
+          kind: "PICKUP",
+          latitude: seller.latitude,
+          longitude: seller.longitude,
+          loadDelta: quantity,
+          orderId: order.id,
+          pairId: order.id,
+          sellerId,
+          buyerId: order.buyerId,
+          serviceSeconds: DEFAULT_SERVICE_SECONDS,
+        });
+      }
+
       nodes.push({
-        id: `D-${order.id}`,
-        type: "DELIVERY",
-        latitude: buyer?.latitude ?? order.deliveryLat,
-        longitude: buyer?.longitude ?? order.deliveryLng,
+        nodeId: `delivery:${order.id}`,
+        kind: "DELIVERY",
+        latitude: order.buyer.latitude,
+        longitude: order.buyer.longitude,
+        loadDelta: -totalQuantity,
         orderId: order.id,
-        demand: order.items.reduce((s: number, it: any) => s + (it.quantity ?? 0), 0),
+        pairId: order.id,
+        buyerId: order.buyerId,
+        serviceSeconds: DEFAULT_SERVICE_SECONDS,
       });
     } else {
-      // ready: only delivery node
-      const buyer = order.buyerId ? await prisma.buyer.findUnique({ where: { id: order.buyerId } }) : null;
+      initialLoad += totalQuantity;
       nodes.push({
-        id: `D-${order.id}`,
-        type: "DELIVERY",
-        latitude: buyer?.latitude ?? order.deliveryLat,
-        longitude: buyer?.longitude ?? order.deliveryLng,
+        nodeId: `delivery:${order.id}`,
+        kind: "DELIVERY",
+        latitude: order.buyer.latitude,
+        longitude: order.buyer.longitude,
+        loadDelta: -totalQuantity,
         orderId: order.id,
-        demand: order.items.reduce((s: number, it: any) => s + (it.quantity ?? 0), 0),
+        buyerId: order.buyerId,
+        serviceSeconds: DEFAULT_SERVICE_SECONDS,
       });
     }
   }
 
-  // append pickups (grouped)
-  for (const p of pickupsBySeller.values()) nodes.unshift(p);
+  const vehicleCapacity = Math.max(
+    initialLoad,
+    Number.isFinite(options.vehicleCapacity ?? Number.NaN) && (options.vehicleCapacity ?? 0) > 0
+      ? Number(options.vehicleCapacity)
+      : DEFAULT_VEHICLE_CAPACITY
+  );
 
-  return nodes;
-}
+  return { nodes, initialLoad, vehicleCapacity };
+};
 
-async function buildMatrix(nodes: Node[]) {
-  if (nodes.length === 0) return { durations: [], distances: [] };
+type MergedPlannedStop = OrtoolsPlannedStop & {
+  mergedNodeIds: string[];
+  mergedOrderIds: string[];
+};
 
-  try {
-    const coords = nodes.map((n) => [n.longitude, n.latitude]);
-    const matrix = await fetchMatrix(coords);
-    return matrix;
-  } catch (err) {
-    // fallback to Haversine
-    const n = nodes.length;
-    const durations: number[] = new Array(n * n).fill(0);
-    const distances: number[] = new Array(n * n).fill(0);
-    for (let i = 0; i < n; i++) {
-      for (let j = 0; j < n; j++) {
-        const d = haversineDistanceKm(nodes[i].latitude, nodes[i].longitude, nodes[j].latitude, nodes[j].longitude);
-        distances[i * n + j] = d;
-        durations[i * n + j] = (d / AVG_SPEED_KMH) * 3600; // seconds
-      }
+type SequencedPlannedStop = MergedPlannedStop & {
+  sequence: number;
+};
+
+const mergeConsecutivePickupStops = (stops: OrtoolsPlannedStop[]) => {
+  const merged: MergedPlannedStop[] = [];
+
+  for (const stop of stops) {
+    const previous = merged[merged.length - 1];
+    const nextStop: MergedPlannedStop = {
+      ...stop,
+      mergedNodeIds: [stop.node_id],
+      mergedOrderIds: stop.order_id ? [stop.order_id] : [],
+    };
+
+    const samePickupLocation =
+      previous &&
+      previous.kind === "PICKUP" &&
+      stop.kind === "PICKUP" &&
+      previous.seller_id === stop.seller_id &&
+      Math.abs(previous.latitude - stop.latitude) < 1e-6 &&
+      Math.abs(previous.longitude - stop.longitude) < 1e-6;
+
+    if (!samePickupLocation) {
+      merged.push(nextStop);
+      continue;
     }
-    return { durations, distances };
-  }
-}
 
-// Simple greedy nearest-neighbor + 2-opt improvement for MVP
-function solveHeuristic(nodes: Node[], durations: number[]) {
-  const n = nodes.length;
-  if (n === 0) return [] as number[];
-
-  const visited = new Array(n).fill(false);
-  const route: number[] = [];
-  let current = 0; // start at index 0 (assume depot is first, or first pickup)
-  visited[current] = true;
-  route.push(current);
-
-  while (route.length < n) {
-    let next = -1;
-    let best = Infinity;
-    for (let j = 0; j < n; j++) {
-      if (visited[j]) continue;
-      const cost = durations[current * n + j] ?? Infinity;
-      if (cost < best) {
-        best = cost;
-        next = j;
-      }
-    }
-    if (next === -1) break;
-    visited[next] = true;
-    route.push(next);
-    current = next;
-  }
-
-  // 2-opt
-  let improved = true;
-  while (improved) {
-    improved = false;
-    for (let i = 1; i < route.length - 2; i++) {
-      for (let k = i + 1; k < route.length - 1; k++) {
-        const a = route[i - 1];
-        const b = route[i];
-        const c = route[k];
-        const d = route[k + 1];
-        const delta =
-          durations[a * n + c] + durations[b * n + d] - (durations[a * n + b] + durations[c * n + d]);
-        if (delta < -1e-6) {
-          route.splice(i, k - i + 1, ...route.slice(i, k + 1).reverse());
-          improved = true;
-        }
-      }
+    previous.load_delta += stop.load_delta;
+    previous.cumulative_load_after = stop.cumulative_load_after;
+    previous.departure_seconds = stop.departure_seconds;
+    previous.travel_time_from_previous_seconds += stop.travel_time_from_previous_seconds;
+    previous.travel_distance_from_previous_meters += stop.travel_distance_from_previous_meters;
+    previous.order_id = previous.order_id ?? stop.order_id;
+    previous.pair_id = previous.pair_id ?? stop.pair_id;
+    previous.buyer_id = previous.buyer_id ?? stop.buyer_id;
+    previous.mergedNodeIds.push(stop.node_id);
+    if (stop.order_id) {
+      previous.mergedOrderIds.push(stop.order_id);
     }
   }
 
-  return route;
-}
+  return merged;
+};
 
-export async function planBatch(batchId: string) {
-  const nodes = await buildNodesForBatch(batchId);
-  if (nodes.length === 0) throw new Error("No nodes to plan");
-
-  const matrix = await buildMatrix(nodes);
-  const order = solveHeuristic(nodes, matrix.durations ?? []);
-
-  // persist Route and Stops
+const persistPlannedRoute = async (
+  batchId: string,
+  solvedStops: SequencedPlannedStop[],
+  routeStartTimeUnix: number,
+  routeDurationSeconds: number,
+  routeDistanceMeters: number,
+) => {
   const route = await prisma.route.create({
     data: {
+      routeNumber: `RT-${batchId.slice(0, 8).toUpperCase()}-${routeStartTimeUnix}`,
       batchId,
       status: "PLANNED",
-      scheduledStart: new Date(),
-      scheduledEnd: new Date(),
-      totalDistance: 0,
+      scheduledStart: new Date(routeStartTimeUnix * 1000),
+      scheduledEnd: new Date((routeStartTimeUnix + routeDurationSeconds) * 1000),
+      totalDistance: routeDistanceMeters,
+      estimatedDuration: routeDurationSeconds,
+      optimizedWaypoints: solvedStops.map((stop) => ({
+        nodeId: stop.node_id,
+        kind: stop.kind,
+        latitude: stop.latitude,
+        longitude: stop.longitude,
+        orderId: stop.order_id,
+        buyerId: stop.buyer_id,
+        pairId: stop.pair_id,
+        sellerId: stop.seller_id,
+        mergedNodeIds: stop.mergedNodeIds,
+        mergedOrderIds: stop.mergedOrderIds,
+        arrivalSeconds: stop.arrival_seconds,
+        departureSeconds: stop.departure_seconds,
+      })),
+      googleMapsRouteData: {
+        solver: "ortools",
+        objective: "time_minimization",
+      },
     },
   });
 
-  let seq = 1;
-  const stopsData = order.map((idx) => {
-    const n = nodes[idx];
-    return {
-      id: undefined,
-      routeId: route.id,
-      type: n.type === "PICKUP" ? "PICKUP" : "DELIVERY",
-      sequenceOrder: seq++,
-      address: "",
-      latitude: n.latitude,
-      longitude: n.longitude,
-      sellerId: n.sellerId ?? null,
-      buyerId: n.orderId ? undefined : null,
-      orderId: n.orderId ?? null,
-      itemsSummary: null,
-    } as any;
-  });
+  for (const stop of solvedStops) {
+    await prisma.stop.create({
+      data: {
+        routeId: route.id,
+        type: stop.kind,
+        sequenceOrder: stop.sequence,
+        address: "",
+        latitude: stop.latitude,
+        longitude: stop.longitude,
+        sellerId: stop.seller_id ?? null,
+        buyerId: stop.buyer_id ?? null,
+        orderId: stop.kind === "DELIVERY" ? stop.order_id ?? null : null,
+        status: "PENDING",
+        estimatedArrival: new Date(stop.arrival_seconds * 1000),
+        notes: stop.pair_id ?? null,
+        itemsSummary: {
+          nodeId: stop.node_id,
+          mergedNodeIds: stop.mergedNodeIds,
+          mergedOrderIds: stop.mergedOrderIds,
+          orderId: stop.order_id,
+          buyerId: stop.buyer_id,
+          pairId: stop.pair_id,
+          sellerId: stop.seller_id,
+          loadDelta: stop.load_delta,
+          cumulativeLoadAfter: stop.cumulative_load_after,
+        },
+      } as any,
+    });
+  }
 
-  for (const s of stopsData) {
-    await prisma.stop.create({ data: s });
+  return route;
+};
+
+const buildFallbackSolution = async (
+  nodes: PlannerNode[],
+  depot: PlannerDepot,
+  routeStartTimeUnix: number,
+  initialLoad: number,
+  matrices: { durations: number[]; distances: number[] },
+) => {
+  const points: PlannerPoint[] = [depot, ...nodes];
+  const ordered = [0];
+  const visited = new Set<number>([0]);
+  let current = 0;
+
+  while (ordered.length < points.length) {
+    let bestIndex = -1;
+    let bestCost = Number.POSITIVE_INFINITY;
+    for (let index = 1; index < points.length; index++) {
+      if (visited.has(index)) continue;
+      const cost = matrices.durations[current * points.length + index];
+      if (cost < bestCost) {
+        bestCost = cost;
+        bestIndex = index;
+      }
+    }
+    if (bestIndex === -1) break;
+    visited.add(bestIndex);
+    ordered.push(bestIndex);
+    current = bestIndex;
+  }
+
+  let cumulativeLoad = initialLoad;
+  let routeDurationSeconds = 0;
+  let routeDistanceMeters = 0;
+  const stops: OrtoolsPlannedStop[] = [];
+
+  for (let sequence = 1; sequence < ordered.length; sequence++) {
+    const fromIndex = ordered[sequence - 1];
+    const toIndex = ordered[sequence];
+    const node = points[toIndex] as PlannerNode;
+    const travelTime = matrices.durations[fromIndex * points.length + toIndex] ?? 0;
+    const travelDistance = matrices.distances[fromIndex * points.length + toIndex] ?? 0;
+    routeDurationSeconds += travelTime;
+    routeDistanceMeters += travelDistance;
+    cumulativeLoad += node.loadDelta;
+
+    stops.push({
+      sequence,
+      node_id: node.nodeId,
+      kind: node.kind,
+      latitude: node.latitude,
+      longitude: node.longitude,
+      load_delta: node.loadDelta,
+      cumulative_load_after: cumulativeLoad,
+      arrival_seconds: routeStartTimeUnix + routeDurationSeconds,
+      departure_seconds: routeStartTimeUnix + routeDurationSeconds + node.serviceSeconds,
+      travel_time_from_previous_seconds: travelTime,
+      travel_distance_from_previous_meters: travelDistance,
+      order_id: node.orderId,
+      buyer_id: node.buyerId,
+      pair_id: node.pairId,
+      seller_id: node.sellerId,
+    });
+
+    routeDurationSeconds += node.serviceSeconds;
   }
 
   return {
+    solved: true,
+    route_distance_meters: routeDistanceMeters,
+    route_duration_seconds: routeDurationSeconds,
+    objective_value: routeDurationSeconds,
+    stops,
+    solver: "heuristic-fallback",
+  } satisfies OrtoolsSolveResponse;
+};
+
+export async function planBatch(batchId: string, options: PlannerBatchPlanOptions = {}) {
+  const { nodes, initialLoad, vehicleCapacity } = await buildNodesForBatch(batchId, options);
+
+  if (nodes.length === 0) throw new Error("No nodes to plan");
+
+  const depot = resolveDepot(nodes, options.depot);
+  const routeStartTimeUnix = Math.floor(Date.now() / 1000);
+  const points: PlannerPoint[] = [depot, ...nodes];
+  const matrix = await buildMatrixFromPoints(points);
+  const routeTimeLimitSeconds = options.timeLimitSeconds ?? Number(process.env.PLANNER_SOLVER_TIME_LIMIT_SECONDS ?? "12");
+
+  let solution: OrtoolsSolveResponse;
+  try {
+    solution = await solveRouteWithOrtools({
+      depot,
+      nodes,
+      vehicleCapacity,
+      initialLoad,
+      routeStartTimeUnix,
+      timeLimitSeconds: routeTimeLimitSeconds,
+      travelTimeMatrixSeconds: toSquareMatrix(matrix.durations, points.length),
+      travelDistanceMatrixMeters: toSquareMatrix(matrix.distances, points.length),
+    });
+  } catch (error) {
+    console.error(`[planner] OR-Tools solve failed, falling back to heuristic: ${(error as Error).message}`);
+    solution = await buildFallbackSolution(nodes, depot, routeStartTimeUnix, initialLoad, matrix);
+  }
+
+  const solvedStops: SequencedPlannedStop[] = mergeConsecutivePickupStops(solution.stops).map(
+    (stop, index) => ({
+      ...stop,
+      sequence: index + 1,
+    })
+  );
+  const route = await persistPlannedRoute(
+    batchId,
+    solvedStops,
+    routeStartTimeUnix,
+    solution.route_duration_seconds,
+    solution.route_distance_meters
+  );
+
+  return {
     routeId: route.id,
-    stops: nodes,
-    order,
+    solver: solution.solver,
+    solved: solution.solved,
+    routeDistanceMeters: solution.route_distance_meters,
+    routeDurationSeconds: solution.route_duration_seconds,
+    stops: solvedStops,
   };
 }
 

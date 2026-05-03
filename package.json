@@ -10,7 +10,8 @@
     "start": "node dist/server.js",
     "seed": "tsx prisma/seed.ts",
     "db:inspect": "tsx inspect-db.ts",
-    "studio": "prisma studio --port 5555"
+    "studio": "prisma studio --port 5555",
+    "planner:service": "cd route-optimizer-service && uvicorn app.main:app --host 0.0.0.0 --port 8001 --reload"
   },
   "keywords": [],
   "author": "",
