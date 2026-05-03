@@ -11,6 +11,7 @@ import {
   emitRouteModified,
   emitRoutePlanned,
 } from "./planner.realtime.js";
+import { recordPlannerMetric, recordPlannerTiming } from "./planner.metrics.js";
 
 type PlannerBatchPlanOptions = {
   pickupRequiredOrderIds?: string[];
@@ -524,6 +525,7 @@ const routeStopToPlannerNode = (stop: {
 };
 
 export async function planBatch(batchId: string, options: PlannerBatchPlanOptions = {}) {
+  const startedAt = Date.now();
   const { nodes, initialLoad, vehicleCapacity } = await buildNodesForBatch(batchId, options);
 
   if (nodes.length === 0) throw new Error("No nodes to plan");
@@ -564,6 +566,10 @@ export async function planBatch(batchId: string, options: PlannerBatchPlanOption
     stops: solvedStops,
   });
 
+  recordPlannerMetric("route_planned");
+  recordPlannerMetric("plan");
+  recordPlannerTiming("plan", Date.now() - startedAt);
+
   return {
     routeId: route.id,
     solver: solution.solver,
@@ -575,6 +581,7 @@ export async function planBatch(batchId: string, options: PlannerBatchPlanOption
 }
 
 export async function dispatchRoute(routeId: string, driverId: string) {
+  const startedAt = Date.now();
   const route = await prisma.route.findUnique({
     where: { id: routeId },
     include: {
@@ -620,6 +627,10 @@ export async function dispatchRoute(routeId: string, driverId: string) {
 
   emitRouteDispatched(updatedRoute.id, driverId, payload);
 
+  recordPlannerMetric("route_dispatched");
+  recordPlannerMetric("dispatch");
+  recordPlannerTiming("dispatch", Date.now() - startedAt);
+
   return {
     id: updatedRoute.id,
     status: updatedRoute.status,
@@ -658,6 +669,7 @@ const calculateCurrentLoadFromStops = (
 };
 
 export async function rerouteActiveRoutesOnce() {
+  const startedAt = Date.now();
   const routes = await prisma.route.findMany({
     where: {
       driverId: { not: null },
@@ -678,12 +690,14 @@ export async function rerouteActiveRoutesOnce() {
     });
 
     if (!latestLocation) {
+      recordPlannerMetric("reroute_skipped");
       results.push({ routeId: route.id, rerouted: false, reason: "missing-driver-location" });
       continue;
     }
 
     const remainingStops = getRemainingStops(route.stops);
     if (remainingStops.length === 0) {
+      recordPlannerMetric("reroute_skipped");
       results.push({ routeId: route.id, rerouted: false, reason: "no-remaining-stops" });
       continue;
     }
@@ -709,6 +723,7 @@ export async function rerouteActiveRoutesOnce() {
     const improvementSeconds = oldRemainingSeconds - currentPlan.route_duration_seconds;
 
     if (improvementSeconds < Number(process.env.PLANNER_REROUTE_MIN_GAIN_SECONDS ?? "90")) {
+      recordPlannerMetric("reroute_skipped");
       results.push({ routeId: route.id, rerouted: false, reason: "improvement-below-threshold" });
       continue;
     }
@@ -784,6 +799,8 @@ export async function rerouteActiveRoutesOnce() {
       },
     });
 
+    recordPlannerMetric("route_modified");
+
     const payload = {
       routeId: route.id,
       driverId: route.driverId,
@@ -797,6 +814,9 @@ export async function rerouteActiveRoutesOnce() {
 
     results.push({ routeId: route.id, rerouted: true, reason: `improved-by-${improvementSeconds}s` });
   }
+
+  recordPlannerMetric("reroute");
+  recordPlannerTiming("reroute", Date.now() - startedAt);
 
   return results;
 }

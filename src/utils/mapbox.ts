@@ -1,3 +1,5 @@
+import { recordPlannerMetric } from "../modules/planner/planner.metrics.js";
+
 type MatrixResponse = {
   durations: number[];
   distances: number[];
@@ -20,8 +22,11 @@ export async function fetchMatrix(coords: Array<[number, number]>, options: Fetc
   const cacheTtlMs = options.cacheTtlMs ?? DEFAULT_CACHE_TTL_MS;
   const cached = MATRIX_CACHE.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) {
+    recordPlannerMetric("matrix_cache_hit");
     return cached.value;
   }
+
+  recordPlannerMetric("matrix_cache_miss");
 
   const token = process.env.MAPBOX_TOKEN;
   if (!token) throw new Error("MAPBOX_TOKEN not configured");
