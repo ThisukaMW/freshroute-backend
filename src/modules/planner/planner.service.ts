@@ -6,6 +6,11 @@ import {
   type OrtoolsPlannedStop,
   type OrtoolsSolveResponse,
 } from "./ortools.client.js";
+import {
+  emitRouteDispatched,
+  emitRouteModified,
+  emitRoutePlanned,
+} from "./planner.realtime.js";
 
 type PlannerBatchPlanOptions = {
   pickupRequiredOrderIds?: string[];
@@ -37,6 +42,24 @@ type PlannerDepot = {
 };
 
 type PlannerPoint = PlannerDepot | PlannerNode;
+
+type SolvePlannerInput = {
+  depot: PlannerDepot;
+  nodes: PlannerNode[];
+  initialLoad: number;
+  vehicleCapacity: number;
+  routeStartTimeUnix: number;
+  timeLimitSeconds: number;
+};
+
+type RouteStopSummary = {
+  nodeId: string;
+  pairId?: string;
+  sellerId?: string;
+  buyerId?: string;
+  orderId?: string;
+  loadDelta: number;
+};
 
 const DEFAULT_SERVICE_SECONDS = 60;
 const DEFAULT_MATRIX_CACHE_TTL_MS = 5 * 60 * 1000;
@@ -106,6 +129,35 @@ const buildMatrixFromPoints = async (points: PlannerPoint[]) => {
     }
 
     return { durations, distances };
+  }
+};
+
+const solvePlannerNodes = async ({
+  depot,
+  nodes,
+  initialLoad,
+  vehicleCapacity,
+  routeStartTimeUnix,
+  timeLimitSeconds,
+}: SolvePlannerInput): Promise<OrtoolsSolveResponse> => {
+  const points: PlannerPoint[] = [depot, ...nodes];
+  const matrix = await buildMatrixFromPoints(points);
+  const matrixWidth = points.length;
+
+  try {
+    return await solveRouteWithOrtools({
+      depot,
+      nodes,
+      vehicleCapacity,
+      initialLoad,
+      routeStartTimeUnix,
+      timeLimitSeconds,
+      travelTimeMatrixSeconds: toSquareMatrix(matrix.durations, matrixWidth),
+      travelDistanceMatrixMeters: toSquareMatrix(matrix.distances, matrixWidth),
+    });
+  } catch (error) {
+    console.error(`[planner] OR-Tools solve failed, falling back to heuristic: ${(error as Error).message}`);
+    return buildFallbackSolution(nodes, depot, routeStartTimeUnix, initialLoad, matrix);
   }
 };
 
@@ -405,6 +457,72 @@ const buildFallbackSolution = async (
   } satisfies OrtoolsSolveResponse;
 };
 
+const extractRouteStopSummary = (stop: {
+  id: string;
+  type: "PICKUP" | "DELIVERY";
+  orderId: string | null;
+  sellerId: string | null;
+  buyerId: string | null;
+  itemsSummary: unknown;
+  latitude: number;
+  longitude: number;
+  sequenceOrder: number;
+  estimatedArrival: Date | null;
+  status: string;
+}) => {
+  const summary = (stop.itemsSummary as RouteStopSummary | null) ?? null;
+  const loadDelta =
+    summary?.loadDelta ??
+    (stop.type === "PICKUP" ? 1 : -1);
+
+  return {
+    nodeId: summary?.nodeId ?? `stop:${stop.id}`,
+    pairId: summary?.pairId ?? stop.orderId ?? undefined,
+    sellerId: summary?.sellerId ?? stop.sellerId ?? undefined,
+    buyerId: summary?.buyerId ?? stop.buyerId ?? undefined,
+    orderId: summary?.orderId ?? stop.orderId ?? undefined,
+    loadDelta,
+  } satisfies RouteStopSummary;
+};
+
+const routeStopToPlannerNode = (stop: {
+  id: string;
+  type: "PICKUP" | "DELIVERY";
+  orderId: string | null;
+  sellerId: string | null;
+  buyerId: string | null;
+  itemsSummary: unknown;
+  latitude: number;
+  longitude: number;
+}) : PlannerNode => {
+  const summary = extractRouteStopSummary({
+    id: stop.id,
+    type: stop.type,
+    orderId: stop.orderId,
+    sellerId: stop.sellerId,
+    buyerId: stop.buyerId,
+    itemsSummary: stop.itemsSummary,
+    latitude: stop.latitude,
+    longitude: stop.longitude,
+    sequenceOrder: 0,
+    estimatedArrival: null,
+    status: "PENDING",
+  });
+
+  return {
+    nodeId: summary.nodeId,
+    kind: stop.type,
+    latitude: stop.latitude,
+    longitude: stop.longitude,
+    loadDelta: summary.loadDelta,
+    orderId: summary.orderId,
+    pairId: summary.pairId,
+    sellerId: summary.sellerId,
+    buyerId: summary.buyerId,
+    serviceSeconds: DEFAULT_SERVICE_SECONDS,
+  };
+};
+
 export async function planBatch(batchId: string, options: PlannerBatchPlanOptions = {}) {
   const { nodes, initialLoad, vehicleCapacity } = await buildNodesForBatch(batchId, options);
 
@@ -412,26 +530,15 @@ export async function planBatch(batchId: string, options: PlannerBatchPlanOption
 
   const depot = resolveDepot(nodes, options.depot);
   const routeStartTimeUnix = Math.floor(Date.now() / 1000);
-  const points: PlannerPoint[] = [depot, ...nodes];
-  const matrix = await buildMatrixFromPoints(points);
   const routeTimeLimitSeconds = options.timeLimitSeconds ?? Number(process.env.PLANNER_SOLVER_TIME_LIMIT_SECONDS ?? "12");
-
-  let solution: OrtoolsSolveResponse;
-  try {
-    solution = await solveRouteWithOrtools({
-      depot,
-      nodes,
-      vehicleCapacity,
-      initialLoad,
-      routeStartTimeUnix,
-      timeLimitSeconds: routeTimeLimitSeconds,
-      travelTimeMatrixSeconds: toSquareMatrix(matrix.durations, points.length),
-      travelDistanceMatrixMeters: toSquareMatrix(matrix.distances, points.length),
-    });
-  } catch (error) {
-    console.error(`[planner] OR-Tools solve failed, falling back to heuristic: ${(error as Error).message}`);
-    solution = await buildFallbackSolution(nodes, depot, routeStartTimeUnix, initialLoad, matrix);
-  }
+  const solution = await solvePlannerNodes({
+    depot,
+    nodes,
+    initialLoad,
+    vehicleCapacity,
+    routeStartTimeUnix,
+    timeLimitSeconds: routeTimeLimitSeconds,
+  });
 
   const solvedStops: SequencedPlannedStop[] = mergeConsecutivePickupStops(solution.stops).map(
     (stop, index) => ({
@@ -447,6 +554,16 @@ export async function planBatch(batchId: string, options: PlannerBatchPlanOption
     solution.route_distance_meters
   );
 
+  emitRoutePlanned(route.id, route.driverId, {
+    routeId: route.id,
+    batchId: route.batchId,
+    routeNumber: route.routeNumber,
+    solver: solution.solver,
+    routeDistanceMeters: solution.route_distance_meters,
+    routeDurationSeconds: solution.route_duration_seconds,
+    stops: solvedStops,
+  });
+
   return {
     routeId: route.id,
     solver: solution.solver,
@@ -457,4 +574,231 @@ export async function planBatch(batchId: string, options: PlannerBatchPlanOption
   };
 }
 
-export default { planBatch };
+export async function dispatchRoute(routeId: string, driverId: string) {
+  const route = await prisma.route.findUnique({
+    where: { id: routeId },
+    include: {
+      batch: true,
+      driver: true,
+      stops: { orderBy: { sequenceOrder: "asc" } },
+    },
+  });
+
+  if (!route) throw new Error("Route not found");
+  if (!driverId.trim()) throw new Error("driverId is required");
+  if (!["PLANNED", "ASSIGNED", "STARTED"].includes(route.status)) {
+    throw new Error(`Route cannot be dispatched from status ${route.status}`);
+  }
+
+  const updatedRoute = await prisma.route.update({
+    where: { id: routeId },
+    data: {
+      driverId,
+      status: "STARTED",
+      actualStart: route.actualStart ?? new Date(),
+    },
+    include: {
+      batch: true,
+      driver: true,
+      stops: { orderBy: { sequenceOrder: "asc" } },
+    },
+  });
+
+  await prisma.batch.update({
+    where: { id: updatedRoute.batchId },
+    data: { status: "IN_PROGRESS" },
+  });
+
+  const payload = {
+    routeId: updatedRoute.id,
+    batchId: updatedRoute.batchId,
+    driverId,
+    status: updatedRoute.status,
+    actualStart: updatedRoute.actualStart,
+    routeNumber: updatedRoute.routeNumber,
+  };
+
+  emitRouteDispatched(updatedRoute.id, driverId, payload);
+
+  return {
+    id: updatedRoute.id,
+    status: updatedRoute.status,
+    driverId: updatedRoute.driverId,
+    actualStart: updatedRoute.actualStart,
+    batchId: updatedRoute.batchId,
+    routeNumber: updatedRoute.routeNumber,
+  };
+}
+
+const getRemainingStops = (stops: Array<{
+  id: string;
+  type: "PICKUP" | "DELIVERY";
+  orderId: string | null;
+  sellerId: string | null;
+  buyerId: string | null;
+  latitude: number;
+  longitude: number;
+  sequenceOrder: number;
+  status: string;
+  itemsSummary: unknown;
+  estimatedArrival: Date | null;
+}>) => stops.filter((stop) => stop.status !== "COMPLETED" && stop.status !== "SKIPPED");
+
+const calculateCurrentLoadFromStops = (
+  stops: Array<{
+    type: "PICKUP" | "DELIVERY";
+    itemsSummary: unknown;
+  }>
+) => {
+  return stops.reduce((load, stop) => {
+    const summary = (stop.itemsSummary as RouteStopSummary | null) ?? null;
+    const delta = summary?.loadDelta ?? (stop.type === "PICKUP" ? 1 : -1);
+    return load + delta;
+  }, 0);
+};
+
+export async function rerouteActiveRoutesOnce() {
+  const routes = await prisma.route.findMany({
+    where: {
+      driverId: { not: null },
+      status: { in: ["STARTED", "IN_PROGRESS"] },
+    },
+    include: {
+      driver: true,
+      stops: { orderBy: { sequenceOrder: "asc" } },
+    },
+  });
+
+  const results: Array<{ routeId: string; rerouted: boolean; reason: string }> = [];
+
+  for (const route of routes) {
+    const latestLocation = await prisma.driverLocation.findFirst({
+      where: { driverId: route.driverId ?? undefined },
+      orderBy: { timestamp: "desc" },
+    });
+
+    if (!latestLocation) {
+      results.push({ routeId: route.id, rerouted: false, reason: "missing-driver-location" });
+      continue;
+    }
+
+    const remainingStops = getRemainingStops(route.stops);
+    if (remainingStops.length === 0) {
+      results.push({ routeId: route.id, rerouted: false, reason: "no-remaining-stops" });
+      continue;
+    }
+
+    const depot = { latitude: latestLocation.latitude, longitude: latestLocation.longitude };
+    const currentLoad = calculateCurrentLoadFromStops(route.stops.filter((stop) => stop.status === "COMPLETED"));
+    const nodes = remainingStops.map(routeStopToPlannerNode);
+    const routeStartTimeUnix = Math.floor(Date.now() / 1000);
+    const timeLimitSeconds = Number(process.env.PLANNER_SOLVER_TIME_LIMIT_SECONDS ?? "12");
+    const vehicleCapacity = Number(process.env.PLANNER_VEHICLE_CAPACITY ?? "999999");
+
+    const currentPlan = await solvePlannerNodes({
+      depot,
+      nodes,
+      initialLoad: currentLoad,
+      vehicleCapacity,
+      routeStartTimeUnix,
+      timeLimitSeconds,
+    });
+
+    const oldRemainingRoute = await buildMatrixFromPoints([depot, ...nodes]);
+    const oldRemainingSeconds = oldRemainingRoute.durations.slice(1).reduce((sum, duration) => sum + duration, 0);
+    const improvementSeconds = oldRemainingSeconds - currentPlan.route_duration_seconds;
+
+    if (improvementSeconds < Number(process.env.PLANNER_REROUTE_MIN_GAIN_SECONDS ?? "90")) {
+      results.push({ routeId: route.id, rerouted: false, reason: "improvement-below-threshold" });
+      continue;
+    }
+
+    const updatedStops = mergeConsecutivePickupStops(currentPlan.stops).map((stop, index) => ({
+      ...stop,
+      sequence: index + 1,
+    }));
+
+    const previousOptimizedWaypoints = route.optimizedWaypoints ?? null;
+    const nextOptimizedWaypoints = updatedStops.map((stop) => ({
+      nodeId: stop.node_id,
+      kind: stop.kind,
+      latitude: stop.latitude,
+      longitude: stop.longitude,
+      orderId: stop.order_id,
+      buyerId: stop.buyer_id,
+      pairId: stop.pair_id,
+      sellerId: stop.seller_id,
+      mergedNodeIds: stop.mergedNodeIds,
+      mergedOrderIds: stop.mergedOrderIds,
+      arrivalSeconds: stop.arrival_seconds,
+      departureSeconds: stop.departure_seconds,
+    }));
+
+    await prisma.route.update({
+      where: { id: route.id },
+      data: {
+        totalDistance: currentPlan.route_distance_meters,
+        estimatedDuration: currentPlan.route_duration_seconds,
+        optimizedWaypoints: nextOptimizedWaypoints,
+        googleMapsRouteData: {
+            ...(typeof route.googleMapsRouteData === "object" && route.googleMapsRouteData !== null
+              ? (route.googleMapsRouteData as Record<string, unknown>)
+              : {}),
+            reroutedAt: new Date().toISOString(),
+            rerouteReason: `traffic-improvement-${improvementSeconds}s`,
+        },
+      },
+    });
+
+    for (const stop of updatedStops) {
+      await prisma.stop.updateMany({
+        where: {
+          routeId: route.id,
+          OR: [
+            { id: stop.node_id.replace(/^stop:/, "") },
+            { orderId: stop.order_id ?? undefined },
+          ],
+        },
+        data: {
+          sequenceOrder: stop.sequence,
+          estimatedArrival: new Date(stop.arrival_seconds * 1000),
+        },
+      });
+    }
+
+    await prisma.routeModification.create({
+      data: {
+        routeId: route.id,
+        type: "ROUTE_CHANGED",
+        reason: `Improved remaining route by ${improvementSeconds}s due to traffic`,
+        oldData: {
+          optimizedWaypoints: previousOptimizedWaypoints,
+          remainingStopCount: remainingStops.length,
+        },
+        newData: {
+          optimizedWaypoints: nextOptimizedWaypoints,
+          remainingStopCount: updatedStops.length,
+          routeDistanceMeters: currentPlan.route_distance_meters,
+          routeDurationSeconds: currentPlan.route_duration_seconds,
+        },
+      },
+    });
+
+    const payload = {
+      routeId: route.id,
+      driverId: route.driverId,
+      reroutedAt: new Date().toISOString(),
+      improvementSeconds,
+      totalDistanceMeters: currentPlan.route_distance_meters,
+      routeDurationSeconds: currentPlan.route_duration_seconds,
+      stops: nextOptimizedWaypoints,
+    };
+    emitRouteModified(route.id, route.driverId, payload);
+
+    results.push({ routeId: route.id, rerouted: true, reason: `improved-by-${improvementSeconds}s` });
+  }
+
+  return results;
+}
+
+export default { planBatch, dispatchRoute, rerouteActiveRoutesOnce };

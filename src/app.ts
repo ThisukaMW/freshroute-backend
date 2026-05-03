@@ -4,6 +4,7 @@ import dotenv from "dotenv";
 import authRoutes from "./modules/auth/auth.routes.js";
 import driverRoutes from "./modules/driver/driver.routes.js";
 import plannerRoutes from "./modules/planner/planner.routes.js";
+import routeDispatchRoutes from "./modules/planner/routes.routes.js";
 
 dotenv.config();
 
@@ -31,5 +32,6 @@ app.get("/api/v1/health", (_req, res) => {
 app.use("/api/v1/auth", authRoutes);
 app.use("/api/v1/driver", driverRoutes);
 app.use("/api/v1/batches", plannerRoutes);
+app.use("/api/v1/routes", routeDispatchRoutes);
 
 export default app;

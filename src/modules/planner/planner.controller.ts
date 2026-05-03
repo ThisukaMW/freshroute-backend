@@ -11,4 +11,16 @@ export const planBatchHandler = async (req: express.Request, res: express.Respon
   }
 };
 
-export default { planBatchHandler };
+export const dispatchRouteHandler = async (req: express.Request, res: express.Response) => {
+  const routeId = Array.isArray(req.params.routeId) ? req.params.routeId[0] : req.params.routeId;
+  const driverId = typeof req.body?.driverId === "string" ? req.body.driverId : "";
+
+  try {
+    const result = await plannerService.dispatchRoute(routeId, driverId);
+    res.json(result);
+  } catch (err: any) {
+    res.status(400).json({ error: err.message ?? String(err) });
+  }
+};
+
+export default { planBatchHandler, dispatchRouteHandler };

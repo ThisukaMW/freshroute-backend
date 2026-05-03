@@ -2,6 +2,8 @@ import { createServer } from "http";
 import { Server } from "socket.io";
 import app from "./app.js";
 import { setupSocketHandlers } from "./socket.js";
+import { setPlannerRealtimeIo } from "./modules/planner/planner.realtime.js";
+import { startRouteRerouteWorker } from "./modules/planner/route-reroute.worker.js";
 
 const PORT = process.env.PORT || 5000;
 const HOST = process.env.HOST || "0.0.0.0";
@@ -47,6 +49,8 @@ const io = new Server(httpServer, {
 
 // Setup socket event handlers
 setupSocketHandlers(io);
+setPlannerRealtimeIo(io);
+startRouteRerouteWorker();
 
 io.engine.on("connection_error", (error) => {
   console.error(
