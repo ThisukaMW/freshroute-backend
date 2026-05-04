@@ -10,18 +10,11 @@ import {
 
 const router = Router();
 
-// Single login for ALL roles (buyer, seller, driver, admin, field_admin)
 router.post("/login", loginUserController);
-
-// Register
 router.post("/customer/register", registerCustomer);
 router.post("/vendor/signup", signupVendor);
-
-// Password reset
 router.post("/forgot-password", forgotPasswordController);
 router.post("/reset-password", resetPasswordController);
-
-// Security — "wasn't me" account lock
 router.post("/secure-account", secureAccountController);
 
 export default router;

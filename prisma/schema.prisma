@@ -112,6 +112,7 @@ model User {
   city          String?    
   address       String?
   passwordHash  String
+  prevPasswordHash  String?   // stores old hash before a reset, cleared after secure-account
 
   // Firebase Cloud Messaging token for push notifications
   fcmToken      String?
@@ -126,6 +127,7 @@ model User {
   sellerProfile Seller?
   buyerProfile  Buyer?
   notifications Notification[]
+
 
   @@index([email])
   @@index([role, status])
@@ -524,22 +526,21 @@ model Rating {
   buyerId String
   buyer   Buyer  @relation(fields: [buyerId], references: [id])
 
-  rating               Int
-  deliveryRating       Int?
-  productQualityRating Int?
-  packagingRating      Int?   // ← new
-
-  comment            String?
-  isVerifiedPurchase Boolean @default(false)
-  isFlagged          Boolean @default(false)
+  rating                Int      // Overall rating (1-5)
+  deliveryRating        Int?     // Delivery speed/accuracy
+  productQualityRating  Int?     // Product condition on arrival
+  packagingRating       Int?
+  comment               String?
+  isVerifiedPurchase    Boolean  @default(false)
+  isFlagged             Boolean  @default(false)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@unique([orderId, productId])  // ← new
+  @@unique([orderId, productId])
 
   @@index([sellerId])
-  @@index([productId])            // ← new
+  @@index([productId])
   @@index([driverId])
   @@index([orderId])
   @@index([buyerId])
@@ -563,4 +564,42 @@ model Notification {
 
   @@index([userId, read])
   @@index([createdAt(sort: Desc)])
+}
+
+// ============= TRUCK MANAGEMENT =============
+
+enum TruckType {
+  REFRIGERATED_VAN
+  FLATBED
+  BOX_TRUCK
+  SEMI_TRAILER
+  TANKER
+  DUMP_TRUCK
+}
+
+enum TemperatureSetting {
+  AMBIENT
+  CHILLED
+  FROZEN
+}
+
+model Truck {
+  id                      String              @id @default(uuid())
+  truckId                 String              @unique
+  operator                String?
+  truckType               TruckType
+  temperatureSetting      TemperatureSetting?
+  route                   String?
+  fuelNeeded              Float?
+  capacityLbs             Float?
+  palletCapacity          Int?
+  deliveryEfficiencyPercent Float?
+  avgDelayHours           Float?
+  isActive                Boolean             @default(true)
+
+  createdAt               DateTime            @default(now())
+  updatedAt               DateTime            @updatedAt
+
+  @@index([operator])
+  @@index([truckType])
 }

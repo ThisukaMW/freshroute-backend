@@ -1,16 +1,16 @@
-/*import bcrypt from "bcrypt";
+import bcrypt from "bcrypt";
 import prisma from "../../config/database.js";
 import { createNotification } from "../notifications/notification.service.js";
 
-// ---------------- UPDATE PERSONAL INFO ----------------
-export const updateVendorPersonalInfo = async (
+// ── PERSONAL INFO (buyer, seller, admin) ─────────────────────────
+export const updatePersonalInfo = async (
   userId: string,
   data: { name?: string; phone?: string; city?: string }
 ) => {
   const user = await prisma.user.update({
     where: { id: userId },
     data: { name: data.name, phone: data.phone, city: data.city },
-    select: { id: true, name: true, email: true, phone: true, city: true },
+    select: { id: true, name: true, email: true, phone: true, city: true, address: true },
   });
 
   await createNotification({
@@ -23,7 +23,28 @@ export const updateVendorPersonalInfo = async (
   return user;
 };
 
-// ---------------- UPDATE BUSINESS INFO ----------------
+// ── DELIVERY ADDRESS (buyer only) ─────────────────────────────────
+export const updateDeliveryAddress = async (
+  userId: string,
+  data: { address?: string; city?: string }
+) => {
+  const user = await prisma.user.update({
+    where: { id: userId },
+    data: { address: data.address, city: data.city },
+    select: { id: true, name: true, email: true, phone: true, city: true, address: true },
+  });
+
+  await createNotification({
+    userId,
+    title: "Delivery address updated",
+    body: "Your delivery address has been updated successfully.",
+    data: { type: "profile_update", section: "delivery_address" },
+  }).catch(() => {});
+
+  return user;
+};
+
+// ── BUSINESS INFO (seller only) ───────────────────────────────────
 export const updateBusinessInfo = async (
   userId: string,
   data: { businessName?: string; businessAddress?: string; city?: string }
@@ -48,8 +69,8 @@ export const updateBusinessInfo = async (
   }).catch(() => {});
 };
 
-// ---------------- UPDATE PASSWORD ----------------
-export const updateVendorPassword = async (
+// ── PASSWORD (all roles) ──────────────────────────────────────────
+export const updatePassword = async (
   userId: string,
   data: { currentPassword: string; newPassword: string }
 ) => {
@@ -65,17 +86,20 @@ export const updateVendorPassword = async (
 
   const passwordHash = await bcrypt.hash(data.newPassword, 10);
 
-  await prisma.user.update({ where: { id: userId }, data: { passwordHash } });
+  await prisma.user.update({
+    where: { id: userId },
+    data: { passwordHash },
+  });
 
   await createNotification({
     userId,
     title: "Password changed",
-    body: "Your password has been changed successfully.",
+    body: "Your password has been changed successfully. If you did not do this, please contact support.",
     data: { type: "profile_update", section: "password" },
   }).catch(() => {});
 };
 
-// ---------------- GET SELLER STATUS ----------------
+// ── SELLER STATUS (seller only) ───────────────────────────────────
 export const getSellerStatus = async (userId: string) => {
   const seller = await prisma.seller.findUnique({
     where: { userId },
@@ -88,9 +112,8 @@ export const getSellerStatus = async (userId: string) => {
   return { isApproved: seller?.isApproved ?? false, status: user?.status ?? "ACTIVE" };
 };
 
-// ---------------- DELETE VENDOR ACCOUNT ----------------
-export const deleteVendorAccount = async (userId: string) => {
-  // delete related records first to avoid foreign key constraint errors
+// ── DELETE ACCOUNT (buyer, seller) ───────────────────────────────
+export const deleteAccount = async (userId: string) => {
   await prisma.notification.deleteMany({ where: { userId } });
   await prisma.user.delete({ where: { id: userId } });
-};*/
+};

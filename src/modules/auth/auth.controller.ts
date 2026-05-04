@@ -4,9 +4,9 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import { findCustomerByEmail, createCustomer } from "./auth.service.js";
 import { createVendor, findVendorByEmail } from "./auth.service.js";
-import { forgotPassword, resetPassword, invalidateUserSessions, findUserByEmail } from "./auth.service.js";
+import { forgotPassword, resetPassword, secureAccount } from "./auth.service.js";
+import { sendPasswordChangedEmail } from "../../utils/mailer.js";
 import { createNotification } from "../notifications/notification.service.js";
-import { sendPasswordChangedEmail, sendAccountLockedEmail } from "../../utils/mailer.js";
 
 // ---------------- PASSWORD VALIDATION ----------------
 const validatePassword = (pwd: string): string | null => {
@@ -17,27 +17,16 @@ const validatePassword = (pwd: string): string | null => {
   return null;
 };
 
-// ---------------- UNIFIED LOGIN (all roles) ----------------
+// ---------------- UNIFIED LOGIN ----------------
 export const loginUserController = async (req: Request, res: Response) => {
   try {
     const { email, password } = req.body;
-
     if (!email || !password) {
       return res.status(400).json({ message: "Email and password are required" });
     }
-
     const result = await loginUser(email, password);
-
-    // Only send token, safe user object, and profile — frontend handles navigation
-    const response: Record<string, any> = {
-      token: result.token,
-      user:  result.user,
-    };
-
-    if (result.profile !== null) {
-      response.profile = result.profile;
-    }
-
+    const response: Record<string, any> = { token: result.token, user: result.user };
+    if (result.profile !== null) response.profile = result.profile;
     return res.json(response);
   } catch (err: any) {
     const status = err.statusCode ?? 500;
@@ -49,32 +38,25 @@ export const loginUserController = async (req: Request, res: Response) => {
 export const registerCustomer = async (req: Request, res: Response) => {
   try {
     const { name, email, password, phone, city, address } = req.body;
-
     if (!name || !email || !password) {
       return res.status(400).json({ message: "Name, email, and password are required" });
     }
-
     const pwdError = validatePassword(password);
     if (pwdError) return res.status(400).json({ message: pwdError });
-
     const existing = await findCustomerByEmail(email);
     if (existing) return res.status(400).json({ message: "Email already exists" });
-
     const passwordHash = await bcrypt.hash(password, 10);
     const customer = await createCustomer({ name, email, passwordHash, phone, city, address });
-
     const token = jwt.sign(
       { userId: customer.id, name: customer.name, email: customer.email, role: "buyer", status: "ACTIVE" },
       process.env.JWT_SECRET!,
       { expiresIn: "7d" }
     );
-
     await createNotification({
       userId: customer.id,
-      title:  "Welcome to FreshRoute! 🎉",
-      body:   `Hi ${customer.name}, your account has been created successfully. Start browsing fresh products from local vendors!`,
+      title: "Welcome to FreshRoute! 🎉",
+      body: `Hi ${customer.name}, your account has been created successfully.`,
     }).catch(() => {});
-
     return res.status(201).json({ token, user: customer });
   } catch (err: any) {
     if (err.code === "P2002") {
@@ -91,51 +73,42 @@ export const signupVendor = async (req: Request, res: Response) => {
       businessName, ownerName, email, phone, password, confirmPassword,
       businessAddress, city, latitude, longitude, agreedToPolicy,
     } = req.body;
-
     if (!businessName || !ownerName || !email || !password || !confirmPassword || !businessAddress || !city) {
       return res.status(400).json({ message: "Missing required fields" });
     }
-
     const pwdError = validatePassword(password);
     if (pwdError) return res.status(400).json({ message: pwdError });
-
     if (password !== confirmPassword) {
       return res.status(400).json({ message: "Passwords do not match" });
     }
-
     if (!agreedToPolicy) {
       return res.status(400).json({ message: "You must agree to vendor policy" });
     }
-
     const existing = await findVendorByEmail(email);
-    if (existing) {
-      return res.status(409).json({ message: "Vendor already exists" });
-    }
-
+    if (existing) return res.status(409).json({ message: "Vendor already exists" });
     const vendor = await createVendor({
       businessName, ownerName, email, phone, password, businessAddress, city,
-      latitude:  latitude  ? Number(latitude)  : undefined,
+      latitude: latitude ? Number(latitude) : undefined,
       longitude: longitude ? Number(longitude) : undefined,
     });
-
     const token = jwt.sign(
       { userId: vendor.id, name: vendor.name, email: vendor.email, role: "seller", status: "ACTIVE" },
       process.env.JWT_SECRET!,
       { expiresIn: "7d" }
     );
-
     await createNotification({
       userId: vendor.id,
-      title:  "Welcome to FreshRoute! 🎉",
-      body:   `Hi ${vendor.name}, your vendor account has been created. Start adding your products and reach local customers!`,
+      title: "Welcome to FreshRoute! 🎉",
+      body: `Hi ${vendor.name}, your vendor account has been created.`,
     }).catch(() => {});
-
     return res.status(201).json({
       token,
       user: { id: vendor.id, name: vendor.name, email: vendor.email, role: "seller", status: "ACTIVE" },
     });
-  } catch (err) {
-    console.error(err);
+  } catch (err: any) {
+    if (err.code === "P2002") {
+      return res.status(409).json({ message: "Phone number already exists" });
+    }
     return res.status(500).json({ message: "Vendor signup failed" });
   }
 };
@@ -143,11 +116,7 @@ export const signupVendor = async (req: Request, res: Response) => {
 // ---------------- FORGOT PASSWORD ----------------
 export const forgotPasswordController = async (req: Request, res: Response) => {
   const { email } = req.body;
-
-  if (!email) {
-    return res.status(400).json({ message: "Email is required" });
-  }
-
+  if (!email) return res.status(400).json({ message: "Email is required" });
   try {
     await forgotPassword(email);
     return res.json({ message: "If that email exists, a reset link has been sent." });
@@ -160,62 +129,32 @@ export const forgotPasswordController = async (req: Request, res: Response) => {
 // ---------------- RESET PASSWORD ----------------
 export const resetPasswordController = async (req: Request, res: Response) => {
   const { token, newPassword } = req.body;
-
   if (!token || !newPassword) {
     return res.status(400).json({ message: "Token and new password are required" });
   }
-
   const pwdError = validatePassword(newPassword);
   if (pwdError) return res.status(400).json({ message: pwdError });
-
   try {
-    // resetPassword should return the user so we can send the email
     const user = await resetPassword(token, newPassword);
-
-    // Fire-and-forget — don't block the response if email fails
     sendPasswordChangedEmail(user.email, user.name).catch((err) =>
       console.error("[email] Failed to send password changed email:", err)
     );
-
     return res.json({ message: "Password reset successfully" });
   } catch (err: any) {
     return res.status(400).json({ message: err.message ?? "Reset failed" });
   }
 };
 
-// ---------------- SECURE ACCOUNT (wasn't me) ----------------
+// ---------------- SECURE ACCOUNT ----------------
 export const secureAccountController = async (req: Request, res: Response) => {
-  const { email } = req.body;
-
-  if (!email) {
-    return res.status(400).json({ message: "Email is required" });
+  const { email, googleIdToken } = req.body;
+  if (!email || !googleIdToken) {
+    return res.status(400).json({ message: "Email and Google token are required" });
   }
-
   try {
-    const user = await findUserByEmail(email);
-
-    if (!user) {
-      // Don't reveal whether the email exists — just return success
-      return res.json({ message: "Account secured." });
-    }
-
-    // Invalidate all sessions + lock the account
-    await invalidateUserSessions(user.id);
-
-    // Notify the user that their account is now locked
-    sendAccountLockedEmail(user.email, user.name).catch((err) =>
-      console.error("[email] Failed to send account locked email:", err)
-    );
-
-    await createNotification({
-      userId: user.id,
-      title:  "⚠️ Account Locked",
-      body:   "Your account has been locked due to a security concern. Please contact support to recover access.",
-    }).catch(() => {});
-
-    return res.json({ message: "Account secured. All sessions have been invalidated." });
-  } catch (err) {
-    console.error(err);
-    return res.status(500).json({ message: "Failed to secure account" });
+    const result = await secureAccount(email, googleIdToken);
+    return res.json(result);
+  } catch (err: any) {
+    return res.status(err.statusCode ?? 500).json({ message: err.message ?? "Failed to secure account" });
   }
 };

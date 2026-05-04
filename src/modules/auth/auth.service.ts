@@ -3,6 +3,9 @@ import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import prisma from "../../config/database.js";
 import { sendResetEmail } from "../../utils/mailer.js";
+import { OAuth2Client } from "google-auth-library";
+
+const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 // ---------------- UNIFIED LOGIN ----------------
 export const loginUser = async (email: string, password: string) => {
@@ -54,7 +57,12 @@ export const loginUser = async (email: string, password: string) => {
       : null;
   }
 
-  return { token, user: safeUser, profile };
+  const redirectTo = role === "seller" ? "/seller"
+    : role === "admin" ? "/admin"
+    : role === "driver" ? "/driver"
+    : "/buyer/products";
+
+  return { token, user: safeUser, profile, redirectTo };
 };
 
 // ---------------- CUSTOMER ----------------
@@ -73,7 +81,7 @@ export const createCustomer = async (data: {
   city?: string;
   address?: string;
 }) => {
-  return prisma.user.create({
+  const user = await prisma.user.create({
     data: {
       name: data.name,
       email: data.email,
@@ -84,8 +92,26 @@ export const createCustomer = async (data: {
       address: data.address ?? undefined,
       status: "ACTIVE",
     },
-    select: { id: true, name: true, email: true, role: true, phone: true, city: true, address: true },
   });
+
+  await prisma.buyer.create({
+    data: {
+      userId: user.id,
+      deliveryAddress: data.address || "To be updated",
+      latitude: 6.9271,
+      longitude: 79.8612,
+    },
+  });
+
+  return {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    role: user.role,
+    phone: user.phone,
+    city: user.city,
+    address: user.address,
+  };
 };
 
 // ---------------- VENDOR ----------------
@@ -111,7 +137,7 @@ export const createVendor = async (input: VendorSignupInput) => {
     data: {
       name: input.ownerName,
       email: input.email,
-      phone: input.phone,
+      phone: input.phone?.trim() || null,
       role: "SELLER",
       status: "ACTIVE",
       city: input.city,
@@ -121,8 +147,8 @@ export const createVendor = async (input: VendorSignupInput) => {
         create: {
           businessName: input.businessName,
           businessAddress: input.businessAddress,
-          latitude: input.latitude,
-          longitude: input.longitude,
+          latitude: input.latitude ?? 0,
+          longitude: input.longitude ?? 0,
         },
       },
     },
@@ -136,7 +162,7 @@ export const forgotPassword = async (email: string) => {
   if (!user) return;
 
   const token = crypto.randomBytes(32).toString("hex");
-  const expiry = new Date(Date.now() + 1000 * 60 * 60); // 1 hour
+  const expiry = new Date(Date.now() + 1000 * 60 * 60);
 
   await prisma.user.update({
     where: { email },
@@ -159,7 +185,7 @@ export const resetPassword = async (token: string, newPassword: string) => {
 
   await prisma.user.update({
     where: { id: user.id },
-    data: { passwordHash, passwordResetToken: null, passwordResetExpiry: null },
+    data: { prevPasswordHash: user.passwordHash, passwordHash, passwordResetToken: null, passwordResetExpiry: null },
   });
 
   return { id: user.id, name: user.name, email: user.email };
@@ -180,4 +206,132 @@ export const invalidateUserSessions = async (userId: string) => {
     where: { id: userId },
     data: { status: "LOCKED" },
   });
+};
+
+// ---------------- ADMIN LOGIN ----------------
+export const loginAdmin = async (email: string, password: string) => {
+  const user = await prisma.user.findUnique({
+    where: { email },
+    select: { id: true, name: true, email: true, role: true, passwordHash: true },
+  });
+
+  if (!user) throw new Error("Invalid credentials");
+
+  if (user.role !== "ADMIN" && user.role !== "FIELD_ADMIN") {
+    throw new Error("Access denied. Admin only.");
+  }
+
+  const valid = await bcrypt.compare(password, user.passwordHash);
+  if (!valid) throw new Error("Invalid credentials");
+
+  const token = jwt.sign(
+    { userId: user.id, role: user.role.toLowerCase() },
+    process.env.JWT_SECRET!,
+    { expiresIn: "7d" }
+  );
+
+  return {
+    token,
+    user: { id: user.id, name: user.name, email: user.email, role: user.role.toLowerCase() },
+  };
+};
+
+// ---------------- GET LOCKED USERS ----------------
+export const getLockedUsers = async () => {
+  return prisma.user.findMany({
+    where: { status: "LOCKED" },
+    select: { id: true, name: true, email: true, role: true, city: true, updatedAt: true },
+    orderBy: { updatedAt: "desc" },
+  });
+};
+
+// ---------------- GRANT ACCESS ----------------
+export const grantAccountAccess = async (userId: string) => {
+  const token = crypto.randomBytes(32).toString("hex");
+  const expiry = new Date(Date.now() + 1000 * 60 * 60);
+
+  const user = await prisma.user.update({
+    where: { id: userId },
+    data: { passwordResetToken: token, passwordResetExpiry: expiry },
+    select: { id: true, name: true, email: true },
+  });
+
+  return { user, recoveryToken: token };
+};
+
+// ---------------- RECOVER ACCOUNT ----------------
+export const recoverAccount = async (token: string, newPassword: string) => {
+  const user = await prisma.user.findFirst({
+    where: {
+      passwordResetToken: token,
+      passwordResetExpiry: { gt: new Date() },
+      status: "LOCKED",
+    },
+  });
+
+  if (!user) throw new Error("Invalid or expired recovery link");
+
+  const passwordHash = await bcrypt.hash(newPassword, 10);
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { passwordHash, status: "ACTIVE", passwordResetToken: null, passwordResetExpiry: null },
+  });
+
+  return { id: user.id, name: user.name, email: user.email };
+};
+
+// ---------------- SECURE ACCOUNT (google auth) ----------------
+export const secureAccount = async (email: string, googleIdToken: string) => {
+  // 1. verify google token
+  let googleEmail: string;
+  try {
+    const ticket = await googleClient.verifyIdToken({
+      idToken: googleIdToken,
+      audience: process.env.GOOGLE_CLIENT_ID,
+    });
+    const payload = ticket.getPayload();
+    if (!payload?.email) throw new Error("No email in token");
+    googleEmail = payload.email.toLowerCase();
+  } catch {
+    const err: any = new Error("Google verification failed. Please try again.");
+    err.statusCode = 401;
+    throw err;
+  }
+
+  // 2. confirm emails match
+  if (googleEmail !== email.toLowerCase()) {
+    const err: any = new Error("The Google account does not match this FreshRoute account.");
+    err.statusCode = 403;
+    throw err;
+  }
+
+  // 3. find user
+  const user = await prisma.user.findUnique({ where: { email } });
+  if (!user) return { message: "Account secured." };
+
+  // 4. revert password
+  if (!user.prevPasswordHash) {
+    const err: any = new Error("No password snapshot found. Contact support@freshroute.lk");
+    err.statusCode = 400;
+    throw err;
+  }
+
+  await prisma.user.update({
+    where: { email },
+    data: {
+      passwordHash: user.prevPasswordHash,
+      prevPasswordHash: null,
+      passwordResetToken: null,
+      passwordResetExpiry: null,
+    },
+  });
+
+  // 5. invalidate sessions
+  await prisma.user.update({
+  where: { id: user.id },
+  data: { status: "ACTIVE" },
+  });
+
+  return { message: "Account secured. Password reverted." };
 };

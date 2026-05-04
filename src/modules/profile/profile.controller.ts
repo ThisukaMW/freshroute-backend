@@ -1,27 +1,41 @@
-/*import type { Response } from "express";
+import type { Response } from "express";
 import type { AuthRequest } from "../../middlewares/auth.middleware.js";
 import {
-  updateVendorPersonalInfo,
+  updatePersonalInfo,
+  updateDeliveryAddress,
   updateBusinessInfo,
-  updateVendorPassword,
+  updatePassword,
   getSellerStatus,
-  deleteVendorAccount,
-} from "./vendor.service.js";
+  deleteAccount,
+} from "./profile.service.js";
 
-// PATCH /api/v1/vendor/profile/personal
-export const updateVendorPersonalInfoController = async (req: AuthRequest, res: Response) => {
+// ── PERSONAL INFO (buyer, seller, admin) ─────────────────────────
+export const updatePersonalInfoController = async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.userId;
     if (!userId) return res.status(401).json({ message: "Unauthorized" });
     const { name, phone, city } = req.body;
-    const user = await updateVendorPersonalInfo(userId, { name, phone, city });
+    const user = await updatePersonalInfo(userId, { name, phone, city });
     res.json({ message: "Personal info updated", user });
   } catch (err: any) {
     res.status(500).json({ message: err.message ?? "Failed to update personal info" });
   }
 };
 
-// PATCH /api/v1/vendor/profile/business
+// ── DELIVERY ADDRESS (buyer only) ─────────────────────────────────
+export const updateDeliveryAddressController = async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.userId;
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
+    const { address, city } = req.body;
+    const user = await updateDeliveryAddress(userId, { address, city });
+    res.json({ message: "Delivery address updated", user });
+  } catch (err: any) {
+    res.status(500).json({ message: err.message ?? "Failed to update address" });
+  }
+};
+
+// ── BUSINESS INFO (seller only) ───────────────────────────────────
 export const updateBusinessInfoController = async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.userId;
@@ -34,8 +48,8 @@ export const updateBusinessInfoController = async (req: AuthRequest, res: Respon
   }
 };
 
-// PATCH /api/v1/vendor/profile/password
-export const updateVendorPasswordController = async (req: AuthRequest, res: Response) => {
+// ── PASSWORD (all roles) ──────────────────────────────────────────
+export const updatePasswordController = async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.userId;
     if (!userId) return res.status(401).json({ message: "Unauthorized" });
@@ -44,14 +58,14 @@ export const updateVendorPasswordController = async (req: AuthRequest, res: Resp
       return res.status(400).json({ message: "Current and new password are required" });
     if (newPassword.length < 8)
       return res.status(400).json({ message: "Password must be at least 8 characters" });
-    await updateVendorPassword(userId, { currentPassword, newPassword });
+    await updatePassword(userId, { currentPassword, newPassword });
     res.json({ message: "Password updated successfully" });
   } catch (err: any) {
     res.status(400).json({ message: err.message ?? "Failed to update password" });
   }
 };
 
-// GET /api/v1/vendor/profile/status
+// ── SELLER STATUS (seller only) ───────────────────────────────────
 export const getSellerStatusController = async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.userId;
@@ -63,14 +77,14 @@ export const getSellerStatusController = async (req: AuthRequest, res: Response)
   }
 };
 
-// DELETE /api/v1/vendor/profile
-export const deleteVendorAccountController = async (req: AuthRequest, res: Response) => {
+// ── DELETE ACCOUNT (buyer, seller) ───────────────────────────────
+export const deleteAccountController = async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.userId;
     if (!userId) return res.status(401).json({ message: "Unauthorized" });
-    await deleteVendorAccount(userId);
-    res.json({ message: "Vendor account deleted successfully" });
+    await deleteAccount(userId);
+    res.json({ message: "Account deleted successfully" });
   } catch (err: any) {
-    res.status(500).json({ message: err.message ?? "Failed to delete vendor account" });
+    res.status(500).json({ message: err.message ?? "Failed to delete account" });
   }
-};*/
+};

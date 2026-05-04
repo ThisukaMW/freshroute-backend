@@ -9,6 +9,26 @@ const connectionString = process.env.DATABASE_URL!;
 const adapter = new PrismaPg({ connectionString });
 const prisma = new PrismaClient({ adapter });
 
+// 👉 ADD THIS AT THE START OF main()
+
+const adminEmail = "admin@freshroute.com";
+const adminPassword = "Admin@1234";
+
+const hashedPassword = await bcrypt.hash(adminPassword, 10);
+
+await prisma.user.upsert({
+  where: { email: adminEmail },
+  update: {},
+  create: {
+    email: adminEmail,
+    passwordHash: hashedPassword,
+    role: "ADMIN",
+    name: "Admin",
+  },
+});
+
+console.log("✅ Admin ensured");
+
 async function main() {
   console.log("🌱 Seeding FreshRoute database...");
 
@@ -30,7 +50,18 @@ async function main() {
   await prisma.buyer.deleteMany();
   await prisma.user.deleteMany();
 
+  const adminPasswordHash = await bcrypt.hash("Admin@1234", 10);
   const passwordHash = await bcrypt.hash("driver123", 10);
+
+  await prisma.user.create({
+    data: {
+      name: "Super Admin",
+      email: "admin@freshroute.com",
+      passwordHash: adminPasswordHash,
+      role: "ADMIN",
+      status: "ACTIVE",
+    },
+  });
 
   // ─── Driver Mike ────────────────────────────────────────────────────────────
   const mikeUser = await prisma.user.create({
@@ -265,6 +296,10 @@ async function main() {
   }
 
   console.log("✅ Seed complete!");
+  console.log("─────────────────────────────────");
+  console.log("Admin login:");
+  console.log("  Email:    admin@freshroute.com");
+  console.log("  Password: Admin@1234");
   console.log("─────────────────────────────────");
   console.log("Driver login:");
   console.log("  Email:    mike@freshroute.com");

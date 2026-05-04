@@ -1,13 +1,14 @@
-import type { Request, Response, NextFunction } from "express";
+import type { Request, Response, NextFunction, RequestHandler } from "express";
 import jwt from "jsonwebtoken";
 
+// Extend Express Request with only what we actually attach
 export interface AuthRequest extends Request {
   userId?: string;
   driverId?: string;
   role?: string;
 }
 
-export const protect = (
+export const protect: RequestHandler = (
   req: AuthRequest,
   res: Response,
   next: NextFunction
@@ -38,3 +39,16 @@ if (!req.userId) {
     res.status(401).json({ message: "Invalid or expired token" });
   }
 };
+
+export const requireAdmin: RequestHandler = (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+) => {
+  const authReq = req as AuthRequest
+  if (authReq.role !== 'admin' && authReq.role !== 'field_admin') {
+    res.status(403).json({ message: 'Access denied. Admins only.' })
+    return
+  }
+  next()
+}
