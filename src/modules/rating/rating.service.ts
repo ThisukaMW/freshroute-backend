@@ -108,6 +108,16 @@ export const createRating = async (input: RatingInput) => {
   return rating;
 };
 
+// ---------------- CHECK IF BUYER HAS ALREADY RATED AN ORDER ----------------
+// Returns true if at least one rating exists for this orderId + buyerId combination
+export const checkRating = async (orderId: string, buyerId: string): Promise<boolean> => {
+  const existing = await prisma.rating.findFirst({
+    where: { orderId, buyerId },
+    select: { id: true },
+  });
+  return !!existing;
+};
+
 // ---------------- GET BUYER'S OWN RATINGS ----------------
 export const getBuyerRatings = async (buyerId: string) => {
   return prisma.rating.findMany({

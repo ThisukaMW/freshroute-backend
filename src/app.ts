@@ -15,6 +15,7 @@ import adminRoutes from "./modules/admin/admin.routes.js";
 import profileRoutes from "./modules/profile/profile.routes.js";
 import ratingRoutes from "./modules/rating/rating.routes.js";
 import notificationRoutes from "./modules/notifications/notification.routes.js";
+import ratingRouter from './modules/rating/rating.routes.js'
 
 const app = express();
 
@@ -39,5 +40,6 @@ app.use("/api/v1/admin", adminRoutes);
 app.use("/api/v1/profile", profileRoutes);
 app.use("/api/v1/rating", ratingRoutes);
 app.use("/api/v1/notifications", notificationRoutes);
+app.use('/api/v1/ratings', ratingRouter)
 
 export default app;

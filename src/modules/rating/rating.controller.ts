@@ -2,6 +2,7 @@ import type { Request, Response } from 'express';
 import type { AuthRequest } from '../../middlewares/auth.middleware.js';
 import {
   createRating,
+  checkRating,
   getBuyerRatings,
   getDriverRatings,
   getSellerRatings,
@@ -15,6 +16,7 @@ import {
   flagRating,
 } from './rating.service.js';
 
+// Extracts the first value from a param that may be a string or string array
 const getParam = (param: string | string[]): string =>
   Array.isArray(param) ? param[0] : param;
 
@@ -29,6 +31,29 @@ export const submitRating = async (req: AuthRequest, res: Response) => {
     return res.status(201).json({ message: 'Rating submitted', rating });
   } catch (err: any) {
     return res.status(400).json({ message: err.message ?? 'Failed to submit rating' });
+  }
+};
+
+// GET /api/v1/rating/check?orderId=:orderId — returns { alreadyRated: boolean }
+export const checkRatingController = async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.userId;
+    if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+
+    const { orderId } = req.query;
+    if (!orderId || typeof orderId !== 'string') {
+      return res.status(400).json({ message: 'orderId query param is required' });
+    }
+
+    // Resolve the userId to a buyerId before querying the rating table
+    const db = await import('../../config/database.js').then(m => m.default);
+    const buyer = await db.buyer.findUnique({ where: { userId }, select: { id: true } });
+    if (!buyer) return res.status(404).json({ message: 'Buyer profile not found' });
+
+    const alreadyRated = await checkRating(orderId, buyer.id);
+    return res.json({ alreadyRated });
+  } catch (err) {
+    return res.status(500).json({ message: 'Failed to check rating status' });
   }
 };
 
@@ -145,9 +170,9 @@ export const editRatingController = async (req: AuthRequest, res: Response) => {
     );
     if (!buyer) return res.status(404).json({ message: 'Buyer profile not found' });
 
-    const ratingId         = getParam(req.params.id);
+    const ratingId             = getParam(req.params.id);
     const { ratings, comment } = req.body;
-    const updated          = await editRating(ratingId, buyer.id, { ratings, comment });
+    const updated              = await editRating(ratingId, buyer.id, { ratings, comment });
     return res.json({ message: 'Rating updated', rating: updated });
   } catch (err: any) {
     return res.status(400).json({ message: err.message ?? 'Failed to update rating' });

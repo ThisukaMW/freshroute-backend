@@ -12,6 +12,7 @@ import {
   editRatingController,
   deleteRatingController,
   flagRatingController,
+  checkRatingController,
 } from './rating.controller.js';
 
 const router = Router();
@@ -19,6 +20,8 @@ const router = Router();
 router.post('/',                          protect, submitRating);
 router.get('/my',                         protect, getMyRatings);
 router.get('/my-seller-ratings',          protect, getMySellerRatings);
+// Checks if the authenticated buyer has already rated a specific order — used by the frontend modal
+router.get('/check',                      protect, checkRatingController);
 router.get('/driver/:driverId',           getDriverRatingsController);
 router.get('/driver/:driverId/stats',     getRatingStatsController);
 router.get('/seller/:sellerId',           getSellerRatingsController);
