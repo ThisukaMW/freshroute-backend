@@ -322,24 +322,38 @@ export const getInventoryStats = async (
  * ✅ Called before checkout
  */
 export const validateCartStock = async (
-  cartItems: Array<{ productId: string; quantity: number }>
+  cartItems: Array<{ productId: string; quantity: number; sellerId: string; cartQuantity: number }>
 ) => {
-  const issues: Array<{
-    productId: string;
-    requested: number;
-    available: number;
-  }> = [];
+  const issues = [];
 
   for (const item of cartItems) {
-    const product = await prisma.product.findUnique({
-      where: { id: item.productId },
+    const sellerProduct = await prisma.sellerProduct.findUnique({
+      where: {
+        productId_sellerId: {
+          productId: item.productId,
+          sellerId: item.sellerId,
+        },
+      },
     });
 
-    if (!product || product.stock < item.quantity) {
+    if (!sellerProduct) {
       issues.push({
         productId: item.productId,
         requested: item.quantity,
-        available: product?.stock || 0,
+        available: 0,
+      });
+      continue;
+    }
+
+    // ✅ The stock was already deducted when added to cart
+    // So real available = current stock + what this buyer already holds (cartQuantity)
+    const realAvailable = sellerProduct.stock + item.cartQuantity;
+
+    if (realAvailable < item.quantity) {
+      issues.push({
+        productId: item.productId,
+        requested: item.quantity,
+        available: realAvailable,
       });
     }
   }
@@ -349,7 +363,6 @@ export const validateCartStock = async (
     issues,
   };
 };
-
 /**
  * Restock a product (seller restocking their inventory)
  * ✅ Updates SellerProduct.stock (seller-specific)

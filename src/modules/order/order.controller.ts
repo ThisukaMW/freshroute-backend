@@ -106,7 +106,7 @@ export const placeOrder = async (req: AuthRequest, res: Response) => {
       ? 400
       : 500;
 
-    res.status(status).json({ message });
+    res.status(status).json({message});
   }
 };
 

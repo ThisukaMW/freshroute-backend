@@ -20,7 +20,9 @@ export const getCart = async (req: AuthRequest, res: Response) => {
     if (!req.userId) {
       return res.status(401).json({ message: "Not authenticated - userId is missing" });
     }
+    console.log(`\n🟢 [CART CONTROLLER] GET /api/v1/cart - userId: ${req.userId}`);
     const data = await getCartWithTotals(req.userId);
+    console.log(`🟢 [CART CONTROLLER] Sending response with ${data.items.length} items to frontend\n`);
     res.json(data);
   } catch (error: unknown) {
     console.error("❌ Get cart error:", error);
@@ -68,14 +70,23 @@ export const addToCart = async (req: AuthRequest, res: Response) => {
 
 /**
  * DELETE /api/v1/cart/:productId
- * Remove item from cart
+ * Remove item from cart (with optional sellerId for multi-seller support)
  */
 export const removeFromCart = async (req: AuthRequest, res: Response) => {
   try {
+    console.log(`\n🟠 [CONTROLLER] DELETE /api/v1/cart/${req.params.productId} - sellerId: ${req.query.sellerId || 'any'}`);
     const { productId } = req.params as { productId: string };
-    await removeItemFromCart(req.userId!, productId);
-    res.json({ message: "Item removed from cart" });
+    const { sellerId } = req.query as { sellerId?: string };
+    
+    await removeItemFromCart(req.userId!, productId, sellerId);
+    console.log(`🟠 [CONTROLLER] Item removed successfully`);
+    res.json({ 
+      message: "Item removed from cart",
+      productId,
+      sellerId: sellerId || undefined,
+    });
   } catch (error: unknown) {
+    console.error(`❌ [CONTROLLER] Remove item error:`, error);
     const message = error instanceof Error ? error.message : "Failed to remove item";
     res.status(400).json({ message });
   }
@@ -83,12 +94,12 @@ export const removeFromCart = async (req: AuthRequest, res: Response) => {
 
 /**
  * PATCH /api/v1/cart
- * Update item quantity
+ * Update item quantity (with sellerId for multi-seller support)
  */
 export const updateQuantity = async (req: AuthRequest, res: Response) => {
   try {
-    const { productId, quantity } = req.body;
-    const item = await updateItemQuantity(req.userId!, productId, quantity);
+    const { productId, quantity, sellerId } = req.body;
+    const item = await updateItemQuantity(req.userId!, productId, quantity, sellerId);
     res.json({
       message: "Quantity updated",
       item,
@@ -107,9 +118,14 @@ export const applyPromo = async (req: AuthRequest, res: Response) => {
   try {
     const { code } = req.body;
     const cart = await applyPromoCode(req.userId!, code);
+    
+    // Get full cart with formatted response
+    const cartData = await getCartWithTotals(req.userId!);
+    
     res.json({
       message: "Promo code applied",
-      cart,
+      ...cartData,
+      promoCode: cart.promoCode?.code || code,
     });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Failed to apply promo code";
@@ -133,12 +149,17 @@ export const totalCart = async (req: AuthRequest, res: Response) => {
 
 /**
  * POST /api/v1/cart/save-for-later
- * Save item for later
+ * Save item for later (requires sellerId for multi-seller support)
  */
 export const saveForLater = async (req: AuthRequest, res: Response) => {
   try {
-    const { productId } = req.body;
-    const item = await saveItemForLater(req.userId!, productId);
+    const { productId, sellerId } = req.body;
+
+    if (!productId || !sellerId) {
+      return res.status(400).json({ message: "productId and sellerId are required" });
+    }
+
+    const item = await saveItemForLater(req.userId!, productId, sellerId);
     res.json({
       message: "Item saved for later",
       item,
@@ -155,9 +176,17 @@ export const saveForLater = async (req: AuthRequest, res: Response) => {
  */
 export const clearCartHandler = async (req: AuthRequest, res: Response) => {
   try {
+    console.log(`\n🔴 [CONTROLLER] POST /api/v1/cart/clear - userId: ${req.userId}`);
     const result = await clearCart(req.userId!);
-    res.json(result);
+    console.log(`🔴 [CONTROLLER] Clear cart response: ${result.message} | ${result.itemsCleared} items cleared`);
+    res.json({
+      message: result.message,
+      itemsCleared: result.itemsCleared,
+      reservationsCleared: result.reservationsCleared,
+      timestamp: new Date().toISOString(),
+    });
   } catch (error: unknown) {
+    console.error(`❌ [CONTROLLER] Clear cart error:`, error);
     const message = error instanceof Error ? error.message : "Failed to clear cart";
     res.status(500).json({ message });
   }

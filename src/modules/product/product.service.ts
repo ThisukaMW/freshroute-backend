@@ -1,48 +1,10 @@
-// import prisma from "../../config/database.js";
+/**
+ * SERVICE LAYER - Product Module
+ * ============================
+ * Contains business logic + database operations
+ * Direct Prisma calls (like driver.service.ts)
+ */
 
-// export type CreateProductInput = {
-//   name: string;
-//   description?: string | null;
-//   category: string;
-//   price: number;
-//   unit: string;
-//   stock: number;
-//   imageUrl?: string | null;
-// };
-
-// export const createProduct = async (userId: string, data: CreateProductInput) => {
-//   // Find seller profile for this user
-//   const seller = await prisma.seller.findUnique({ where: { userId } });
-//   if (!seller) throw new Error("Seller profile not found");
-
-//   const product = await prisma.product.create({
-//     data: {
-//       name: data.name,
-//       description: data.description ?? null,
-//       category: data.category,
-//       price: data.price,
-//       unit: data.unit,
-//       stock: data.stock,
-//       imageUrl: data.imageUrl ?? null,
-//       status: "PENDING_APPROVAL",
-//       seller: { connect: { id: seller.id } },
-//     },
-//   });
-
-//   return {
-//     id: product.id,
-//     name: product.name,
-//     description: product.description,
-//     category: product.category,
-//     price: product.price,
-//     unit: product.unit,
-//     stock: product.stock,
-//     imageUrl: product.imageUrl,
-//     status: product.status,
-//     createdAt: product.createdAt,
-//     updatedAt: product.updatedAt,
-//   };
-// };
 import prisma from "../../config/database.js";
 
 export type CreateProductInput = {
@@ -75,35 +37,34 @@ export const createProduct = async (
   userId: string,
   data: CreateProductInput
 ) => {
+  // Find seller by userId
   const seller = await prisma.seller.findUnique({
     where: { userId },
   });
-
   if (!seller) throw new Error("Seller profile not found");
 
-  // 1️⃣ Create Product entry (generic product, not seller-specific)
+  // Create Product entry
   const product = await prisma.product.create({
     data: {
       name: data.name,
       description: data.description ?? null,
       category: data.category,
-      price: data.price, // Primary price (for reference)
+      price: data.price,
       unit: data.unit,
-      stock: 0, // ✅ Initially 0 - will be calculated from SellerProduct after approval
+      stock: 0,
       imageUrl: data.imageUrl ?? null,
-      status: "PENDING_APPROVAL", // ⏳ Awaiting admin approval
-      seller: { connect: { id: seller.id } }, // Link to original seller
+      status: "PENDING_APPROVAL",
+      seller: { connect: { id: seller.id } },
     },
   });
 
-  // 2️⃣ Create SellerProduct entry with seller's specific price and stock
-  // ⏳ This is also in PENDING state until admin approves
+  // Create SellerProduct entry
   const sellerProduct = await prisma.sellerProduct.create({
     data: {
       productId: product.id,
       sellerId: seller.id,
       price: data.price,
-      stock: data.stock, // Seller's initial stock amount
+      stock: data.stock,
     },
   });
 
@@ -161,6 +122,7 @@ export const updateProductStatus = async (
   productId: string,
   status: "APPROVED" | "REJECTED"
 ) => {
+  // Update product status
   const product = await prisma.product.update({
     where: { id: productId },
     data: { status },
@@ -190,25 +152,35 @@ export const updateProduct = async (
   productId: string,
   data: UpdateProductInput
 ) => {
+  // Find seller by userId
   const seller = await prisma.seller.findUnique({
     where: { userId },
   });
-
   if (!seller) throw new Error("Seller profile not found");
 
   // Get existing product
   const product = await prisma.product.findUnique({
     where: { id: productId },
+    include: {
+      seller: {
+        include: {
+          user: { select: { name: true, email: true } },
+        },
+      },
+      sellerProducts: {
+        include: {
+          seller: {
+            include: {
+              user: { select: { name: true } },
+            },
+          },
+        },
+      },
+    },
   });
-
   if (!product) throw new Error("Product not found");
 
-  // Make sure seller owns this product
-  // if (product.sellerId !== seller.id) {
-  //   throw new Error("You can only edit your own products");
-  // }
-
-  // Get this seller's SellerProduct entry
+  // Get seller's SellerProduct entry
   const sellerProduct = await prisma.sellerProduct.findUnique({
     where: {
       productId_sellerId: {
@@ -217,7 +189,6 @@ export const updateProduct = async (
       },
     },
   });
-
   if (!sellerProduct) {
     throw new Error("Product not found in your inventory");
   }
@@ -234,6 +205,22 @@ export const updateProduct = async (
     updatedProduct = await prisma.product.update({
       where: { id: productId },
       data: productUpdateData,
+      include: {
+        seller: {
+          include: {
+            user: { select: { name: true, email: true } },
+          },
+        },
+        sellerProducts: {
+          include: {
+            seller: {
+              include: {
+                user: { select: { name: true } },
+              },
+            },
+          },
+        },
+      },
     });
   }
 
@@ -286,18 +273,33 @@ export const getApprovedProducts = async () => {
           user: { select: { name: true } },
         },
       },
-      // ✅ Include all seller stocks to calculate live total
       sellerProducts: true,
+      // ✅ NEW: Include reservations to calculate available stock
+      reservations: {
+        where: {
+          status: { in: ["ACTIVE", "CONFIRMED"] }, // Count soft + hard reserved
+        },
+      },
     },
     orderBy: { createdAt: "desc" },
   });
 
-  // ✅ Calculate live total stock from all sellers
+  // ✅ Calculate live total stock from all sellers MINUS reserved quantity
   return products.map((product) => {
+    // Total stock from all sellers
     const totalStock = product.sellerProducts.reduce(
       (sum, sp) => sum + sp.stock,
       0
     );
+
+    // Reserved quantity (ACTIVE soft-reserved + CONFIRMED hard-deducted)
+    const reservedQuantity = product.reservations.reduce(
+      (sum, res) => sum + res.quantity,
+      0
+    );
+
+    // Available = Total - Reserved
+    const availableStock = Math.max(0, totalStock - reservedQuantity);
 
     return {
       id: product.id,
@@ -306,11 +308,13 @@ export const getApprovedProducts = async () => {
       category: product.category,
       price: product.price,
       unit: product.unit,
-      stock: totalStock, // ✅ Live calculated, not stale DB value
+      stock: totalStock, // ✅ Total stock (for reference)
+      availableStock: availableStock, // ✅ NEW: Available = Total - Reserved
+      reservedQuantity: reservedQuantity, // ✅ NEW: How much is reserved
       imageUrl: product.imageUrl,
       status: product.status,
       seller: product.seller,
-      sellerCount: product.sellerProducts.length, // ✅ Bonus: how many sellers offer this
+      sellerCount: product.sellerProducts.length,
       createdAt: product.createdAt,
       updatedAt: product.updatedAt,
     };
@@ -329,7 +333,6 @@ export const getProductById = async (productId: string) => {
           user: { select: { name: true, email: true } },
         },
       },
-      // ✅ Include seller stocks
       sellerProducts: {
         include: {
           seller: {
@@ -341,7 +344,6 @@ export const getProductById = async (productId: string) => {
       },
     },
   });
-
   if (!product) return null;
 
   // ✅ Live total stock
@@ -355,53 +357,6 @@ export const getProductById = async (productId: string) => {
     stock: totalStock, // ✅ Override with live calculated value
   };
 };
-
-// ===============================
-// GET SELLERS FOR A PRODUCT (All sellers offering the same product name)
-// ===============================
-// export const getSellersByProductName = async (productName: string) => {
-//   return prisma.product.findMany({
-//     where: {
-//       name: {
-//         contains: productName,
-//         mode: "insensitive", // ✅ FIX
-//       },
-//       status: "APPROVED",
-//     },
-//     include: {
-//       seller: {
-//         include: {
-//           user: {
-//             select: { name: true, email: true },
-//           },
-//         },
-//       },
-//     },
-//     orderBy: { price: "asc" },
-//   });
-// };
-
-// export const getSellersByProductName = async (productName: string) => {
-//   return prisma.product.findMany({
-//     where: {
-//       status: "APPROVED",
-//       name: {
-//         contains: productName.trim(),   // remove hidden spaces
-//         mode: "insensitive",          // ignore case
-//       },
-//     },
-//     include: {
-//       seller: {
-//         include: {
-//           user: {
-//             select: { name: true, email: true },
-//           },
-//         },
-//       },
-//     },
-//     orderBy: { price: "asc" },
-//   });
-// };
 
 // ===============================
 // GET SELLERS FOR A PRODUCT (via SellerProduct table)
@@ -426,28 +381,8 @@ export const getSellersByProductName = async (productId: string) => {
 // GET ALL PRODUCTS (ROLE BASED)
 // ===============================
 export const getAllProducts = async (role: string) => {
-  // If Buyer/User → only approved
- 
-    
-  
-
-  // If Seller or Admin → see everything
   if (role === "SELLER" || role === "ADMIN") {
-  return prisma.product.findMany({
-    include: {
-      seller: {
-        include: {
-          user: {
-            select: { name: true },
-          },
-        },
-      },
-    },
-    orderBy: { createdAt: "desc" },
-  });
-}
-return prisma.product.findMany({
-      where: { status: "APPROVED" },
+    return prisma.product.findMany({
       include: {
         seller: {
           include: {
@@ -459,4 +394,19 @@ return prisma.product.findMany({
       },
       orderBy: { createdAt: "desc" },
     });
+  }
+
+  return prisma.product.findMany({
+    where: { status: "APPROVED" },
+    include: {
+      seller: {
+        include: {
+          user: {
+            select: { name: true },
+          },
+        },
+      },
+    },
+    orderBy: { createdAt: "desc" },
+  });
 };

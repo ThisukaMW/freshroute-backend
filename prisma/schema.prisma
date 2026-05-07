@@ -107,6 +107,13 @@ enum DeliveryTimeSlot {
   EVENING      // 6 PM - 10 PM
 }
 
+enum ReservationStatus {
+  ACTIVE       // Soft hold in cart
+  CONFIRMED    // Hard deducted on payment
+  CANCELLED    // User removed from cart
+  EXPIRED      // Auto-released after timeout
+}
+
 // ============= USER MANAGEMENT =============
 
 model User {
@@ -186,6 +193,7 @@ model Seller {
 
   sellerProducts SellerProduct[]
   cartItems     CartItem[]
+  reservations  StockReservation[]
 
   // Relationships
   products        Product[]
@@ -211,7 +219,7 @@ model Buyer {
   orders          Order[]
   deliveryStops   Stop[]      @relation("BuyerDeliveries")
   ratings         Rating[]
-
+  reservations    StockReservation[]
 
   cart            Cart?
   @@index([userId])
@@ -245,6 +253,8 @@ model Product {
   orderItems  OrderItem[]
 
   cartItems   CartItem[]
+
+  reservations StockReservation[]
 
   @@index([sellerId, status])
   @@index([status])
@@ -297,6 +307,7 @@ model Order {
   items           OrderItem[]
   payment         Payment?
   rating          Rating?
+  reservations    StockReservation[]
 
   @@index([buyerId, status])
   @@index([batchId])
@@ -348,8 +359,8 @@ model CartItem {
   productId String
   product   Product   @relation(fields: [productId], references: [id], onDelete: Restrict)
 
-  sellerId  String?
-  seller    Seller?   @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  sellerId  String
+  seller    Seller    @relation(fields: [sellerId], references: [id], onDelete: Cascade)
 
   quantity  Float
   savedForLater Boolean @default(false)
@@ -357,7 +368,42 @@ model CartItem {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
-  @@unique([cartId, productId])
+  // Allow same product from different sellers in cart
+  @@unique([cartId, productId, sellerId])
+  @@index([cartId])
+  @@index([productId, sellerId])
+  
+  // Link to stock reservation
+  reservation StockReservation?
+}
+
+model StockReservation {
+  id             String   @id @default(uuid())
+  
+  productId      String
+  product        Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  
+  sellerId       String
+  seller         Seller   @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  
+  buyerId        String
+  buyer          Buyer    @relation(fields: [buyerId], references: [id], onDelete: Cascade)
+  
+  quantity       Float    // How much is reserved
+  status         ReservationStatus @default(ACTIVE) // ACTIVE, CONFIRMED, CANCELLED, EXPIRED
+  
+  cartItemId     String?  @unique // Link to cart
+  cartItem       CartItem? @relation(fields: [cartItemId], references: [id], onDelete: Cascade)
+  
+  orderId        String?  // Link when order created
+  order          Order?   @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  
+  expiresAt      DateTime // When reservation auto-expires
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  
+  @@index([buyerId, status])
+  @@index([expiresAt]) // For cleanup job
 }
 
 model PromoCode {

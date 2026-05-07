@@ -49,6 +49,39 @@ export const createOrder = async (input: CreateOrderInput) => {
     throw new Error("One or more products are unavailable or not approved");
   }
 
+  // ✅ VALIDATION 5: Verify all reservations exist and are ACTIVE (soft reserve exists)
+  for (const item of input.items) {
+    const reservation = await prisma.stockReservation.findFirst({
+      where: {
+        productId: item.productId,
+        sellerId: item.sellerId,
+        buyerId: input.buyerId,
+        status: "ACTIVE",
+      },
+    });
+
+    if (!reservation) {
+      throw new Error(
+        `No active reservation found for ${item.productId} from seller ${item.sellerId}. ` +
+        `Please add item to cart first.`
+      );
+    }
+
+    if (reservation.expiresAt < new Date()) {
+      throw new Error(
+        `Reservation for ${item.productId} has expired. Please add item to cart again.`
+      );
+    }
+
+    // Verify quantity hasn't changed
+    if (reservation.quantity !== item.quantity) {
+      throw new Error(
+        `Reservation quantity mismatch for ${item.productId}. ` +
+        `Expected ${reservation.quantity}, got ${item.quantity}`
+      );
+    }
+  }
+
   // Calculate order items
   const orderItems = input.items.map((item) => {
     const product = products.find((p) => p.id === item.productId)!;
@@ -58,7 +91,7 @@ export const createOrder = async (input: CreateOrderInput) => {
 
     return {
       productId: product.id,
-      sellerId: product.sellerId,
+      sellerId: item.sellerId,  // ✅ Use sellerId from input (who offers it)
       quantity: item.quantity,
       unitPrice: product.price,
       totalPrice,
@@ -101,24 +134,60 @@ export const createOrder = async (input: CreateOrderInput) => {
     },
   });
 
-  // Update product stock for each item
-  // ✅ INDUSTRY STANDARD FLOW:
-  // 1️⃣ Update SellerProduct.stock FIRST (seller-specific inventory)
-  // 2️⃣ Recalculate Product.stock as SUM of all seller products
+  // ✅ HARD DEDUCTION: Update reservations to CONFIRMED and deduct stock
+  // This is where stock actually leaves the system
   for (const item of input.items) {
-    // PRIORITY 1: Update SellerProduct stock first (seller-specific)
-    await inventoryService.updateSellerProductStock({
-      productId: item.productId,
-      sellerId: item.sellerId,
-      quantity: -item.quantity,
-      type: "PURCHASE",
-      orderId: order.id,
-      reason: `Sold in order ${order.orderNumber}`,
-    });
+    try {
+      // STEP 1: Update reservation status to CONFIRMED
+      const reservation = await prisma.stockReservation.findFirst({
+        where: {
+          productId: item.productId,
+          sellerId: item.sellerId,
+          buyerId: input.buyerId,
+          status: "ACTIVE",
+        },
+      });
 
-    // PRIORITY 2: Recalculate Product.stock as SUM of all sellers for this product
-    // ✅ This ensures Product.stock = sum of all SellerProduct.stock
-    await inventoryService.recalculateProductStock(item.productId);
+      if (reservation) {
+        // Update reservation to CONFIRMED and link to order
+        await prisma.stockReservation.update({
+          where: { id: reservation.id },
+          data: {
+            status: "CONFIRMED",
+            orderId: order.id,
+          },
+        });
+      }
+
+      // STEP 2: Deduct stock from SellerProduct (FIRST - seller-specific)
+      await inventoryService.updateSellerProductStock({
+        productId: item.productId,
+        sellerId: item.sellerId,
+        quantity: -item.quantity, // negative = deduct
+        type: "PURCHASE",
+        reason: `Order ${order.orderNumber} created - payment pending`,
+        orderId: order.id,
+        performedBy: input.buyerId,
+      });
+
+      // STEP 3: Recalculate Product.stock as SUM of all SellerProduct.stock
+      // ✅ This ensures Product.stock = sum of all SellerProduct.stock
+      await inventoryService.recalculateProductStock(item.productId);
+    } catch (error) {
+      console.error(
+        `❌ Failed to deduct stock for ${item.productId}:`,
+        error instanceof Error ? error.message : error
+      );
+      // Partially roll back: update remaining reservations to ACTIVE
+      await prisma.stockReservation.updateMany({
+        where: {
+          orderId: order.id,
+          status: "CONFIRMED",
+        },
+        data: { status: "ACTIVE", orderId: null },
+      });
+      throw error;
+    }
   }
 
   return order;
@@ -266,16 +335,17 @@ export const getSellerOrderById = async (orderId: string, sellerId: string) => {
         },
       },
       payment: true,
-      driver: {
-        select: { user: { select: { name: true, phone: true } } },
-      },
+      // NOTE: driver field not implemented in Order model
+      // driver: {
+      //   select: { user: { select: { name: true, phone: true } } },
+      // },
     },
   });
 
   if (!order) throw new Error("Order not found");
 
   // Verify seller has products in this order
-  const sellerHasOrder = order.items.some((item) => item.sellerId === sellerId);
+  const sellerHasOrder = order.items.some((item: any) => item.sellerId === sellerId);
   if (!sellerHasOrder) throw new Error("Forbidden: You don't have products in this order");
 
   return order;
