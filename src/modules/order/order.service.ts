@@ -175,7 +175,7 @@ export const createOrder = async (input: CreateOrderInput) => {
       await inventoryService.recalculateProductStock(item.productId);
     } catch (error) {
       console.error(
-        `❌ Failed to deduct stock for ${item.productId}:`,
+        `❌ Failed to deduct the stock for ${item.productId}:`,
         error instanceof Error ? error.message : error
       );
       // Partially roll back: update remaining reservations to ACTIVE
