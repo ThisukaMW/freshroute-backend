@@ -4,6 +4,7 @@ import {
   allHistory,
   allOrders,
   allRoutes,
+  adminRefundQueue,
   assessBuyer,
   assessDriver,
   assessSeller,
@@ -56,8 +57,10 @@ import {
 
 const router = Router();
 
-// All routes require a valid JWT and FIELD_ADMIN role
-// NOTE: enabled protection middleware for field admin module.
+// Admin processing queue for itemized refund requests initiated by field admins.
+router.get("/admin/refund-queue", protect, authorize("ADMIN"), adminRefundQueue);
+
+// All field-admin routes require FIELD_ADMIN role.
 router.use(protect, authorize("FIELD_ADMIN"));
 
 

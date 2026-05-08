@@ -7,6 +7,7 @@ import {
   createRouteReassessment,
   getDashboardOverview,
   getAllOrders,
+  getAdminRefundQueue,
   getAssessmentCandidates,
   getFieldAdminNotifications,
   getFieldAdminProfile,
@@ -331,13 +332,25 @@ export const paymentRefundEligibleOrders = async (req: AuthRequest, res: Respons
 
 export const paymentRefundInitiate = async (req: AuthRequest, res: Response) => {
   try {
-    const { orderId, amount, reason } = req.body as {
+    const { orderId, reason, orderItemIds } = req.body as {
       orderId: string;
-      amount: number;
       reason?: string;
+      orderItemIds?: string[];
     };
-    const data = await initiateRefund(req.fieldAdminId!, { orderId, amount, reason });
+    const data = await initiateRefund(req.fieldAdminId!, { orderId, reason, orderItemIds });
     res.status(201).json(data);
+  } catch (error) {
+    fail(res, error, 400);
+  }
+};
+
+export const adminRefundQueue = async (req: AuthRequest, res: Response) => {
+  try {
+    const status = typeof req.query.status === "string" ? req.query.status : undefined;
+    const fieldAdminId = typeof req.query.fieldAdminId === "string" ? req.query.fieldAdminId : undefined;
+    const routeId = typeof req.query.routeId === "string" ? req.query.routeId : undefined;
+    const data = await getAdminRefundQueue({ status, fieldAdminId, routeId });
+    res.json(data);
   } catch (error) {
     fail(res, error, 400);
   }

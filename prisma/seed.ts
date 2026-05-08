@@ -9,10 +9,9 @@ const connectionString = process.env.DATABASE_URL!;
 const adapter = new PrismaPg({ connectionString });
 const prisma = new PrismaClient({ adapter });
 
-async function main() {
-  console.log("🌱 Seeding FreshRoute database...");
+const seedMode = process.env.SEED_MODE?.trim().toLowerCase() ?? "default";
 
-  // Clean existing data
+const clearDatabase = async () => {
   await prisma.notification.deleteMany();
   await prisma.rating.deleteMany();
   await prisma.aggregationRunRejection.deleteMany();
@@ -34,7 +33,433 @@ async function main() {
   await prisma.driver.deleteMany();
   await prisma.seller.deleteMany();
   await prisma.buyer.deleteMany();
+  await prisma.fieldAdmin.deleteMany();
   await prisma.user.deleteMany();
+};
+
+const seedSimulationScenario = async () => {
+  console.log("🧪 Seeding deterministic simulation dataset...");
+  await clearDatabase();
+
+  const passwordHash = await bcrypt.hash("demo123", 10);
+  const buyerHash = await bcrypt.hash("buyer123", 10);
+
+  const sellerConfigs = [
+    {
+      name: "North Valley Farms",
+      email: "seller.north@freshroute.com",
+      address: "12 North Valley Rd, Colombo",
+      lat: 6.965,
+      lng: 79.872,
+    },
+    {
+      name: "Southern Greens Cooperative",
+      email: "seller.south@freshroute.com",
+      address: "88 Galle Road, Colombo",
+      lat: 6.865,
+      lng: 79.862,
+    },
+    {
+      name: "Central Harvest Hub",
+      email: "seller.central@freshroute.com",
+      address: "22 Borella Junction, Colombo",
+      lat: 6.915,
+      lng: 79.878,
+    },
+  ];
+
+  const sellers: Array<{ id: string; userId: string }> = [];
+  for (const sellerCfg of sellerConfigs) {
+    const user = await prisma.user.create({
+      data: {
+        email: sellerCfg.email,
+        name: sellerCfg.name,
+        role: "SELLER",
+        passwordHash,
+      },
+    });
+    const seller = await prisma.seller.create({
+      data: {
+        userId: user.id,
+        businessName: sellerCfg.name,
+        businessAddress: sellerCfg.address,
+        latitude: sellerCfg.lat,
+        longitude: sellerCfg.lng,
+        isApproved: true,
+      },
+    });
+    sellers.push({ id: seller.id, userId: user.id });
+  }
+
+  const fieldAdmins: string[] = [];
+  for (let index = 1; index <= 3; index += 1) {
+    const user = await prisma.user.create({
+      data: {
+        email: `fieldadmin${index}@freshroute.com`,
+        name: `Field Admin ${index}`,
+        role: "FIELD_ADMIN",
+        passwordHash,
+      },
+    });
+    const fieldAdmin = await prisma.fieldAdmin.create({
+      data: {
+        userId: user.id,
+        vehicleNumber: `FA-${String(index).padStart(3, "0")}`,
+        vehicleType: "Support Van",
+        isActive: true,
+      },
+    });
+    fieldAdmins.push(fieldAdmin.id);
+  }
+
+  for (let index = 1; index <= 10; index += 1) {
+    const user = await prisma.user.create({
+      data: {
+        email: `driver${index}@freshroute.com`,
+        name: `Driver ${index}`,
+        role: "DRIVER",
+        passwordHash,
+      },
+    });
+    await prisma.driver.create({
+      data: {
+        userId: user.id,
+        licenseNumber: `DL-SIM-${String(index).padStart(3, "0")}`,
+        vehicleNumber: `DRV-SIM-${String(index).padStart(3, "0")}`,
+        vehicleType: "Truck",
+        vehicleCapacity: 450 + index * 30,
+        isActive: true,
+        isAvailable: true,
+      },
+    });
+  }
+
+  await prisma.truck.createMany({
+    data: [
+      {
+        vehicleNumber: "TRK-SIM-001",
+        vehicleType: "Reefer",
+        vehicleCapacity: 650,
+        maxWeight: 650,
+        maxVolume: 140,
+        maxStops: 24,
+        storageSupport: "BOTH",
+        vehicleBrand: "Isuzu",
+        makeYear: new Date("2020-01-01T00:00:00.000Z"),
+        vehicleHeight: 3.5,
+        VehicleWeight: 3500,
+        Refregeration: true,
+        Tempreture: 4,
+        isActive: true,
+        isAvailable: true,
+      },
+      {
+        vehicleNumber: "TRK-SIM-002",
+        vehicleType: "Dry Van",
+        vehicleCapacity: 520,
+        maxWeight: 520,
+        maxVolume: 115,
+        maxStops: 20,
+        storageSupport: "NORMAL",
+        vehicleBrand: "Mitsubishi",
+        makeYear: new Date("2021-01-01T00:00:00.000Z"),
+        vehicleHeight: 3.2,
+        VehicleWeight: 3000,
+        Refregeration: false,
+        Tempreture: 18,
+        isActive: true,
+        isAvailable: true,
+      },
+      {
+        vehicleNumber: "TRK-SIM-003",
+        vehicleType: "Reefer",
+        vehicleCapacity: 480,
+        maxWeight: 480,
+        maxVolume: 100,
+        maxStops: 18,
+        storageSupport: "COLD",
+        vehicleBrand: "Toyota",
+        makeYear: new Date("2019-01-01T00:00:00.000Z"),
+        vehicleHeight: 3.1,
+        VehicleWeight: 2800,
+        Refregeration: true,
+        Tempreture: 2,
+        isActive: true,
+        isAvailable: true,
+      },
+      {
+        vehicleNumber: "TRK-SIM-004",
+        vehicleType: "Dry Van",
+        vehicleCapacity: 420,
+        maxWeight: 420,
+        maxVolume: 90,
+        maxStops: 16,
+        storageSupport: "NORMAL",
+        vehicleBrand: "Mahindra",
+        makeYear: new Date("2022-01-01T00:00:00.000Z"),
+        vehicleHeight: 3.0,
+        VehicleWeight: 2600,
+        Refregeration: false,
+        Tempreture: 20,
+        isActive: true,
+        isAvailable: true,
+      },
+      {
+        vehicleNumber: "TRK-SIM-005",
+        vehicleType: "Dry Van",
+        vehicleCapacity: 560,
+        maxWeight: 560,
+        maxVolume: 120,
+        maxStops: 22,
+        storageSupport: "NORMAL",
+        vehicleBrand: "Isuzu",
+        makeYear: new Date("2021-01-01T00:00:00.000Z"),
+        vehicleHeight: 3.3,
+        VehicleWeight: 3150,
+        Refregeration: false,
+        Tempreture: 19,
+        isActive: true,
+        isAvailable: true,
+      },
+      {
+        vehicleNumber: "TRK-SIM-006",
+        vehicleType: "Reefer",
+        vehicleCapacity: 540,
+        maxWeight: 540,
+        maxVolume: 118,
+        maxStops: 21,
+        storageSupport: "BOTH",
+        vehicleBrand: "Hino",
+        makeYear: new Date("2020-01-01T00:00:00.000Z"),
+        vehicleHeight: 3.25,
+        VehicleWeight: 3050,
+        Refregeration: true,
+        Tempreture: 3,
+        isActive: true,
+        isAvailable: true,
+      },
+      {
+        vehicleNumber: "TRK-SIM-007",
+        vehicleType: "Dry Van",
+        vehicleCapacity: 470,
+        maxWeight: 470,
+        maxVolume: 98,
+        maxStops: 18,
+        storageSupport: "NORMAL",
+        vehicleBrand: "Tata",
+        makeYear: new Date("2022-01-01T00:00:00.000Z"),
+        vehicleHeight: 3.05,
+        VehicleWeight: 2750,
+        Refregeration: false,
+        Tempreture: 20,
+        isActive: true,
+        isAvailable: true,
+      },
+      {
+        vehicleNumber: "TRK-SIM-008",
+        vehicleType: "Reefer",
+        vehicleCapacity: 500,
+        maxWeight: 500,
+        maxVolume: 108,
+        maxStops: 19,
+        storageSupport: "COLD",
+        vehicleBrand: "Mitsubishi",
+        makeYear: new Date("2019-01-01T00:00:00.000Z"),
+        vehicleHeight: 3.1,
+        VehicleWeight: 2850,
+        Refregeration: true,
+        Tempreture: 2,
+        isActive: true,
+        isAvailable: true,
+      },
+    ],
+  });
+
+  const hubs = await Promise.all([
+    prisma.hub.create({
+      data: {
+        name: "North Collection Hub",
+        latitude: 6.968,
+        longitude: 79.868,
+        type: "MARKET",
+      },
+    }),
+    prisma.hub.create({
+      data: {
+        name: "South Collection Hub",
+        latitude: 6.858,
+        longitude: 79.864,
+        type: "FARM",
+      },
+    }),
+    prisma.hub.create({
+      data: {
+        name: "Central Aggregation Hub",
+        latitude: 6.914,
+        longitude: 79.872,
+        type: "AGGREGATION_CENTER",
+      },
+    }),
+  ]);
+
+  const zones = await Promise.all([
+    prisma.deliveryZone.create({
+      data: {
+        name: "Colombo North",
+        code: "CMB_NORTH",
+        minLat: 6.94,
+        maxLat: 7.02,
+        minLng: 79.83,
+        maxLng: 79.91,
+      },
+    }),
+    prisma.deliveryZone.create({
+      data: {
+        name: "Colombo Central",
+        code: "CMB_CENTRAL",
+        minLat: 6.90,
+        maxLat: 6.9399,
+        minLng: 79.84,
+        maxLng: 79.91,
+      },
+    }),
+    prisma.deliveryZone.create({
+      data: {
+        name: "Colombo South",
+        code: "CMB_SOUTH",
+        minLat: 6.84,
+        maxLat: 6.8999,
+        minLng: 79.84,
+        maxLng: 79.91,
+      },
+    }),
+  ]);
+
+  const products = [];
+  for (let index = 0; index < sellers.length; index += 1) {
+    const seller = sellers[index]!;
+    const product = await prisma.product.create({
+      data: {
+        sellerId: seller.id,
+        name: `Demo Product ${index + 1}`,
+        category: "Produce",
+        price: 2.5 + index,
+        unit: "kg",
+        stock: 500,
+        status: "APPROVED",
+      },
+    });
+    products.push(product);
+  }
+
+  const buyers: Array<{ id: string; lat: number; lng: number; zoneIndex: number }> = [];
+  for (let index = 1; index <= 75; index += 1) {
+    const zoneIndex = (index - 1) % zones.length;
+    const zone = zones[zoneIndex]!;
+    const latRange = zone.maxLat - zone.minLat;
+    const lngRange = zone.maxLng - zone.minLng;
+    const lat = zone.minLat + ((index % 23) / 23) * latRange;
+    const lng = zone.minLng + ((index % 19) / 19) * lngRange;
+
+    const user = await prisma.user.create({
+      data: {
+        email: `sim-buyer-${String(index).padStart(3, "0")}@freshroute.com`,
+        name: `Simulation Buyer ${index}`,
+        role: "BUYER",
+        passwordHash: buyerHash,
+      },
+    });
+    const buyer = await prisma.buyer.create({
+      data: {
+        userId: user.id,
+        deliveryAddress: `Simulation Address ${index}, Zone ${zone.code}`,
+        latitude: Number(lat.toFixed(6)),
+        longitude: Number(lng.toFixed(6)),
+      },
+    });
+    buyers.push({ id: buyer.id, lat: Number(lat.toFixed(6)), lng: Number(lng.toFixed(6)), zoneIndex });
+  }
+
+  const baseDate = new Date();
+  baseDate.setHours(9, 0, 0, 0);
+  let paidOrders = 0;
+  let ineligibleOrders = 0;
+
+  for (let index = 1; index <= 68; index += 1) {
+    const buyer = buyers[index - 1]!;
+    const zone = zones[buyer.zoneIndex]!;
+    const seller = sellers[(index - 1) % sellers.length]!;
+    const product = products[(index - 1) % products.length]!;
+    const storageType = index % 5 === 0 ? "COLD" : "NORMAL";
+    const weight = Number((8 + (index % 9) * 4.5).toFixed(2));
+    const volume = Number((1.2 + (index % 7) * 0.8).toFixed(2));
+    const assignedHub = hubs[(index - 1) % hubs.length]!;
+
+    let status: "PAID" | "PENDING" = "PAID";
+    let isCancelled = false;
+    let totalWeight: number | null = weight;
+    let totalVolume: number | null = volume;
+
+    if (index % 17 === 0) {
+      status = "PENDING";
+      ineligibleOrders += 1;
+    } else if (index % 19 === 0) {
+      isCancelled = true;
+      ineligibleOrders += 1;
+    } else if (index % 23 === 0) {
+      totalWeight = null;
+      totalVolume = null;
+      ineligibleOrders += 1;
+    } else {
+      paidOrders += 1;
+    }
+
+    const order = await prisma.order.create({
+      data: {
+        buyerId: buyer.id,
+        orderNumber: `SIM-ORD-${String(index).padStart(3, "0")}`,
+        status,
+        isCancelled,
+        totalAmount: Number((40 + index * 2.75).toFixed(2)),
+        storageType,
+        totalWeight,
+        totalVolume,
+        deliveryAddress: `Simulation Address ${index}, Zone ${zone.code}`,
+        deliveryLat: buyer.lat,
+        deliveryLng: buyer.lng,
+        deliveryZoneId: zone.id,
+        deliveryDate: new Date(baseDate.getTime() + (index % 6) * 30 * 60 * 1000),
+        pickupHubId: assignedHub.id,
+        placedAt: new Date(baseDate.getTime() - (index % 12) * 60 * 60 * 1000),
+      },
+    });
+
+    await prisma.orderItem.create({
+      data: {
+        orderId: order.id,
+        productId: product.id,
+        quantity: 1 + (index % 4),
+        unitPrice: product.price,
+        totalPrice: Number((product.price * (1 + (index % 4))).toFixed(2)),
+        sellerId: seller.id,
+      },
+    });
+  }
+
+  console.log("✅ Simulation seed complete");
+  console.log(`Paid candidate orders: ${paidOrders}`);
+  console.log(`Intentionally ineligible orders: ${ineligibleOrders}`);
+  console.log(`Zones: ${zones.length}, Hubs: ${hubs.length}, Trucks: 8, FieldAdmins: ${fieldAdmins.length}`);
+};
+
+async function main() {
+  if (seedMode === "simulation") {
+    await seedSimulationScenario();
+    return;
+  }
+
+  console.log("🌱 Seeding FreshRoute database...");
+  await clearDatabase();
 
   const passwordHash = await bcrypt.hash("driver123", 10);
 

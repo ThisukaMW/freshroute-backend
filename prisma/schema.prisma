@@ -341,12 +341,17 @@ model ProductInspection {
   result        InspectionResult
   approvedQuantity Float?
   totalQuantity Float?
+  rejectedQuantity Float?
+  rejectedAmount Float?
+  sellerId      String?
   unit          String?
   notes         String?
   createdAt     DateTime     @default(now())
+  refundItems   RefundItem[]
 
   @@index([fieldAdminId])
   @@index([orderItemId])
+  @@index([sellerId])
 }
 
 model DeliveryVerification {
@@ -406,12 +411,33 @@ model Refund {
   amount        Float
   reason        String?
   status        PaymentStatus  @default(PENDING)
+  refundItems   RefundItem[]
 
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
 
   @@index([orderId])
   @@index([initiatedBy])
+}
+
+model RefundItem {
+  id                String             @id @default(uuid())
+  refundId           String
+  refund             Refund             @relation(fields: [refundId], references: [id], onDelete: Cascade)
+  orderItemId        String
+  orderItem          OrderItem          @relation(fields: [orderItemId], references: [id], onDelete: Restrict)
+  inspectionId       String?
+  inspection         ProductInspection? @relation(fields: [inspectionId], references: [id], onDelete: SetNull)
+  sellerId           String
+  rejectedQuantity   Float
+  unitPrice          Float
+  lineAmount         Float
+  createdAt          DateTime           @default(now())
+
+  @@index([refundId])
+  @@index([orderItemId])
+  @@index([inspectionId])
+  @@index([sellerId])
 }
 
 // ============= PRODUCTS & ORDERS =============
@@ -511,6 +537,7 @@ model OrderItem {
 
   // relations from field admin tasks
   inspections ProductInspection[]
+  refundItems RefundItem[]
 
   createdAt   DateTime    @default(now())
 

@@ -1,8 +1,6 @@
 import prisma from "../../config/database.js";
 import {
   inferInspectionResult,
-  isRefundWithinRemainingLimit,
-  isValidRefundAmount,
   normalizeApprovedQuantity,
 } from "./fieldadmin.rules.js";
 
@@ -363,6 +361,8 @@ export const createInspection = async (
   const totalQuantity = orderItem.quantity;
   const approvedQuantity = normalizeApprovedQuantity(payload.approvedQuantity, totalQuantity);
   const result = payload.result ?? inferInspectionResult(approvedQuantity, totalQuantity);
+  const rejectedQuantity = Math.max(0, totalQuantity - approvedQuantity);
+  const rejectedAmount = Number((rejectedQuantity * orderItem.unitPrice).toFixed(2));
 
   return prisma.productInspection.create({
     data: {
@@ -371,6 +371,9 @@ export const createInspection = async (
       result,
       approvedQuantity,
       totalQuantity,
+      rejectedQuantity,
+      rejectedAmount,
+      sellerId: orderItem.sellerId,
       unit: orderItem.product.unit,
       notes: payload.notes,
     },
@@ -645,7 +648,22 @@ export const getRefunds = async (fieldAdminId: string) => {
   await ensureFieldAdminExists(fieldAdminId);
   return prisma.refund.findMany({
     where: { initiatedBy: fieldAdminId },
-    include: { order: { select: { id: true, orderNumber: true, totalAmount: true, status: true } } },
+    include: {
+      order: { select: { id: true, orderNumber: true, totalAmount: true, status: true } },
+      refundItems: {
+        include: {
+          orderItem: {
+            select: {
+              id: true,
+              quantity: true,
+              unitPrice: true,
+              product: { select: { id: true, name: true, unit: true } },
+            },
+          },
+          inspection: { select: { id: true, result: true, approvedQuantity: true, rejectedQuantity: true } },
+        },
+      },
+    },
     orderBy: { createdAt: "desc" },
   });
 };
@@ -676,47 +694,195 @@ export const getRefundEligibleOrders = async (fieldAdminId: string) => {
 
 export const initiateRefund = async (
   fieldAdminId: string,
-  payload: { orderId: string; amount: number; reason?: string }
+  payload: { orderId: string; reason?: string; orderItemIds?: string[] }
 ) => {
   await ensureFieldAdminExists(fieldAdminId);
-  const order = await ensureOrderOwnedByFieldAdmin(fieldAdminId, payload.orderId);
-  const hasRejectedOrPartialInspection = await prisma.productInspection.findFirst({
+  await ensureOrderOwnedByFieldAdmin(fieldAdminId, payload.orderId);
+
+  const inspections = await prisma.productInspection.findMany({
     where: {
       fieldAdminId,
       result: { in: ["PARTIAL", "REJECTED"] },
-      orderItem: { orderId: payload.orderId },
+      orderItem: {
+        orderId: payload.orderId,
+        ...(payload.orderItemIds?.length ? { id: { in: payload.orderItemIds } } : {}),
+      },
     },
-    select: { id: true },
+    include: {
+      orderItem: {
+        select: {
+          id: true,
+          orderId: true,
+          sellerId: true,
+          unitPrice: true,
+          quantity: true,
+        },
+      },
+    },
+    orderBy: { createdAt: "desc" },
   });
 
-  if (!hasRejectedOrPartialInspection) {
-    throw new Error("Refunds are only allowed for partially or fully rejected orders");
+  // Keep only latest inspection per order item for refund eligibility.
+  const latestByOrderItem = new Map<string, (typeof inspections)[number]>();
+  for (const inspection of inspections) {
+    if (!inspection.orderItemId || !inspection.orderItem) continue;
+    if (!latestByOrderItem.has(inspection.orderItemId)) {
+      latestByOrderItem.set(inspection.orderItemId, inspection);
+    }
   }
 
-  if (!isValidRefundAmount(payload.amount, order.totalAmount)) {
-    throw new Error("Invalid refund amount");
+  const refundableItems = Array.from(latestByOrderItem.values());
+  if (refundableItems.length === 0) {
+    throw new Error("No rejected or partially rejected order items found for refund");
   }
 
-  const existingReserved = await prisma.refund.aggregate({
-    _sum: { amount: true },
+  const orderItemIds = refundableItems.map((item) => item.orderItemId!).filter(Boolean);
+  const existingRefundedByItem = await prisma.refundItem.groupBy({
+    by: ["orderItemId"],
+    where: { orderItemId: { in: orderItemIds } },
+    _sum: { rejectedQuantity: true, lineAmount: true },
+  });
+  const refundedQtyMap = new Map(
+    existingRefundedByItem.map((row) => [row.orderItemId, row._sum.rejectedQuantity ?? 0])
+  );
+
+  const refundLines = refundableItems
+    .map((inspection) => {
+      const item = inspection.orderItem!;
+      const rejectedQuantity =
+        inspection.rejectedQuantity ??
+        Math.max(0, (inspection.totalQuantity ?? item.quantity) - (inspection.approvedQuantity ?? 0));
+      const alreadyRefundedQuantity = refundedQtyMap.get(item.id) ?? 0;
+      const refundableQuantity = Math.max(0, rejectedQuantity - alreadyRefundedQuantity);
+      if (refundableQuantity <= 0) return null;
+      const lineAmount = Number((refundableQuantity * item.unitPrice).toFixed(2));
+      return {
+        orderItemId: item.id,
+        inspectionId: inspection.id,
+        sellerId: item.sellerId,
+        rejectedQuantity: refundableQuantity,
+        unitPrice: item.unitPrice,
+        lineAmount,
+      };
+    })
+    .filter((line): line is NonNullable<typeof line> => Boolean(line));
+
+  if (refundLines.length === 0) {
+    throw new Error("All rejected quantities are already part of refund requests");
+  }
+
+  const totalAmount = Number(refundLines.reduce((sum, line) => sum + line.lineAmount, 0).toFixed(2));
+
+  return prisma.$transaction(async (tx) => {
+    const refund = await tx.refund.create({
+      data: {
+        orderId: payload.orderId,
+        initiatedBy: fieldAdminId,
+        amount: totalAmount,
+        reason: payload.reason,
+        status: "PENDING",
+      },
+    });
+
+    await tx.refundItem.createMany({
+      data: refundLines.map((line) => ({
+        refundId: refund.id,
+        orderItemId: line.orderItemId,
+        inspectionId: line.inspectionId,
+        sellerId: line.sellerId,
+        rejectedQuantity: line.rejectedQuantity,
+        unitPrice: line.unitPrice,
+        lineAmount: line.lineAmount,
+      })),
+    });
+
+    return tx.refund.findUniqueOrThrow({
+      where: { id: refund.id },
+      include: {
+        order: { select: { id: true, orderNumber: true, totalAmount: true, status: true } },
+        refundItems: {
+          include: {
+            orderItem: {
+              select: {
+                id: true,
+                quantity: true,
+                unitPrice: true,
+                product: { select: { id: true, name: true, unit: true } },
+              },
+            },
+            inspection: { select: { id: true, result: true, approvedQuantity: true, rejectedQuantity: true } },
+          },
+        },
+      },
+    });
+  });
+};
+
+export const getAdminRefundQueue = async (filters?: { status?: string; fieldAdminId?: string; routeId?: string }) => {
+  const routeFilter =
+    filters?.routeId && filters.routeId.trim().length > 0
+      ? { order: { batch: { routes: { some: { id: filters.routeId } } } } }
+      : {};
+  const fieldAdminFilter =
+    filters?.fieldAdminId && filters.fieldAdminId.trim().length > 0
+      ? { initiatedBy: filters.fieldAdminId }
+      : {};
+  const statusFilter =
+    filters?.status && filters.status.trim().length > 0 ? { status: filters.status as any } : {};
+
+  return prisma.refund.findMany({
     where: {
-      orderId: payload.orderId,
-      status: { in: ["PENDING", "PROCESSING", "COMPLETED", "REFUNDED"] },
+      ...routeFilter,
+      ...fieldAdminFilter,
+      ...statusFilter,
     },
-  });
-  const alreadyReservedAmount = existingReserved._sum.amount ?? 0;
-  if (!isRefundWithinRemainingLimit(alreadyReservedAmount, payload.amount, order.totalAmount)) {
-    throw new Error("Refund total exceeds order amount");
-  }
-
-  return prisma.refund.create({
-    data: {
-      orderId: payload.orderId,
-      initiatedBy: fieldAdminId,
-      amount: payload.amount,
-      reason: payload.reason,
-      status: "PENDING",
+    include: {
+      fieldAdmin: { include: { user: { select: { id: true, name: true, email: true } } } },
+      order: {
+        select: {
+          id: true,
+          orderNumber: true,
+          totalAmount: true,
+          status: true,
+          batch: {
+            select: {
+              id: true,
+              routes: {
+                select: {
+                  id: true,
+                  routeNumber: true,
+                  status: true,
+                  fieldAdminId: true,
+                },
+              },
+            },
+          },
+        },
+      },
+      refundItems: {
+        include: {
+          orderItem: {
+            select: {
+              id: true,
+              quantity: true,
+              unitPrice: true,
+              sellerId: true,
+              product: { select: { id: true, name: true, unit: true } },
+            },
+          },
+          inspection: {
+            select: {
+              id: true,
+              result: true,
+              approvedQuantity: true,
+              rejectedQuantity: true,
+              notes: true,
+            },
+          },
+        },
+      },
     },
+    orderBy: { createdAt: "desc" },
   });
 };
 
