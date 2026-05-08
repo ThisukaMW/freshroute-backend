@@ -34,12 +34,14 @@ const ensureHubs = async () => {
   return hubs;
 };
 
+//get all active delivery zones.
 const getDeliveryZones = async () =>
   prisma.deliveryZone.findMany({
     where: { isActive: true },
     select: { id: true, code: true, minLat: true, maxLat: true, minLng: true, maxLng: true },
   });
 
+//get all active trucks that are available.
 const getAvailableTrucks = async () =>
   prisma.truck.findMany({
     where: { isActive: true, isAvailable: true },
@@ -53,6 +55,7 @@ const getAvailableTrucks = async () =>
     orderBy: { maxWeight: "asc" },
   });
 
+//get all active drivers that are available.
 const getAvailableDrivers = async () =>
   prisma.driver.findMany({
     where: { isActive: true, isAvailable: true },
@@ -60,6 +63,7 @@ const getAvailableDrivers = async () =>
     orderBy: { createdAt: "asc" },
   });
 
+//get all active field admins.
 const getActiveFieldAdmins = async () =>
   prisma.fieldAdmin.findMany({
     where: { isActive: true },
@@ -67,6 +71,7 @@ const getActiveFieldAdmins = async () =>
     orderBy: { createdAt: "asc" },
   });
 
+//recalculate the live load of a truck.
 const recalculateTruckLiveLoad = async (
   tx: Pick<typeof prisma, "order" | "truck">,
   truckId: string
@@ -96,6 +101,7 @@ const recalculateTruckLiveLoad = async (
   return { currentLoadWeight, currentLoadVolume, currentLoadStops };
 };
 
+//select a truck that can carry a given slice.
 const selectTruckForSlice = (
   trucks: Array<{
     id: string;
@@ -116,6 +122,7 @@ const selectTruckForSlice = (
       })
   );
 
+//split a slice into multiple slices if it doesn't fit into a single truck.
 const splitSliceForTruckFit = (
   slice: ReturnType<typeof splitByCapacity>[number],
   trucks: Awaited<ReturnType<typeof getAvailableTrucks>>
@@ -171,6 +178,7 @@ const splitSliceForTruckFit = (
   return { fittedSlices: bins, unattachedOrders: unattached };
 };
 
+//make a slice feasible by splitting it into multiple slices if it doesn't fit into a single truck.
 const makeTruckFeasibleSlices = (
   slices: ReturnType<typeof splitByCapacity>,
   trucks: Awaited<ReturnType<typeof getAvailableTrucks>>,
@@ -198,6 +206,7 @@ const makeTruckFeasibleSlices = (
   return feasible;
 };
 
+//get all orders that are eligible for aggregation.
 const getCandidates = async (windowStart: Date, windowEnd: Date): Promise<CandidateOrder[]> => {
   const orders = await prisma.order.findMany({
     where: {
@@ -239,6 +248,7 @@ const getCandidates = async (windowStart: Date, windowEnd: Date): Promise<Candid
   });
 };
 
+//assign a delivery zone to an order.
 const assignDeliveryZone = (
   order: CandidateOrder,
   zones: Array<{ id: string; code: string; minLat: number; maxLat: number; minLng: number; maxLng: number }>
@@ -251,6 +261,7 @@ const assignDeliveryZone = (
       order.deliveryLng <= zone.maxLng
   );
 
+//evaluate the eligibility of a candidate order.
 const evaluateEligibility = (candidates: CandidateOrder[]) => {
   const eligible: CandidateOrder[] = [];
   const rejected: RejectedOrderReason[] = [];
@@ -272,6 +283,7 @@ const evaluateEligibility = (candidates: CandidateOrder[]) => {
   return { eligible, rejected };
 };
 
+//persist the geo assignments of orders.
 const persistGeoAssignments = async (orders: CandidateOrder[], dryRun: boolean) => {
   if (dryRun) return;
   await prisma.$transaction(
@@ -287,6 +299,7 @@ const persistGeoAssignments = async (orders: CandidateOrder[], dryRun: boolean) 
   );
 };
 
+//create batches and routes for a given set of slices.
 const createBatchesAndRoutes = async (
   slices: ReturnType<typeof splitByCapacity>,
   trucks: Awaited<ReturnType<typeof getAvailableTrucks>>,
@@ -472,6 +485,7 @@ const createBatchesAndRoutes = async (
   return created;
 };
 
+//run the order aggregation process.
 export const runOrderAggregation = async (input: AggregationRunInput): Promise<AggregationSummary> => {
   const triggerMode = input.triggerMode ?? "manual";
   const config = {
@@ -609,6 +623,7 @@ export const runOrderAggregation = async (input: AggregationRunInput): Promise<A
   }
 };
 
+//get all aggregation runs in descending order of startedAt timestamp up to 100 runs.
 export const getAggregationRuns = async (limit = 20) => {
   const safeLimit = Math.max(1, Math.min(limit, 100));
   return prisma.aggregationRun.findMany({
@@ -633,6 +648,7 @@ export const getAggregationRuns = async (limit = 20) => {
   });
 };
 
+//get a specific aggregation run by id with its rejections.
 export const getAggregationRunById = async (runId: string) => {
   return prisma.aggregationRun.findUnique({
     where: { id: runId },
@@ -651,6 +667,7 @@ export const getAggregationRunById = async (runId: string) => {
   });
 };
 
+//get the route start handoff bundle for a specific route.
 export const getRouteStartHandoffBundle = async (routeId: string) => {
   const route = await prisma.route.findUnique({
     where: { id: routeId },

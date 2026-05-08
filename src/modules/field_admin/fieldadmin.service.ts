@@ -6,6 +6,7 @@ import {
 
 const ACTIVE_LOAD_STATUSES: Array<"BATCHED" | "ASSIGNED" | "IN_TRANSIT"> = ["BATCHED", "ASSIGNED", "IN_TRANSIT"];
 
+//recalculate the live load of a truck.
 const recalculateTruckLiveLoad = async (
   tx: Pick<typeof prisma, "order" | "truck">,
   truckId: string
@@ -33,6 +34,7 @@ const recalculateTruckLiveLoad = async (
   });
 };
 
+//ensure a field admin exists.
 const ensureFieldAdminExists = async (fieldAdminId: string) => {
   const fieldAdmin = await prisma.fieldAdmin.findUnique({
     where: { id: fieldAdminId },
@@ -46,6 +48,7 @@ const ensureFieldAdminExists = async (fieldAdminId: string) => {
   return fieldAdmin;
 };
 
+//ensure an order is owned by a field admin.
 const ensureOrderOwnedByFieldAdmin = async (fieldAdminId: string, orderId: string) => {
   const order = await prisma.order.findUnique({ where: { id: orderId } });
   if (!order) {
@@ -61,6 +64,7 @@ const ensureOrderOwnedByFieldAdmin = async (fieldAdminId: string, orderId: strin
   return order;
 };
 
+//ensure an order item is owned by a field admin.
 const ensureOrderItemOwnedByFieldAdmin = async (fieldAdminId: string, orderItemId: string) => {
   const orderItem = await prisma.orderItem.findUnique({
     where: { id: orderItemId },
@@ -73,6 +77,7 @@ const ensureOrderItemOwnedByFieldAdmin = async (fieldAdminId: string, orderItemI
   return orderItem;
 };
 
+//ensure a stop is owned by a field admin.
 const ensureStopOwnedByFieldAdmin = async (fieldAdminId: string, stopId: string) => {
   const stop = await prisma.stop.findFirst({
     where: { id: stopId, route: { fieldAdminId } },
@@ -83,6 +88,7 @@ const ensureStopOwnedByFieldAdmin = async (fieldAdminId: string, stopId: string)
   }
 };
 
+//select the order for a field admin.
 const orderSelect = {
   id: true,
   orderNumber: true,
@@ -135,6 +141,7 @@ const orderSelect = {
   buyer: { include: { user: { select: { name: true, email: true } } } },
 };
 
+//convert the orders to a field admin order contract.
 const toFieldAdminOrderContract = (
   orders: Array<{
     id: string;
@@ -202,6 +209,7 @@ const toFieldAdminOrderContract = (
     };
   });
 
+//get all orders for a field admin.
 export const getAllOrders = async (fieldAdminId: string) => {
   await ensureFieldAdminExists(fieldAdminId);
   const orders = await prisma.order.findMany({
@@ -212,6 +220,7 @@ export const getAllOrders = async (fieldAdminId: string) => {
   return toFieldAdminOrderContract(orders);
 };
 
+//get orders by status for a field admin.
 export const getOrdersByStatus = async (
   fieldAdminId: string,
   statuses: Array<
@@ -230,6 +239,7 @@ export const getOrdersByStatus = async (
   return toFieldAdminOrderContract(orders);
 };
 
+//get the profile of a field admin.
 export const getFieldAdminProfile = async (fieldAdminId: string) => {
   const fieldAdmin = await ensureFieldAdminExists(fieldAdminId);
   return {
@@ -244,6 +254,7 @@ export const getFieldAdminProfile = async (fieldAdminId: string) => {
   };
 };
 
+//get the notifications of a field admin.
 export const getFieldAdminNotifications = async (fieldAdminId: string) => {
   const fieldAdmin = await ensureFieldAdminExists(fieldAdminId);
   return prisma.notification.findMany({
@@ -252,6 +263,7 @@ export const getFieldAdminNotifications = async (fieldAdminId: string) => {
   });
 };
 
+//get all routes for a field admin.
 export const getRoutes = async (
   fieldAdminId: string,
   statuses?: Array<"PLANNED" | "ASSIGNED" | "STARTED" | "IN_PROGRESS" | "COMPLETED" | "FAILED" | "CANCELLED">
@@ -325,6 +337,7 @@ export const getRoutes = async (
   });
 };
 
+//get all task stops for a field admin.
 export const getTaskStops = async (
   fieldAdminId: string,
   statuses?: Array<"PENDING" | "IN_PROGRESS" | "COMPLETED" | "FAILED" | "SKIPPED">,
@@ -347,6 +360,7 @@ export const getTaskStops = async (
   });
 };
 
+//create an inspection for an order item.
 export const createInspection = async (
   fieldAdminId: string,
   payload: {
@@ -380,6 +394,7 @@ export const createInspection = async (
   });
 };
 
+//get the history of inspections for a field admin.
 export const getInspectionHistory = async (
   fieldAdminId: string,
   result?: "APPROVED" | "REJECTED" | "PARTIAL"
@@ -399,6 +414,7 @@ export const getInspectionHistory = async (
   });
 };
 
+//mark the delivery of a stop as complete.
 export const markDeliveryComplete = async (
   fieldAdminId: string,
   payload: { stopId: string; notes?: string }
@@ -488,6 +504,7 @@ export const markDeliveryComplete = async (
   return updatedStop;
 };
 
+//create an assessment for a target.
 export const createAssessment = async (
   fieldAdminId: string,
   payload: { targetUserId: string; target: "DRIVER" | "BUYER" | "SELLER"; rating: number; comment?: string }
@@ -519,6 +536,7 @@ export const createAssessment = async (
   });
 };
 
+//create a damage report for a stop.
 export const createDamageReport = async (
   fieldAdminId: string,
   payload: { description: string; stopId?: string; images?: unknown }
@@ -537,6 +555,7 @@ export const createDamageReport = async (
   });
 };
 
+//get the assessment candidates for a field admin.
 export const getAssessmentCandidates = async (fieldAdminId: string) => {
   await ensureFieldAdminExists(fieldAdminId);
   const routes = await prisma.route.findMany({
@@ -592,6 +611,7 @@ export const getAssessmentCandidates = async (fieldAdminId: string) => {
   };
 };
 
+//create a route reassessment for a field admin.
 export const createRouteReassessment = async (
   fieldAdminId: string,
   payload: { routeId: string; reason?: string; oldData?: unknown; newData?: unknown }
@@ -616,6 +636,7 @@ export const createRouteReassessment = async (
   });
 };
 
+//update the truck capacity for a field admin.
 export const updateTruckCapacity = async (
   fieldAdminId: string,
   payload: { driverId: string; vehicleCapacity: number }
@@ -635,6 +656,7 @@ export const updateTruckCapacity = async (
   });
 };
 
+//get the payment history for a field admin.
 export const getPaymentHistory = async (fieldAdminId: string) => {
   await ensureFieldAdminExists(fieldAdminId);
   return prisma.payment.findMany({
@@ -644,6 +666,7 @@ export const getPaymentHistory = async (fieldAdminId: string) => {
   });
 };
 
+//get the refunds for a field admin.
 export const getRefunds = async (fieldAdminId: string) => {
   await ensureFieldAdminExists(fieldAdminId);
   return prisma.refund.findMany({
@@ -668,6 +691,7 @@ export const getRefunds = async (fieldAdminId: string) => {
   });
 };
 
+//get the refund eligible orders for a field admin.
 export const getRefundEligibleOrders = async (fieldAdminId: string) => {
   await ensureFieldAdminExists(fieldAdminId);
 
@@ -692,6 +716,7 @@ export const getRefundEligibleOrders = async (fieldAdminId: string) => {
   return toFieldAdminOrderContract(orders);
 };
 
+//initiate a refund for a field admin.
 export const initiateRefund = async (
   fieldAdminId: string,
   payload: { orderId: string; reason?: string; orderItemIds?: string[] }
@@ -818,6 +843,7 @@ export const initiateRefund = async (
   });
 };
 
+//get the admin refund queue for a field admin.
 export const getAdminRefundQueue = async (filters?: { status?: string; fieldAdminId?: string; routeId?: string }) => {
   const routeFilter =
     filters?.routeId && filters.routeId.trim().length > 0
@@ -886,6 +912,7 @@ export const getAdminRefundQueue = async (filters?: { status?: string; fieldAdmi
   });
 };
 
+//get the dashboard overview for a field admin.
 export const getDashboardOverview = async (fieldAdminId: string) => {
   await ensureFieldAdminExists(fieldAdminId);
 
@@ -912,6 +939,7 @@ export const getDashboardOverview = async (fieldAdminId: string) => {
   return { assignedOrders, assessments, pendingQuality, routesToday };
 };
 
+//get the history for a field admin.
 export const getHistory = async (fieldAdminId: string) => {
   await ensureFieldAdminExists(fieldAdminId);
   const routes = await prisma.route.findMany({
@@ -947,6 +975,7 @@ export const getHistory = async (fieldAdminId: string) => {
   };
 };
 
+//get the truck live load debug for a field admin.
 export const getTruckLiveLoadDebug = async (fieldAdminId: string) => {
   await ensureFieldAdminExists(fieldAdminId);
 

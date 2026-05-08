@@ -1,5 +1,6 @@
 import type { ClusteredOrderGroup, PackedBatchSlice } from "./aggregator.types.js";
 
+//split the clusters into slices based on the capacity limits until one of the limits is exceeded.
 export const splitByCapacity = (
   clusters: ClusteredOrderGroup[],
   limits: { maxStopsPerBatch: number; maxWeightPerBatch: number; maxVolumePerBatch: number }
@@ -18,6 +19,7 @@ export const splitByCapacity = (
     let currentWeight = 0;
     let currentVolume = 0;
 
+    //flush the current orders to the slices array if the limits are exceeded.
     const flush = () => {
       if (currentOrders.length === 0) return;
       slices.push({

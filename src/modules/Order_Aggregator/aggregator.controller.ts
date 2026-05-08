@@ -23,6 +23,7 @@ const isAutoTriggerWithinWindow = (now: Date) => {
   return hour >= 0 && hour < 4;
 };
 
+//manual and Automated trigger for controlled aggregation runs.
 export const runAggregation = async (req: AuthRequest, res: Response) => {
   try {
     const now = new Date();
@@ -65,6 +66,7 @@ export const runAggregation = async (req: AuthRequest, res: Response) => {
   }
 };
 
+//preview aggregation run before running it to see the results before actually running it.
 export const previewAggregation = async (req: AuthRequest, res: Response) => {
   try {
     const now = new Date();
@@ -94,6 +96,7 @@ export const previewAggregation = async (req: AuthRequest, res: Response) => {
   }
 };
 
+//list all aggregation runs.
 export const listAggregationRuns = async (req: AuthRequest, res: Response) => {
   try {
     const limit = req.query.limit ? Number(req.query.limit) : 20;
@@ -105,6 +108,7 @@ export const listAggregationRuns = async (req: AuthRequest, res: Response) => {
   }
 };
 
+//get a specific aggregation run by id.
 export const getAggregationRun = async (req: AuthRequest, res: Response) => {
   try {
     const runId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
@@ -124,6 +128,7 @@ export const getAggregationRun = async (req: AuthRequest, res: Response) => {
   }
 };
 
+//get the route start handoff bundle for a specific route.
 export const getRouteStartHandoff = async (req: AuthRequest, res: Response) => {
   try {
     const routeId = Array.isArray(req.params.routeId) ? req.params.routeId[0] : req.params.routeId;

@@ -2,6 +2,7 @@ import type { CandidateOrder } from "./aggregator.types.js";
 
 export const toRadians = (value: number) => (value * Math.PI) / 180;
 
+//calculate the haversine distance between two points on the earth's surface.
 export const haversineDistanceKm = (
   lat1: number,
   lng1: number,

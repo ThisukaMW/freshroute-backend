@@ -1,5 +1,6 @@
 import type { CandidateOrder } from "./aggregator.types.js";
 
+//get the eligibility failure reason for a candidate order.
 export const getEligibilityFailureReason = (order: CandidateOrder): string | null => {
   if (order.status !== "PAID") return "Order status is not PAID";
   if (order.isCancelled) return "Order is cancelled";
@@ -13,6 +14,7 @@ export const getEligibilityFailureReason = (order: CandidateOrder): string | nul
   return null;
 };
 
+//check if a truck can carry a given slice.
 export const canTruckCarrySlice = (
   truck: {
     maxWeight: number;
@@ -37,6 +39,7 @@ export const canTruckCarrySlice = (
   );
 };
 
+//reserve a resource by id from a pool.
 export const reserveResourceById = <T extends { id: string }>(pool: T[], id: string) => {
   const idx = pool.findIndex((item) => item.id === id);
   if (idx < 0) return null;
@@ -44,6 +47,7 @@ export const reserveResourceById = <T extends { id: string }>(pool: T[], id: str
   return picked ?? null;
 };
 
+//pick a resource from a pool in a round robin manner.
 export const pickRoundRobin = <T>(items: T[], cursor: number) => {
   if (items.length === 0) return { item: null, nextCursor: cursor };
   const normalized = ((cursor % items.length) + items.length) % items.length;

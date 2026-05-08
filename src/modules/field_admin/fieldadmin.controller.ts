@@ -30,6 +30,7 @@ const fail = (res: Response, error: unknown, status = 500) => {
   res.status(status).json({ message });
 };
 
+//get all orders for a field admin.
 export const allOrders = async (req: AuthRequest, res: Response) => {
   try {
     const data = await getAllOrders(req.fieldAdminId!);
@@ -39,6 +40,7 @@ export const allOrders = async (req: AuthRequest, res: Response) => {
   }
 };
 
+//get all pending orders for a field admin.
 export const pendingOrders = async (req: AuthRequest, res: Response) => {
   try {
     const data = await getOrdersByStatus(req.fieldAdminId!, ["PENDING", "PAYMENT_PENDING", "PAID"]);
@@ -48,6 +50,7 @@ export const pendingOrders = async (req: AuthRequest, res: Response) => {
   }
 };
 
+//get all scheduled orders for a field admin.
 export const scheduledOrders = async (req: AuthRequest, res: Response) => {
   try {
     const data = await getOrdersByStatus(req.fieldAdminId!, ["BATCHED", "ASSIGNED"]);
@@ -57,6 +60,7 @@ export const scheduledOrders = async (req: AuthRequest, res: Response) => {
   }
 };
 
+//get all in transit orders for a field admin.
 export const inTransitOrders = async (req: AuthRequest, res: Response) => {
   try {
     const data = await getOrdersByStatus(req.fieldAdminId!, ["IN_TRANSIT"]);
@@ -66,6 +70,7 @@ export const inTransitOrders = async (req: AuthRequest, res: Response) => {
   }
 };
 
+//get all delivered orders for a field admin.
 export const deliveredOrders = async (req: AuthRequest, res: Response) => {
   try {
     const data = await getOrdersByStatus(req.fieldAdminId!, ["DELIVERED"]);
@@ -75,6 +80,7 @@ export const deliveredOrders = async (req: AuthRequest, res: Response) => {
   }
 };
 
+//get the profile of a field admin.
 export const myProfile = async (req: AuthRequest, res: Response) => {
   try {
     const data = await getFieldAdminProfile(req.fieldAdminId!);
@@ -84,6 +90,7 @@ export const myProfile = async (req: AuthRequest, res: Response) => {
   }
 };
 
+//get the profile of a field admin for editing.
 export const myProfileEdit = async (req: AuthRequest, res: Response) => {
   try {
     const data = await getFieldAdminProfile(req.fieldAdminId!);
@@ -93,6 +100,7 @@ export const myProfileEdit = async (req: AuthRequest, res: Response) => {
   }
 };
 
+//get the addresses of a field admin.
 export const myAddresses = async (req: AuthRequest, res: Response) => {
   try {
     const stops = await getTaskStops(req.fieldAdminId!);
@@ -110,6 +118,7 @@ export const myAddresses = async (req: AuthRequest, res: Response) => {
   }
 };
 
+//get the notifications of a field admin.
 export const myNotifications = async (req: AuthRequest, res: Response) => {
   try {
     const data = await getFieldAdminNotifications(req.fieldAdminId!);
@@ -119,6 +128,7 @@ export const myNotifications = async (req: AuthRequest, res: Response) => {
   }
 };
 
+//get the help content for a field admin.
 export const helpContent = async (_req: AuthRequest, res: Response) => {
   res.json({
     title: "Field Admin Help",
@@ -127,6 +137,7 @@ export const helpContent = async (_req: AuthRequest, res: Response) => {
   });
 };
 
+//get the terms content for a field admin.
 export const termsContent = async (_req: AuthRequest, res: Response) => {
   res.json({
     version: "1.0",
@@ -135,6 +146,7 @@ export const termsContent = async (_req: AuthRequest, res: Response) => {
   });
 };
 
+//get all routes for a field admin.
 export const allRoutes = async (req: AuthRequest, res: Response) => {
   try {
     const data = await getRoutes(req.fieldAdminId!);
@@ -144,6 +156,7 @@ export const allRoutes = async (req: AuthRequest, res: Response) => {
   }
 };
 
+//get all active routes for a field admin.
 export const activeRoutes = async (req: AuthRequest, res: Response) => {
   try {
     const data = await getRoutes(req.fieldAdminId!, ["ASSIGNED", "STARTED", "IN_PROGRESS"]);
@@ -153,6 +166,7 @@ export const activeRoutes = async (req: AuthRequest, res: Response) => {
   }
 };
 
+//get all scheduled routes for a field admin.
 export const scheduledRoutes = async (req: AuthRequest, res: Response) => {
   try {
     const data = await getRoutes(req.fieldAdminId!, ["PLANNED", "ASSIGNED"]);
@@ -162,6 +176,7 @@ export const scheduledRoutes = async (req: AuthRequest, res: Response) => {
   }
 };
 
+//get all completed routes for a field admin.
 export const completedRoutes = async (req: AuthRequest, res: Response) => {
   try {
     const data = await getRoutes(req.fieldAdminId!, ["COMPLETED"]);
@@ -171,6 +186,7 @@ export const completedRoutes = async (req: AuthRequest, res: Response) => {
   }
 };
 
+//get all in progress routes for a field admin.
 export const inProgressRoutes = async (req: AuthRequest, res: Response) => {
   try {
     const data = await getRoutes(req.fieldAdminId!, ["IN_PROGRESS"]);
@@ -180,6 +196,7 @@ export const inProgressRoutes = async (req: AuthRequest, res: Response) => {
   }
 };
 
+//get the history of routes for a field admin.
 export const routeHistory = async (req: AuthRequest, res: Response) => {
   try {
     const data = await getHistory(req.fieldAdminId!);
@@ -189,6 +206,7 @@ export const routeHistory = async (req: AuthRequest, res: Response) => {
   }
 };
 
+//get the history of all orders for a field admin.
 export const allHistory = async (req: AuthRequest, res: Response) => {
   try {
     const data = await getHistory(req.fieldAdminId!);
@@ -198,6 +216,7 @@ export const allHistory = async (req: AuthRequest, res: Response) => {
   }
 };
 
+//get the history of trucks for a field admin.
 export const truckHistory = async (req: AuthRequest, res: Response) => {
   try {
     const data = await getRoutes(req.fieldAdminId!, ["COMPLETED"]);
@@ -215,6 +234,7 @@ export const truckHistory = async (req: AuthRequest, res: Response) => {
   }
 };
 
+//get the history of drivers for a field admin.
 export const driverHistory = async (req: AuthRequest, res: Response) => {
   try {
     const data = await getRoutes(req.fieldAdminId!, ["COMPLETED"]);
@@ -232,6 +252,7 @@ export const driverHistory = async (req: AuthRequest, res: Response) => {
   }
 };
 
+//get all assigned tasks for a field admin.
 export const assignedTasks = async (req: AuthRequest, res: Response) => {
   try {
     const data = await getTaskStops(req.fieldAdminId!, ["PENDING", "IN_PROGRESS"]);
@@ -241,6 +262,7 @@ export const assignedTasks = async (req: AuthRequest, res: Response) => {
   }
 };
 
+//get all completed tasks for a field admin.
 export const completedTasks = async (req: AuthRequest, res: Response) => {
   try {
     const data = await getTaskStops(req.fieldAdminId!, ["COMPLETED"]);
@@ -250,6 +272,7 @@ export const completedTasks = async (req: AuthRequest, res: Response) => {
   }
 };
 
+//get all pending tasks for a field admin.
 export const pendingTasks = async (req: AuthRequest, res: Response) => {
   try {
     const data = await getTaskStops(req.fieldAdminId!, ["PENDING"]);
@@ -259,6 +282,7 @@ export const pendingTasks = async (req: AuthRequest, res: Response) => {
   }
 };
 
+//get all scheduled tasks for a field admin.
 export const scheduledTasks = async (req: AuthRequest, res: Response) => {
   try {
     const data = await getTaskStops(req.fieldAdminId!, ["PENDING", "IN_PROGRESS"]);
@@ -268,6 +292,7 @@ export const scheduledTasks = async (req: AuthRequest, res: Response) => {
   }
 };
 
+//get all overdue tasks for a field admin.
 export const overdueTasks = async (req: AuthRequest, res: Response) => {
   try {
     const data = await getTaskStops(req.fieldAdminId!, undefined, true);
@@ -277,6 +302,7 @@ export const overdueTasks = async (req: AuthRequest, res: Response) => {
   }
 };
 
+//get the payment history for a field admin.
 export const paymentHistory = async (req: AuthRequest, res: Response) => {
   try {
     const data = await getPaymentHistory(req.fieldAdminId!);
@@ -286,6 +312,7 @@ export const paymentHistory = async (req: AuthRequest, res: Response) => {
   }
 };
 
+//get the payment invoices for a field admin.
 export const paymentInvoices = async (req: AuthRequest, res: Response) => {
   try {
     const data = await getPaymentHistory(req.fieldAdminId!);
@@ -304,6 +331,7 @@ export const paymentInvoices = async (req: AuthRequest, res: Response) => {
   }
 };
 
+//get the payment methods for a field admin.
 export const paymentMethods = async (_req: AuthRequest, res: Response) => {
   res.json([
     { id: "cash", name: "Cash on Delivery", enabled: true },
@@ -312,6 +340,7 @@ export const paymentMethods = async (_req: AuthRequest, res: Response) => {
   ]);
 };
 
+//get the payment refunds for a field admin.
 export const paymentRefunds = async (req: AuthRequest, res: Response) => {
   try {
     const data = await getRefunds(req.fieldAdminId!);
@@ -321,6 +350,7 @@ export const paymentRefunds = async (req: AuthRequest, res: Response) => {
   }
 };
 
+//get the eligible orders for payment refunds for a field admin.
 export const paymentRefundEligibleOrders = async (req: AuthRequest, res: Response) => {
   try {
     const data = await getRefundEligibleOrders(req.fieldAdminId!);
@@ -330,6 +360,7 @@ export const paymentRefundEligibleOrders = async (req: AuthRequest, res: Respons
   }
 };
 
+//initiate a payment refund for a field admin.
 export const paymentRefundInitiate = async (req: AuthRequest, res: Response) => {
   try {
     const { orderId, reason, orderItemIds } = req.body as {
@@ -344,6 +375,7 @@ export const paymentRefundInitiate = async (req: AuthRequest, res: Response) => 
   }
 };
 
+//get the admin refund queue for a field admin.
 export const adminRefundQueue = async (req: AuthRequest, res: Response) => {
   try {
     const status = typeof req.query.status === "string" ? req.query.status : undefined;
@@ -356,6 +388,7 @@ export const adminRefundQueue = async (req: AuthRequest, res: Response) => {
   }
 };
 
+//get the settings profile for a field admin.
 export const settingsProfile = async (req: AuthRequest, res: Response) => {
   try {
     const data = await getFieldAdminProfile(req.fieldAdminId!);
@@ -365,6 +398,7 @@ export const settingsProfile = async (req: AuthRequest, res: Response) => {
   }
 };
 
+//get the settings notifications for a field admin.
 export const settingsNotifications = async (req: AuthRequest, res: Response) => {
   try {
     const data = await getFieldAdminNotifications(req.fieldAdminId!);
@@ -374,14 +408,17 @@ export const settingsNotifications = async (req: AuthRequest, res: Response) => 
   }
 };
 
+//get the settings privacy for a field admin.
 export const settingsPrivacy = async (_req: AuthRequest, res: Response) => {
   res.json({ shareLocation: true, shareDeviceInfo: false });
 };
 
+//get the settings security for a field admin.
 export const settingsSecurity = async (_req: AuthRequest, res: Response) => {
   res.json({ twoFactorEnabled: false, jwtBasedAuth: true });
 };
 
+//confirm the quality of an order item for a field admin.
 export const qualityConfirm = async (req: AuthRequest, res: Response) => {
   try {
     const { orderItemId, notes, approvedQuantity } = req.body as {
@@ -401,6 +438,7 @@ export const qualityConfirm = async (req: AuthRequest, res: Response) => {
   }
 };
 
+//get the history of quality confirmations for a field admin.
 export const qualityHistory = async (req: AuthRequest, res: Response) => {
   try {
     const data = await getInspectionHistory(req.fieldAdminId!);
@@ -410,6 +448,7 @@ export const qualityHistory = async (req: AuthRequest, res: Response) => {
   }
 };
 
+//submit the quality feedback for an order item for a field admin.
 export const qualityFeedback = async (req: AuthRequest, res: Response) => {
   try {
     const { orderItemId, notes, approvedQuantity } = req.body as {
@@ -429,6 +468,7 @@ export const qualityFeedback = async (req: AuthRequest, res: Response) => {
   }
 };
 
+//submit the rejection of an order item for a field admin.
 export const rejectSubmit = async (req: AuthRequest, res: Response) => {
   try {
     const { orderItemId, notes, approvedQuantity } = req.body as {
@@ -448,6 +488,7 @@ export const rejectSubmit = async (req: AuthRequest, res: Response) => {
   }
 };
 
+//get the history of rejections for a field admin.
 export const rejectHistory = async (req: AuthRequest, res: Response) => {
   try {
     const data = await getInspectionHistory(req.fieldAdminId!, "REJECTED");
@@ -457,6 +498,7 @@ export const rejectHistory = async (req: AuthRequest, res: Response) => {
   }
 };
 
+//submit the rejection feedback for an order item for a field admin.
 export const rejectFeedback = async (req: AuthRequest, res: Response) => {
   try {
     const { orderItemId, notes, approvedQuantity } = req.body as {
@@ -476,6 +518,7 @@ export const rejectFeedback = async (req: AuthRequest, res: Response) => {
   }
 };
 
+//complete the delivery of a stop for a field admin.
 export const completeDelivery = async (req: AuthRequest, res: Response) => {
   try {
     const { stopId, notes } = req.body as { stopId: string; notes?: string };
@@ -486,6 +529,7 @@ export const completeDelivery = async (req: AuthRequest, res: Response) => {
   }
 };
 
+//assess the driver of a route for a field admin.
 export const assessDriver = async (req: AuthRequest, res: Response) => {
   try {
     const { targetUserId, rating, comment } = req.body as {
@@ -505,6 +549,7 @@ export const assessDriver = async (req: AuthRequest, res: Response) => {
   }
 };
 
+//assess the buyer of a route for a field admin.
 export const assessBuyer = async (req: AuthRequest, res: Response) => {
   try {
     const { targetUserId, rating, comment } = req.body as {
@@ -524,6 +569,7 @@ export const assessBuyer = async (req: AuthRequest, res: Response) => {
   }
 };
 
+//assess the seller of a route for a field admin.
 export const assessSeller = async (req: AuthRequest, res: Response) => {
   try {
     const { targetUserId, rating, comment } = req.body as {
@@ -543,6 +589,7 @@ export const assessSeller = async (req: AuthRequest, res: Response) => {
   }
 };
 
+//report damage to a stop for a field admin.
 export const reportDamage = async (req: AuthRequest, res: Response) => {
   try {
     const { description, stopId, images } = req.body as {
@@ -557,6 +604,7 @@ export const reportDamage = async (req: AuthRequest, res: Response) => {
   }
 };
 
+//reassess the route for a field admin.
 export const reassessRoute = async (req: AuthRequest, res: Response) => {
   try {
     const { routeId, reason, oldData, newData } = req.body as {
@@ -577,6 +625,7 @@ export const reassessRoute = async (req: AuthRequest, res: Response) => {
   }
 };
 
+//update the truck capacity for a field admin.
 export const updateTruck = async (req: AuthRequest, res: Response) => {
   try {
     const { driverId, vehicleCapacity } = req.body as {
@@ -590,6 +639,7 @@ export const updateTruck = async (req: AuthRequest, res: Response) => {
   }
 };
 
+//get the dashboard overview for a field admin.
 export const dashboardOverview = async (req: AuthRequest, res: Response) => {
   try {
     const data = await getDashboardOverview(req.fieldAdminId!);
@@ -599,6 +649,7 @@ export const dashboardOverview = async (req: AuthRequest, res: Response) => {
   }
 };
 
+//get the assessment candidates for a field admin.
 export const assessmentCandidates = async (req: AuthRequest, res: Response) => {
   try {
     const data = await getAssessmentCandidates(req.fieldAdminId!);
@@ -608,6 +659,7 @@ export const assessmentCandidates = async (req: AuthRequest, res: Response) => {
   }
 };
 
+//get the truck live load debug for a field admin.
 export const truckLiveLoadDebug = async (req: AuthRequest, res: Response) => {
   try {
     const data = await getTruckLiveLoadDebug(req.fieldAdminId!);

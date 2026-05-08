@@ -4,6 +4,7 @@ import { haversineDistanceKm } from "./aggregator.utils.js";
 
 type GroupKey = `${string}|${"NORMAL" | "COLD"}|${string}`;
 
+//cluster the orders by delivery geo location using DBSCAN (Density-Based Spatial Clustering of Applications with Noise).
 export const clusterByDeliveryGeo = (
   orders: CandidateOrder[],
   clusterRadiusKm: number,
@@ -20,9 +21,13 @@ export const clusterByDeliveryGeo = (
     grouped.set(key, current);
   }
 
+  //result array to store the clustered orders.
   const result: ClusteredOrderGroup[] = [];
+
+  //create a new DBSCAN instance.
   const dbscan = new clustering.DBSCAN();
 
+  //iterate over the grouped orders.
   for (const [key, groupOrders] of grouped.entries()) {
     const [pickupHubId, storageType, deliveryZoneCode] = key.split("|") as [
       string,
@@ -31,6 +36,7 @@ export const clusterByDeliveryGeo = (
     ];
     const points = groupOrders.map((order) => [order.deliveryLat, order.deliveryLng]);
 
+    //run the DBSCAN algorithm to cluster the orders.
     const clusters = dbscan.run(
       points,
       clusterRadiusKm,
@@ -38,6 +44,7 @@ export const clusterByDeliveryGeo = (
       (a: number[], b: number[]) => haversineDistanceKm(a[0]!, a[1]!, b[0]!, b[1]!)
     ) as number[][];
 
+    //if no clusters are found, add the orders as a single cluster.
     if (clusters.length === 0) {
       result.push({
         pickupHubId,
