@@ -57,6 +57,7 @@ export async function solveRouteWithOrtools(
   const timeout = setTimeout(() => controller.abort(), 30_000);
 
   try {
+    //Send JSON payload to OR-Tools service and parse response(Pyhton service)
     const response = await fetch(`${baseUrl}/solve`, {
       method: "POST",
       headers: {
@@ -70,7 +71,7 @@ export async function solveRouteWithOrtools(
       const detail = await response.text();
       throw new Error(`OR-Tools service error (${response.status}): ${detail}`);
     }
-
+    //Return optimized stop sequence
     return (await response.json()) as OrtoolsSolveResponse;
   } finally {
     clearTimeout(timeout);

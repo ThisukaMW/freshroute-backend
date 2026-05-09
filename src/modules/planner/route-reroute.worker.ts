@@ -5,7 +5,7 @@ let workerHandle: NodeJS.Timeout | null = null;
 export const startRouteRerouteWorker = () => {
   if (workerHandle) return;
 
-  const intervalMs = Number(process.env.PLANNER_REROUTE_INTERVAL_MS ?? "30000");
+  const intervalMs = Number(process.env.PLANNER_REROUTE_INTERVAL_MS ?? "60000");//Every 60 seconds
 
   workerHandle = setInterval(async () => {
     try {

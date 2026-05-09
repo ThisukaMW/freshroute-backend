@@ -8,8 +8,11 @@
     "dev": "tsx watch src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js",
+    "test": "node --test --import tsx \"test/**/*.test.ts\"",
+    "test:watch": "node --test --watch --import tsx \"test/**/*.test.ts\"",
     "seed": "tsx prisma/seed.ts",
     "db:inspect": "tsx inspect-db.ts",
+    "route:admin": "tsx tmp-route-admin.ts",
     "studio": "prisma studio --port 5555",
     "planner:service": "cd route-optimizer-service && uvicorn app.main:app --host 0.0.0.0 --port 8001 --reload"
   },

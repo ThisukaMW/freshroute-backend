@@ -53,9 +53,13 @@ def solve_route(request: SolveRequest) -> SolveResponse:
 
     all_points = [request.depot] + [Location(latitude=node.latitude, longitude=node.longitude) for node in request.nodes]
     node_count = len(all_points)
+
+    #Build OR-Tools routing model
     manager = pywrapcp.RoutingIndexManager(node_count, 1, 0)
     routing = pywrapcp.RoutingModel(manager)
 
+
+    #Add time dimension (travel times between stops)
     def time_callback(from_index: int, to_index: int) -> int:
         from_node = manager.IndexToNode(from_index)
         to_node = manager.IndexToNode(to_index)
@@ -73,6 +77,7 @@ def solve_route(request: SolveRequest) -> SolveResponse:
     )
     time_dimension = routing.GetDimensionOrDie("Time")
 
+    #Add load dimension (capacity constraints,Weight/volume)
     def load_callback(from_index: int) -> int:
         node = manager.IndexToNode(from_index)
         return 0 if node == 0 else int(request.nodes[node - 1].load_delta)
@@ -105,8 +110,8 @@ def solve_route(request: SolveRequest) -> SolveResponse:
         bucket[node.kind.value.lower()].append(index)
 
     for pair_id, grouped in pair_groups.items():
-        pickups = grouped["pickup"]
-        deliveries = grouped["delivery"]
+        pickups = grouped["pickup"] # All pickup nodes for this order
+        deliveries = grouped["delivery"] # All delivery nodes for this order
         if not pickups or not deliveries:
             raise ValueError(f"pair_id={pair_id} must have at least one pickup and one delivery")
 
@@ -114,16 +119,21 @@ def solve_route(request: SolveRequest) -> SolveResponse:
             for delivery_index in deliveries:
                 pickup_routing_index = manager.NodeToIndex(pickup_index)
                 delivery_routing_index = manager.NodeToIndex(delivery_index)
+                #Enforce pickup before delivery and same vehicle constraints
                 routing.AddPickupAndDelivery(pickup_routing_index, delivery_routing_index)
+                # ENFORCE: Same vehicle (only 1 vehicle anyway)
                 routing.solver().Add(routing.VehicleVar(pickup_routing_index) == routing.VehicleVar(delivery_routing_index))
+                # ENFORCE: Pickup time < Delivery time
                 routing.solver().Add(time_dimension.CumulVar(pickup_routing_index) <= time_dimension.CumulVar(delivery_routing_index))
 
+    #Set search parameters for OR-Tools solver
     search_parameters = pywrapcp.DefaultRoutingSearchParameters()
     search_parameters.first_solution_strategy = routing_enums_pb2.FirstSolutionStrategy.PATH_CHEAPEST_ARC
     search_parameters.local_search_metaheuristic = routing_enums_pb2.LocalSearchMetaheuristic.GUIDED_LOCAL_SEARCH
     search_parameters.time_limit.FromSeconds(request.time_limit_seconds)
     search_parameters.log_search = False
 
+    #Solve
     solution = routing.SolveWithParameters(search_parameters)
     if solution is None:
         raise ValueError("No feasible route found")

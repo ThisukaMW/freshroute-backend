@@ -6,6 +6,7 @@ export const setPlannerRealtimeIo = (io: Server) => {
   plannerIo = io;
 };
 
+//When route is planned,notify all watchers
 export const emitRoutePlanned = (routeId: string, driverId: string | null | undefined, payload: unknown) => {
   if (!plannerIo) return;
 

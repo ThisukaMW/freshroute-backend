@@ -313,6 +313,28 @@ const mergeConsecutivePickupStops = (stops: OrtoolsPlannedStop[]) => {
   return merged;
 };
 
+const cleanupExistingDraftPlans = async (batchId: string) => {
+  const activeRoutes = await prisma.route.count({
+    where: {
+      batchId,
+      status: { in: ["STARTED", "IN_PROGRESS"] },
+    },
+  });
+
+  if (activeRoutes > 0) {
+    throw new Error("Cannot re-plan batch while a route is active");
+  }
+
+  // Re-planning the same batch can collide on Stop.orderId (@unique).
+  // Remove old draft routes first so new stop records can be inserted.
+  await prisma.route.deleteMany({
+    where: {
+      batchId,
+      status: { in: ["PLANNED", "ASSIGNED", "FAILED", "CANCELLED"] },
+    },
+  });
+};
+
 const persistPlannedRoute = async (
   batchId: string,
   solvedStops: SequencedPlannedStop[],
@@ -320,6 +342,8 @@ const persistPlannedRoute = async (
   routeDurationSeconds: number,
   routeDistanceMeters: number,
 ) => {
+  await cleanupExistingDraftPlans(batchId);
+
   const route = await prisma.route.create({
     data: {
       routeNumber: `RT-${batchId.slice(0, 8).toUpperCase()}-${routeStartTimeUnix}`,
@@ -350,7 +374,22 @@ const persistPlannedRoute = async (
     },
   });
 
+  const seenDeliveryOrderIds = new Set<string>();
+
   for (const stop of solvedStops) {
+    // Stop.orderId is globally unique, so only one DELIVERY stop per order can hold it.
+    // Additional delivery-like rows keep order association in itemsSummary.
+
+    let orderIdForDb: string | null = null;
+    if (stop.kind === "DELIVERY" && stop.order_id) {
+      if (!seenDeliveryOrderIds.has(stop.order_id)) {
+        seenDeliveryOrderIds.add(stop.order_id);
+        orderIdForDb = stop.order_id;
+      } else {
+        orderIdForDb = null;
+      }
+    }
+
     await prisma.stop.create({
       data: {
         routeId: route.id,
@@ -361,7 +400,7 @@ const persistPlannedRoute = async (
         longitude: stop.longitude,
         sellerId: stop.seller_id ?? null,
         buyerId: stop.buyer_id ?? null,
-        orderId: stop.kind === "DELIVERY" ? stop.order_id ?? null : null,
+        orderId: orderIdForDb,
         status: "PENDING",
         estimatedArrival: new Date(stop.arrival_seconds * 1000),
         notes: stop.pair_id ?? null,
@@ -526,13 +565,16 @@ const routeStopToPlannerNode = (stop: {
 
 export async function planBatch(batchId: string, options: PlannerBatchPlanOptions = {}) {
   const startedAt = Date.now();
+  //convert orders to nodes
   const { nodes, initialLoad, vehicleCapacity } = await buildNodesForBatch(batchId, options);
 
   if (nodes.length === 0) throw new Error("No nodes to plan");
 
+  //Find where the route starts
   const depot = resolveDepot(nodes, options.depot);
   const routeStartTimeUnix = Math.floor(Date.now() / 1000);
   const routeTimeLimitSeconds = options.timeLimitSeconds ?? Number(process.env.PLANNER_SOLVER_TIME_LIMIT_SECONDS ?? "12");
+  //Get travel times between all stops (from Mapbox or fallback)
   const solution = await solvePlannerNodes({
     depot,
     nodes,
@@ -542,12 +584,16 @@ export async function planBatch(batchId: string, options: PlannerBatchPlanOption
     timeLimitSeconds: routeTimeLimitSeconds,
   });
 
+  //Returns best order to visit stops with times and distances between stops
+
   const solvedStops: SequencedPlannedStop[] = mergeConsecutivePickupStops(solution.stops).map(
     (stop, index) => ({
       ...stop,
       sequence: index + 1,
     })
   );
+
+  //Save route to database
   const route = await persistPlannedRoute(
     batchId,
     solvedStops,
@@ -556,6 +602,8 @@ export async function planBatch(batchId: string, options: PlannerBatchPlanOption
     solution.route_distance_meters
   );
 
+
+  //Notify real time watchers
   emitRoutePlanned(route.id, route.driverId, {
     routeId: route.id,
     batchId: route.batchId,
@@ -670,6 +718,7 @@ const calculateCurrentLoadFromStops = (
 
 export async function rerouteActiveRoutesOnce() {
   const startedAt = Date.now();
+  //Find all active routes
   const routes = await prisma.route.findMany({
     where: {
       driverId: { not: null },
@@ -684,6 +733,7 @@ export async function rerouteActiveRoutesOnce() {
   const results: Array<{ routeId: string; rerouted: boolean; reason: string }> = [];
 
   for (const route of routes) {
+    //Get drivers current location
     const latestLocation = await prisma.driverLocation.findFirst({
       where: { driverId: route.driverId ?? undefined },
       orderBy: { timestamp: "desc" },
@@ -695,6 +745,7 @@ export async function rerouteActiveRoutesOnce() {
       continue;
     }
 
+    //Get remaining stops
     const remainingStops = getRemainingStops(route.stops);
     if (remainingStops.length === 0) {
       recordPlannerMetric("reroute_skipped");
@@ -709,6 +760,7 @@ export async function rerouteActiveRoutesOnce() {
     const timeLimitSeconds = Number(process.env.PLANNER_SOLVER_TIME_LIMIT_SECONDS ?? "12");
     const vehicleCapacity = Number(process.env.PLANNER_VEHICLE_CAPACITY ?? "999999");
 
+    //RE-SOLVE: Start from driver's current position to all remaining stops
     const currentPlan = await solvePlannerNodes({
       depot,
       nodes,
@@ -718,10 +770,12 @@ export async function rerouteActiveRoutesOnce() {
       timeLimitSeconds,
     });
 
+    //compare old remaining time vs new optimized time
     const oldRemainingRoute = await buildMatrixFromPoints([depot, ...nodes]);
     const oldRemainingSeconds = oldRemainingRoute.durations.slice(1).reduce((sum, duration) => sum + duration, 0);
     const improvementSeconds = oldRemainingSeconds - currentPlan.route_duration_seconds;
 
+    //If improvement is less than 90 seconds, skip reroute to avoid unnecessary disruptions
     if (improvementSeconds < Number(process.env.PLANNER_REROUTE_MIN_GAIN_SECONDS ?? "90")) {
       recordPlannerMetric("reroute_skipped");
       results.push({ routeId: route.id, rerouted: false, reason: "improvement-below-threshold" });
@@ -749,6 +803,7 @@ export async function rerouteActiveRoutesOnce() {
       departureSeconds: stop.departure_seconds,
     }));
 
+    //Update route with new stop order
     await prisma.route.update({
       where: { id: route.id },
       data: {
@@ -781,6 +836,7 @@ export async function rerouteActiveRoutesOnce() {
       });
     }
 
+    //Record route modification like for auduting and analytics
     await prisma.routeModification.create({
       data: {
         routeId: route.id,
@@ -811,7 +867,7 @@ export async function rerouteActiveRoutesOnce() {
       stops: nextOptimizedWaypoints,
     };
     emitRouteModified(route.id, route.driverId, payload);
-
+    //Notify via socket.IO
     results.push({ routeId: route.id, rerouted: true, reason: `improved-by-${improvementSeconds}s` });
   }
 
