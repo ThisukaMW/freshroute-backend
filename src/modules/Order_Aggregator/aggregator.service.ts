@@ -13,6 +13,10 @@ import type {
   CandidateOrder,
   RejectedOrderReason,
 } from "./aggregator.types.js";
+import {
+  getDeliveryDayBoundsColombo,
+  getOrderPlacementDayBoundsColombo,
+} from "./aggregator.colombo.js";
 import { assignNearestHub, batchNumber, routeNumber } from "./aggregator.utils.js";
 
 const configDefault = {
@@ -206,11 +210,18 @@ const makeTruckFeasibleSlices = (
   return feasible;
 };
 
-//get all orders that are eligible for aggregation.
-const getCandidates = async (windowStart: Date, windowEnd: Date): Promise<CandidateOrder[]> => {
+//get all orders that are eligible for aggregation (by placedAt window only — no deliveryDate filter).
+const getCandidates = async (placementDayStart: Date, placementDayEnd: Date): Promise<CandidateOrder[]> => {
   const orders = await prisma.order.findMany({
     where: {
-      deliveryDate: { gte: windowStart, lte: windowEnd },
+      status: "PAID",
+      isCancelled: false,
+      batchId: null,
+      placedAt: {
+        gte: placementDayStart,
+        lte: placementDayEnd,
+      },
+      OR: [{ totalWeight: { gt: 0 } }, { totalVolume: { gt: 0 } }],
     },
     include: {
       items: {
@@ -512,10 +523,12 @@ export const runOrderAggregation = async (input: AggregationRunInput): Promise<A
     },
   });
   try {
+    const { deliveryDayStart, deliveryDayEnd } = getDeliveryDayBoundsColombo(input.windowStart);
+    const { placementDayStart, placementDayEnd } = getOrderPlacementDayBoundsColombo(deliveryDayStart);
     const trucks = await getAvailableTrucks();
     const hubs = await ensureHubs();
     const zones = await getDeliveryZones();
-    const fetchedCandidates = await getCandidates(input.windowStart, input.windowEnd);
+    const fetchedCandidates = await getCandidates(placementDayStart, placementDayEnd);
     const { eligible, rejected } = evaluateEligibility(fetchedCandidates);
 
     const withGeo = eligible.map((order) => {
@@ -561,8 +574,8 @@ export const runOrderAggregation = async (input: AggregationRunInput): Promise<A
           rejected,
           config.autoAssignRoutes,
           triggerMode,
-          input.windowStart,
-          input.windowEnd
+          deliveryDayStart,
+          deliveryDayEnd
         );
 
     const summary: AggregationSummary = {

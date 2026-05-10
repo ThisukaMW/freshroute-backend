@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { execSync } from "node:child_process";
 import prisma from "../src/config/database.js";
+import { getDeliveryDayBoundsColombo } from "../src/modules/Order_Aggregator/aggregator.colombo.js";
 import {
   getAggregationRunById,
   runOrderAggregation,
@@ -35,10 +36,7 @@ const getGitSha = () => {
 
 const resolveSimulationConfig = (): SimulationConfig => {
   const now = new Date();
-  const defaultStart = new Date(now);
-  defaultStart.setHours(0, 0, 0, 0);
-  const defaultEnd = new Date(now);
-  defaultEnd.setHours(23, 59, 59, 999);
+  const { deliveryDayStart: defaultStart, deliveryDayEnd: defaultEnd } = getDeliveryDayBoundsColombo(now);
 
   return {
     clusterRadiusKm: Number(process.env.SIM_CLUSTER_RADIUS_KM ?? 8),

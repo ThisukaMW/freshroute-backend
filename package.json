@@ -12,7 +12,7 @@
     "seed:simulation": "SEED_MODE=simulation tsx prisma/seed.ts",
     "simulate:aggregator": "tsx scripts/aggregator-simulate.ts",
     "simulate:full": "npm run seed:simulation && npm run simulate:aggregator",
-    "test": "tsx --test src/modules/Order_Aggregator/aggregator.rules.test.ts src/modules/Order_Aggregator/aggregator.service.test.ts src/modules/field_admin/fieldadmin.rules.test.ts src/modules/field_admin/fieldadmin.service.test.ts"
+    "test": "tsx --test src/modules/Order_Aggregator/aggregator.colombo.test.ts src/modules/Order_Aggregator/aggregator.rules.test.ts src/modules/Order_Aggregator/aggregator.service.test.ts src/modules/field_admin/fieldadmin.rules.test.ts src/modules/field_admin/fieldadmin.service.test.ts"
   },
   "keywords": [],
   "author": "",

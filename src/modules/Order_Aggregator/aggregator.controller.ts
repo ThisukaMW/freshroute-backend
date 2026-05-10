@@ -1,6 +1,10 @@
 import type { Response } from "express";
 import type { AuthRequest } from "../../middlewares/auth.middleware.js";
 import {
+  defaultAggregatorWindowColombo,
+  isWithinScheduledAggregatorWindowColombo,
+} from "./aggregator.colombo.js";
+import {
   getAggregationRunById,
   getAggregationRuns,
   getRouteStartHandoffBundle,
@@ -18,29 +22,21 @@ const normalizeTriggerMode = (value: unknown): "manual" | "payment_event" | "sch
   return "manual";
 };
 
-const isAutoTriggerWithinWindow = (now: Date) => {
-  const hour = now.getHours();
-  return hour >= 0 && hour < 4;
-};
-
 //manual and Automated trigger for controlled aggregation runs.
 export const runAggregation = async (req: AuthRequest, res: Response) => {
   try {
     const now = new Date();
-    const start = new Date(now);
-    start.setHours(0, 0, 0, 0);
-    const end = new Date(now);
-    end.setHours(4, 0, 0, 0);
+    const { windowStart: defaultStart, windowEnd: defaultEnd } = defaultAggregatorWindowColombo(now);
 
-    const windowStart = toDate(req.body?.windowStart, start);
-    const windowEnd = toDate(req.body?.windowEnd, end);
+    const windowStart = toDate(req.body?.windowStart, defaultStart);
+    const windowEnd = toDate(req.body?.windowEnd, defaultEnd);
     const dryRun = Boolean(req.body?.dryRun);
     const triggerMode = normalizeTriggerMode(req.body?.triggerMode);
 
-    if (triggerMode === "scheduled" && !isAutoTriggerWithinWindow(now)) {
+    if (triggerMode === "scheduled" && !isWithinScheduledAggregatorWindowColombo(now)) {
       res.status(400).json({
         message:
-          "Scheduled batching is allowed only between 00:00 and 04:00 server time.",
+          "Scheduled batching is allowed only between 00:00 and 04:00 Sri Lanka time (Asia/Colombo).",
       });
       return;
     }
@@ -70,13 +66,10 @@ export const runAggregation = async (req: AuthRequest, res: Response) => {
 export const previewAggregation = async (req: AuthRequest, res: Response) => {
   try {
     const now = new Date();
-    const start = new Date(now);
-    start.setHours(0, 0, 0, 0);
-    const end = new Date(now);
-    end.setHours(4, 0, 0, 0);
+    const { windowStart: defaultStart, windowEnd: defaultEnd } = defaultAggregatorWindowColombo(now);
 
-    const windowStart = toDate(req.query.windowStart, start);
-    const windowEnd = toDate(req.query.windowEnd, end);
+    const windowStart = toDate(req.query.windowStart, defaultStart);
+    const windowEnd = toDate(req.query.windowEnd, defaultEnd);
 
     const data = await runOrderAggregation({
       windowStart,
