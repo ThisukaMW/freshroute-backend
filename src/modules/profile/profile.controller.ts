@@ -1,3 +1,6 @@
+// This file handles profile-related requests from the frontend.
+// It reads the user's id from the token, then calls the right service function to do the work.
+
 import type { Response } from "express";
 import type { AuthRequest } from "../../middlewares/auth.middleware.js";
 import {
@@ -9,7 +12,7 @@ import {
   deleteAccount,
 } from "./profile.service.js";
 
-// ── PERSONAL INFO (buyer, seller, admin) ─────────────────────────
+// Update name, phone, or city — works for buyers, sellers, and admins
 export const updatePersonalInfoController = async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.userId;
@@ -22,7 +25,7 @@ export const updatePersonalInfoController = async (req: AuthRequest, res: Respon
   }
 };
 
-// ── DELIVERY ADDRESS (buyer only) ─────────────────────────────────
+// Update delivery address and city — for buyers only
 export const updateDeliveryAddressController = async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.userId;
@@ -35,7 +38,7 @@ export const updateDeliveryAddressController = async (req: AuthRequest, res: Res
   }
 };
 
-// ── BUSINESS INFO (seller only) ───────────────────────────────────
+// Update business name and address — for sellers only
 export const updateBusinessInfoController = async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.userId;
@@ -48,16 +51,19 @@ export const updateBusinessInfoController = async (req: AuthRequest, res: Respon
   }
 };
 
-// ── PASSWORD (all roles) ──────────────────────────────────────────
+// Change the user's password after checking the current one is correct
 export const updatePasswordController = async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.userId;
     if (!userId) return res.status(401).json({ message: "Unauthorized" });
     const { currentPassword, newPassword } = req.body;
+
+    // Make sure both passwords are given and new one is at least 8 characters
     if (!currentPassword || !newPassword)
       return res.status(400).json({ message: "Current and new password are required" });
     if (newPassword.length < 8)
       return res.status(400).json({ message: "Password must be at least 8 characters" });
+
     await updatePassword(userId, { currentPassword, newPassword });
     res.json({ message: "Password updated successfully" });
   } catch (err: any) {
@@ -65,7 +71,7 @@ export const updatePasswordController = async (req: AuthRequest, res: Response) 
   }
 };
 
-// ── SELLER STATUS (seller only) ───────────────────────────────────
+// Check if the seller's account has been approved by an admin yet
 export const getSellerStatusController = async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.userId;
@@ -77,7 +83,7 @@ export const getSellerStatusController = async (req: AuthRequest, res: Response)
   }
 };
 
-// ── DELETE ACCOUNT (buyer, seller) ───────────────────────────────
+// Permanently delete the logged-in user's account
 export const deleteAccountController = async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.userId;
