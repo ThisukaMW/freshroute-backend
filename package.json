@@ -8,7 +8,8 @@
     "dev": "tsx watch src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js",
-    "seed": "tsx prisma/seed.ts"
+    "seed": "tsx prisma/seed.ts",
+    "test": "node --import tsx/esm --test"
   },
   "keywords": [],
   "author": "",
@@ -36,9 +37,13 @@
     "@types/node": "^25.2.3",
     "@types/nodemailer": "^8.0.0",
     "@types/pg": "^8.16.0",
+    "@types/sinon": "^21.0.1",
     "@types/socket.io": "^3.0.2",
     "@types/stripe": "^8.0.416",
+    "@types/supertest": "^7.2.0",
     "prisma": "^7.4.0",
+    "sinon": "^22.0.0",
+    "supertest": "^7.2.2",
     "ts-node-dev": "^2.0.0",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3"

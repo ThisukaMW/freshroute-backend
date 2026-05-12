@@ -25,7 +25,7 @@ export const protect: RequestHandler = (
   try {
     const decoded: any = jwt.verify(token, process.env.JWT_SECRET!);
 
-    console.log("DECODED:", decoded); // 👈 add this
+    console.log("DECODED:", decoded); 
 
     req.userId = decoded.userId || decoded.id || decoded.user?.id;
     req.driverId = decoded.driverId;
