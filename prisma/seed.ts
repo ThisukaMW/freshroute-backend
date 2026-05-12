@@ -2,8 +2,24 @@ import { PrismaClient } from "../src/generated/prisma/client.js";
 import { PrismaPg } from "@prisma/adapter-pg";
 import bcrypt from "bcrypt";
 import dotenv from "dotenv";
+import {
+  getDeliveryDayBoundsColombo,
+  getOrderPlacementDayBoundsColombo,
+} from "../src/modules/Order_Aggregator/aggregator.colombo.js";
 
 dotenv.config();
+
+/** `placedAt` inside [placementDayStart, placementDayEnd] for aggregator intake day (Asia/Colombo). */
+const placedAtOnPlacementDay = (
+  placementDayStart: Date,
+  placementDayEnd: Date,
+  offsetHoursFromStart: number
+): Date => {
+  const t = new Date(placementDayStart.getTime() + offsetHoursFromStart * 60 * 60 * 1000);
+  const endCap = placementDayEnd.getTime() - 60_000;
+  if (t.getTime() > endCap) return new Date(endCap);
+  return t;
+};
 
 const connectionString = process.env.DATABASE_URL!;
 const adapter = new PrismaPg({ connectionString });
@@ -390,10 +406,12 @@ const seedSimulationScenario = async () => {
     buyers.push({ id: buyer.id, lat: Number(lat.toFixed(6)), lng: Number(lng.toFixed(6)), zoneIndex });
   }
 
-  const baseDate = new Date();
-  baseDate.setHours(9, 0, 0, 0);
+  // Aggregator uses "placement day" = previous Colombo calendar day vs. "today" (delivery day).
+  const seedNow = new Date();
+  const { deliveryDayStart } = getDeliveryDayBoundsColombo(seedNow);
+  const { placementDayStart, placementDayEnd } = getOrderPlacementDayBoundsColombo(deliveryDayStart);
+
   let paidOrders = 0;
-  let ineligibleOrders = 0;
 
   for (let index = 1; index <= 68; index += 1) {
     const buyer = buyers[index - 1]!;
@@ -405,42 +423,25 @@ const seedSimulationScenario = async () => {
     const volume = Number((1.2 + (index % 7) * 0.8).toFixed(2));
     const assignedHub = hubs[(index - 1) % hubs.length]!;
 
-    let status: "PAID" | "PENDING" = "PAID";
-    let isCancelled = false;
-    let totalWeight: number | null = weight;
-    let totalVolume: number | null = volume;
-
-    if (index % 17 === 0) {
-      status = "PENDING";
-      ineligibleOrders += 1;
-    } else if (index % 19 === 0) {
-      isCancelled = true;
-      ineligibleOrders += 1;
-    } else if (index % 23 === 0) {
-      totalWeight = null;
-      totalVolume = null;
-      ineligibleOrders += 1;
-    } else {
-      paidOrders += 1;
-    }
+    paidOrders += 1;
 
     const order = await prisma.order.create({
       data: {
         buyerId: buyer.id,
         orderNumber: `SIM-ORD-${String(index).padStart(3, "0")}`,
-        status,
-        isCancelled,
+        status: "PAID",
+        isCancelled: false,
         totalAmount: Number((40 + index * 2.75).toFixed(2)),
         storageType,
-        totalWeight,
-        totalVolume,
+        totalWeight: weight,
+        totalVolume: volume,
         deliveryAddress: `Simulation Address ${index}, Zone ${zone.code}`,
         deliveryLat: buyer.lat,
         deliveryLng: buyer.lng,
         deliveryZoneId: zone.id,
-        deliveryDate: new Date(baseDate.getTime() + (index % 6) * 30 * 60 * 1000),
+        deliveryDate: new Date(deliveryDayStart.getTime() + (index % 6) * 30 * 60 * 1000),
         pickupHubId: assignedHub.id,
-        placedAt: new Date(baseDate.getTime() - (index % 12) * 60 * 60 * 1000),
+        placedAt: placedAtOnPlacementDay(placementDayStart, placementDayEnd, 1 + (index % 14) * 0.75),
       },
     });
 
@@ -457,8 +458,9 @@ const seedSimulationScenario = async () => {
   }
 
   console.log("✅ Simulation seed complete");
-  console.log(`Paid candidate orders: ${paidOrders}`);
-  console.log(`Intentionally ineligible orders: ${ineligibleOrders}`);
+  console.log(`PAID unbatched orders (placement day Colombo): ${paidOrders}`);
+  console.log(`Placement window (UTC): ${placementDayStart.toISOString()} … ${placementDayEnd.toISOString()}`);
+  console.log(`Delivery day start (UTC): ${deliveryDayStart.toISOString()}`);
   console.log(`Zones: ${zones.length}, Hubs: ${hubs.length}, Trucks: 8, FieldAdmins: ${fieldAdmins.length}`);
 };
 
@@ -470,6 +472,10 @@ async function main() {
 
   console.log("🌱 Seeding FreshRoute database...");
   await clearDatabase();
+
+  const seedNow = new Date();
+  const { deliveryDayStart, deliveryDayEnd } = getDeliveryDayBoundsColombo(seedNow);
+  const { placementDayStart, placementDayEnd } = getOrderPlacementDayBoundsColombo(deliveryDayStart);
 
   const passwordHash = await bcrypt.hash("driver123", 10);
 
@@ -589,6 +595,53 @@ async function main() {
     },
   });
 
+  // Extra trucks + drivers so POST /aggregator/run with autoAssignRoutes can open many batches/routes
+  // (each route reserves one truck + one driver until cleared).
+  const demoDriverPassword = await bcrypt.hash("driver123", 10);
+  for (let i = 1; i <= 8; i += 1) {
+    const both = i % 2 === 1;
+    await prisma.truck.create({
+      data: {
+        vehicleNumber: `TRK-DEMO-${String(i).padStart(2, "0")}`,
+        vehicleType: both ? "Reefer" : "Dry Van",
+        vehicleCapacity: both ? 500 : 400,
+        maxWeight: both ? 500 : 400,
+        maxVolume: both ? 115 : 92,
+        maxStops: both ? 25 : 22,
+        storageSupport: both ? "BOTH" : "NORMAL",
+        vehicleBrand: both ? "Isuzu" : "Fuso",
+        makeYear: new Date("2021-06-01T00:00:00.000Z"),
+        vehicleHeight: 3.4,
+        VehicleWeight: 3000,
+        Refregeration: both,
+        Tempreture: both ? 4 : 20,
+        isActive: true,
+        isAvailable: true,
+      },
+    });
+  }
+  for (let i = 1; i <= 12; i += 1) {
+    const user = await prisma.user.create({
+      data: {
+        email: `agg-driver-${String(i).padStart(2, "0")}@freshroute.com`,
+        name: `Aggregator Demo Driver ${i}`,
+        role: "DRIVER",
+        passwordHash: demoDriverPassword,
+      },
+    });
+    await prisma.driver.create({
+      data: {
+        userId: user.id,
+        licenseNumber: `DL-AGG-DEMO-${String(i).padStart(3, "0")}`,
+        vehicleNumber: `VAN-DEMO-${String(i).padStart(2, "0")}`,
+        vehicleType: "Van",
+        vehicleCapacity: 500,
+        isActive: true,
+        isAvailable: true,
+      },
+    });
+  }
+
   // ─── Fixed Pickup Hubs (Phase 1 Aggregator) ───────────────────────────────
   const hubs = await Promise.all([
     prisma.hub.create({
@@ -618,6 +671,8 @@ async function main() {
   ]);
 
   const primaryHub = hubs[0]!;
+  /** Colombo hub — pickup for aggregator demo orders (same city as delivery zones). */
+  const colomboHub = hubs[2]!;
 
   const deliveryZones = await Promise.all([
     prisma.deliveryZone.create({
@@ -736,11 +791,9 @@ async function main() {
     buyers.push(buyer);
   }
 
-  // ─── Batch ───────────────────────────────────────────────────────────────────
-  const today = new Date();
-  today.setHours(6, 45, 0, 0);
-  const batchEnd = new Date(today);
-  batchEnd.setHours(14, 0, 0, 0);
+  // ─── Batch (scheduled on current Colombo "delivery day") ─────────────────────
+  const today = new Date(deliveryDayStart.getTime() + (6 * 60 + 45) * 60 * 1000);
+  const batchEnd = new Date(deliveryDayStart.getTime() + 14 * 60 * 60 * 1000);
 
   const batch = await prisma.batch.create({
     data: {
@@ -824,7 +877,7 @@ async function main() {
         pickupHubId: primaryHub.id,
         batchId: batch.id,
         stopId: stop.id,
-        placedAt: new Date(today.getTime() - (12 - i) * 24 * 60 * 60000),
+        placedAt: placedAtOnPlacementDay(placementDayStart, placementDayEnd, 2 + i * 1.25),
         actualDelivery: isCompleted ? new Date(now.getTime() - (8 - i) * 13 * 60000) : null,
       },
     });
@@ -933,9 +986,147 @@ async function main() {
   });
 
   // ─── Aggregator test orders (eligible + ineligible cases) ─────────────────
-  // These orders are intentionally left unbatched for manual aggregator testing.
-  const aggregatorBaseDate = new Date();
-  aggregatorBaseDate.setHours(9, 0, 0, 0);
+  // Unbatched; eligible rows use placement day (yesterday Colombo) so POST /aggregator/run finds them
+  // when windowStart is default "today" midnight Colombo or any instant on the current delivery day.
+
+  // ─── High-volume demo: many PAID orders → multiple geo/capacity slices → multiple batches/routes ───
+  const bulkDemoBuyers: { id: string }[] = [];
+  for (let i = 0; i < 42; i += 1) {
+    const user = await prisma.user.create({
+      data: {
+        email: `bulk-demo-${String(i).padStart(3, "0")}@aggregator.local`,
+        name: `Bulk Customer ${i + 1}`,
+        role: "BUYER",
+        passwordHash: buyerHashedPw,
+      },
+    });
+    const buyer = await prisma.buyer.create({
+      data: {
+        userId: user.id,
+        deliveryAddress: `${500 + i} Bulk St, Colombo`,
+        latitude: 6.92,
+        longitude: 79.855,
+      },
+    });
+    bulkDemoBuyers.push(buyer);
+  }
+  let bulkBuyerCursor = 0;
+  const nextBulkBuyerId = () => {
+    const row = bulkDemoBuyers[bulkBuyerCursor];
+    bulkBuyerCursor += 1;
+    return row!.id;
+  };
+
+  // 12× Colombo North NORMAL — tight cluster; ~46 kg each → capacity splits (500 kg / batch default)
+  for (let i = 0; i < 12; i += 1) {
+    const qty = 22 + (i % 6);
+    const weight = 46;
+    const volume = 3.65;
+    const p = products[i % 4]!;
+    const order = await prisma.order.create({
+      data: {
+        buyerId: nextBulkBuyerId(),
+        orderNumber: `ORD-BULK-N-${String(i + 1).padStart(2, "0")}`,
+        status: "PAID",
+        isCancelled: false,
+        totalAmount: Number((p.price * qty).toFixed(2)),
+        storageType: "NORMAL",
+        totalWeight: weight,
+        totalVolume: volume,
+        deliveryAddress: `${200 + i} Havelock North, Colombo`,
+        deliveryLat: 6.958 + (i % 4) * 0.0022,
+        deliveryLng: 79.856 + (i % 3) * 0.0022,
+        deliveryZoneId: colomboNorthZone.id,
+        deliveryDate: new Date(deliveryDayStart.getTime() + (1 + (i % 8)) * 30 * 60 * 1000),
+        pickupHubId: colomboHub.id,
+        placedAt: placedAtOnPlacementDay(placementDayStart, placementDayEnd, 4 + i * 0.11),
+      },
+    });
+    await prisma.orderItem.create({
+      data: {
+        orderId: order.id,
+        productId: p.id,
+        quantity: qty,
+        unitPrice: p.price,
+        totalPrice: Number((p.price * qty).toFixed(2)),
+        sellerId: seller.id,
+      },
+    });
+  }
+
+  // 15× Colombo South NORMAL — dense with ORD-AGG-001; ~42 kg each → multiple packed slices
+  for (let i = 0; i < 15; i += 1) {
+    const qty = 18 + (i % 8);
+    const weight = 42;
+    const volume = 3.25;
+    const p = products[(i + 1) % 4]!;
+    const order = await prisma.order.create({
+      data: {
+        buyerId: nextBulkBuyerId(),
+        orderNumber: `ORD-BULK-S-${String(i + 1).padStart(2, "0")}`,
+        status: "PAID",
+        isCancelled: false,
+        totalAmount: Number((p.price * qty).toFixed(2)),
+        storageType: "NORMAL",
+        totalWeight: weight,
+        totalVolume: volume,
+        deliveryAddress: `${300 + i} Marine Drive South, Colombo`,
+        deliveryLat: 6.904 + (i % 5) * 0.0018,
+        deliveryLng: 79.846 + (i % 4) * 0.0018,
+        deliveryZoneId: colomboSouthZone.id,
+        deliveryDate: new Date(deliveryDayStart.getTime() + (2 + (i % 10)) * 25 * 60 * 1000),
+        pickupHubId: colomboHub.id,
+        placedAt: placedAtOnPlacementDay(placementDayStart, placementDayEnd, 6 + i * 0.1),
+      },
+    });
+    await prisma.orderItem.create({
+      data: {
+        orderId: order.id,
+        productId: p.id,
+        quantity: qty,
+        unitPrice: p.price,
+        totalPrice: Number((p.price * qty).toFixed(2)),
+        sellerId: seller.id,
+      },
+    });
+  }
+
+  // 9× Colombo South COLD — separate storage group; pairs with ORD-AGG-002 for multi-route cold runs
+  for (let i = 0; i < 9; i += 1) {
+    const qty = 16 + (i % 5);
+    const weight = 36;
+    const volume = 3.05;
+    const p = products[(i + 2) % 4]!;
+    const order = await prisma.order.create({
+      data: {
+        buyerId: nextBulkBuyerId(),
+        orderNumber: `ORD-BULK-C-${String(i + 1).padStart(2, "0")}`,
+        status: "PAID",
+        isCancelled: false,
+        totalAmount: Number((p.price * qty).toFixed(2)),
+        storageType: "COLD",
+        totalWeight: weight,
+        totalVolume: volume,
+        deliveryAddress: `${400 + i} Cold Chain Rd, Colombo`,
+        deliveryLat: 6.888 + (i % 4) * 0.0024,
+        deliveryLng: 79.868 + (i % 3) * 0.0024,
+        deliveryZoneId: colomboSouthZone.id,
+        deliveryDate: new Date(deliveryDayStart.getTime() + (3 + (i % 6)) * 28 * 60 * 1000),
+        pickupHubId: colomboHub.id,
+        placedAt: placedAtOnPlacementDay(placementDayStart, placementDayEnd, 8 + i * 0.09),
+      },
+    });
+    await prisma.orderItem.create({
+      data: {
+        orderId: order.id,
+        productId: p.id,
+        quantity: qty,
+        unitPrice: p.price,
+        totalPrice: Number((p.price * qty).toFixed(2)),
+        sellerId: seller.id,
+      },
+    });
+  }
 
   // Eligible
   const eligibleOrder1 = await prisma.order.create({
@@ -952,9 +1143,9 @@ async function main() {
       deliveryLat: 6.9185,
       deliveryLng: 79.8581,
       deliveryZoneId: colomboSouthZone.id,
-      deliveryDate: aggregatorBaseDate,
-      pickupHubId: primaryHub.id,
-      placedAt: new Date(aggregatorBaseDate.getTime() - 2 * 60 * 60 * 1000),
+      deliveryDate: new Date(deliveryDayStart.getTime() + 2 * 60 * 60 * 1000),
+      pickupHubId: colomboHub.id,
+      placedAt: placedAtOnPlacementDay(placementDayStart, placementDayEnd, 3),
     },
   });
 
@@ -983,9 +1174,9 @@ async function main() {
       deliveryLat: 6.9004,
       deliveryLng: 79.8492,
       deliveryZoneId: colomboSouthZone.id,
-      deliveryDate: new Date(aggregatorBaseDate.getTime() + 30 * 60 * 1000),
-      pickupHubId: primaryHub.id,
-      placedAt: new Date(aggregatorBaseDate.getTime() - 90 * 60 * 1000),
+      deliveryDate: new Date(deliveryDayStart.getTime() + 3 * 60 * 60 * 1000),
+      pickupHubId: colomboHub.id,
+      placedAt: placedAtOnPlacementDay(placementDayStart, placementDayEnd, 5),
     },
   });
 
@@ -1015,8 +1206,9 @@ async function main() {
       deliveryLat: 6.8942,
       deliveryLng: 79.8607,
       deliveryZoneId: colomboSouthZone.id,
-      deliveryDate: aggregatorBaseDate,
-      pickupHubId: primaryHub.id,
+      deliveryDate: new Date(deliveryDayStart.getTime() + 4 * 60 * 60 * 1000),
+      pickupHubId: colomboHub.id,
+      placedAt: placedAtOnPlacementDay(placementDayStart, placementDayEnd, 7),
     },
   });
 
@@ -1035,8 +1227,9 @@ async function main() {
       deliveryLat: 6.9068,
       deliveryLng: 79.857,
       deliveryZoneId: colomboSouthZone.id,
-      deliveryDate: aggregatorBaseDate,
-      pickupHubId: primaryHub.id,
+      deliveryDate: new Date(deliveryDayStart.getTime() + 4 * 60 * 60 * 1000),
+      pickupHubId: colomboHub.id,
+      placedAt: placedAtOnPlacementDay(placementDayStart, placementDayEnd, 8),
     },
   });
 
@@ -1053,8 +1246,9 @@ async function main() {
       deliveryLat: 6.9148,
       deliveryLng: 79.8715,
       deliveryZoneId: colomboSouthZone.id,
-      deliveryDate: aggregatorBaseDate,
-      pickupHubId: primaryHub.id,
+      deliveryDate: new Date(deliveryDayStart.getTime() + 5 * 60 * 60 * 1000),
+      pickupHubId: colomboHub.id,
+      placedAt: placedAtOnPlacementDay(placementDayStart, placementDayEnd, 9),
     },
   });
 
@@ -1071,6 +1265,13 @@ async function main() {
   console.log("Driver login:");
   console.log("  Email:    mike@freshroute.com");
   console.log("  Password: driver123");
+  console.log("─────────────────────────────────");
+  console.log("Aggregator demo (Asia/Colombo):");
+  console.log(`  Placement day (order placedAt window, UTC): ${placementDayStart.toISOString()} … ${placementDayEnd.toISOString()}`);
+  console.log(`  Delivery day for batching (UTC): ${deliveryDayStart.toISOString()} … ${deliveryDayEnd.toISOString()}`);
+  console.log("  POST /api/v1/aggregator/run with empty body uses today's Colombo window;");
+  console.log("  candidates = PAID, batchId null, placedAt on placement day above.");
+  console.log("  Bulk demo: ORD-BULK-N/S/C-* (+ ORD-AGG-001/002) → multiple batches/routes when autoAssignRoutes is true.");
   console.log("─────────────────────────────────");
   console.log("Route:  RT-2024-0218-042 | TRK-042");
   console.log("Stops:  12 total (8 completed, 4 pending)");
