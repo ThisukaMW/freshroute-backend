@@ -45,6 +45,38 @@ export const loginDriver = async (email: string, password: string) => {
   };
 };
 
+export const loginAdmin = async (email: string, password: string) => {
+  const user = await prisma.user.findUnique({ where: { email } });
+
+  if (!user || user.role !== "ADMIN") {
+    throw new Error("Invalid credentials");
+  }
+
+  const isMatch = await bcrypt.compare(password, user.passwordHash);
+  if (!isMatch) {
+    throw new Error("Invalid credentials");
+  }
+
+  const token = jwt.sign(
+    {
+      userId: user.id,
+      role: user.role,
+    },
+    getJwtSecret(),
+    { expiresIn: "7d" }
+  );
+
+  return {
+    token,
+    admin: {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+    },
+  };
+};
+
 export const loginFieldAdmin = async (email: string, password: string) => {
   const user = await prisma.user.findUnique({
     where: { email },
