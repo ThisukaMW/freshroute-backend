@@ -309,12 +309,14 @@ export const getAllProductsController = async (
   res: Response
 ) => {
   try {
-    const products = await getAllProducts(req.role!);
+    const products = await getAllProducts(req.role);
 
     res.json(products);
   } catch (error) {
+    console.error("❌ Error fetching products:", error);
     res.status(500).json({
       message: "Failed to fetch products",
+      error: process.env.NODE_ENV === "development" ? (error as any).message : undefined,
     });
   }
 };
