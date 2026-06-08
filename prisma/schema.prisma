@@ -4,12 +4,11 @@
 generator client {
   provider = "prisma-client-js"
   output   = "../src/generated/prisma"
-  previewFeatures = ["driverAdapters"]
+  
 }
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 // ============= ENUMS =============
@@ -26,6 +25,7 @@ enum UserStatus {
   ACTIVE
   INACTIVE
   SUSPENDED
+  LOCKED
 }
 
 enum ProductStatus {
@@ -123,10 +123,15 @@ model User {
   name          String
   role          UserRole
   status        UserStatus  @default(ACTIVE)
+  city          String?    
+  address       String?
   passwordHash  String
+  prevPasswordHash  String?   // stores old hash before a reset, cleared after secure-account
 
   // Firebase Cloud Messaging token for push notifications
   fcmToken      String?
+  passwordResetToken  String?
+  passwordResetExpiry DateTime?
 
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
@@ -136,6 +141,9 @@ model User {
   sellerProfile Seller?
   buyerProfile  Buyer?
   notifications Notification[]
+
+  tokenVersion Int @default(0)
+
 
   @@index([email])
   @@index([role, status])
@@ -183,9 +191,9 @@ model Seller {
 
   businessName    String
   businessAddress String
-  latitude        Float
-  longitude       Float
-
+  latitude        Float?
+  longitude       Float?
+  verificationDocUrl String? 
   isApproved      Boolean     @default(false)
 
   createdAt       DateTime    @default(now())
@@ -198,6 +206,10 @@ model Seller {
   // Relationships
   products        Product[]
   pickupStops     Stop[]      @relation("SellerPickups")
+
+  averageRating   Float       @default(0)
+  totalRatings    Int         @default(0)
+  ratings         Rating[]
 
   @@index([isApproved])
   @@index([userId])
@@ -248,6 +260,8 @@ model Product {
   stockHistory    StockHistory[]
 
   sellerProducts SellerProduct[]
+
+  ratings Rating[]
 
   // Relationships
   orderItems  OrderItem[]
@@ -306,7 +320,7 @@ model Order {
   // Relationships
   items           OrderItem[]
   payment         Payment?
-  rating          Rating?
+  ratings         Rating[]  // ← replace with this (plural, no ?)
   reservations    StockReservation[]
 
   @@index([buyerId, status])
@@ -621,23 +635,38 @@ model DriverSession {
 // ============= RATING SYSTEM =============
 
 model Rating {
-  id                    String   @id @default(uuid())
-  orderId               String   @unique
-  order                 Order    @relation(fields: [orderId], references: [id])
+  id String @id @default(uuid())
 
-  driverId              String
-  driver                Driver   @relation(fields: [driverId], references: [id])
+  orderId   String
+  order     Order   @relation(fields: [orderId], references: [id])
 
-  buyerId               String
-  buyer                 Buyer    @relation(fields: [buyerId], references: [id])
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
+
+  sellerId String
+  seller   Seller @relation(fields: [sellerId], references: [id])
+
+  driverId String
+  driver   Driver @relation(fields: [driverId], references: [id])
+
+  buyerId String
+  buyer   Buyer  @relation(fields: [buyerId], references: [id])
 
   rating                Int      // Overall rating (1-5)
   deliveryRating        Int?     // Delivery speed/accuracy
   productQualityRating  Int?     // Product condition on arrival
+  packagingRating       Int?
   comment               String?
+  isVerifiedPurchase    Boolean  @default(false)
+  isFlagged             Boolean  @default(false)
 
-  createdAt             DateTime @default(now())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
+  @@unique([orderId, productId])
+
+  @@index([sellerId])
+  @@index([productId])
   @@index([driverId])
   @@index([orderId])
   @@index([buyerId])
@@ -648,7 +677,7 @@ model Rating {
 model Notification {
   id        String   @id @default(uuid())
   userId    String
-  user      User     @relation(fields: [userId], references: [id])
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   title     String
   body      String
@@ -661,6 +690,46 @@ model Notification {
 
   @@index([userId, read])
   @@index([createdAt(sort: Desc)])
+
+}
+
+// ============= TRUCK MANAGEMENT =============
+
+enum TruckType {
+  REFRIGERATED_VAN
+  FLATBED
+  BOX_TRUCK
+  SEMI_TRAILER
+  TANKER
+  DUMP_TRUCK
+}
+
+enum TemperatureSetting {
+  AMBIENT
+  CHILLED
+  FROZEN
+}
+
+model Truck {
+  id                      String              @id @default(uuid())
+  truckId                 String              @unique
+  operator                String?
+  truckType               TruckType
+  temperatureSetting      TemperatureSetting?
+  route                   String?
+  fuelNeeded              Float?
+  capacityLbs             Float?
+  palletCapacity          Int?
+  deliveryEfficiencyPercent Float?
+  avgDelayHours           Float?
+  isActive                Boolean             @default(true)
+
+  createdAt               DateTime            @default(now())
+  updatedAt               DateTime            @updatedAt
+
+  @@index([operator])
+  @@index([truckType])
+
 }
 // ============= INVENTORY SYSTEM =============
 

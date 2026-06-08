@@ -1,18 +1,41 @@
+// This file lists all the login, signup, and password URLs for buyers, sellers, and admins.
+// No login token is needed for any of these — they are all public.
+
 import { Router } from "express";
-import { driverLogin, sellerLogin, buyerLogin, sellerSignupController } from "./auth.controller.js";
+import {
+  loginUserController,
+  registerCustomer,
+  signupVendor,
+  forgotPasswordController,
+  resetPasswordController,
+  secureAccountController,
+} from "./auth.controller.js";
+import { sellerLogin, buyerLogin } from "./auth.controller.js";
 
 const router = Router();
 
-// POST /api/v1/auth/driver/login
-router.post("/driver/login", driverLogin);
+// One login that works for any role (buyer, seller, driver, admin)
+router.post("/login", loginUserController);
 
-// POST /api/v1/auth/seller/login
+// Buyer registers a new account
+router.post("/customer/register", registerCustomer);
+
+// Seller (vendor) registers a new business account
+router.post("/vendor/signup", signupVendor);
+
+// User asks for a password reset email
+router.post("/forgot-password", forgotPasswordController);
+
+// User sets a new password using the link from the email
+router.post("/reset-password", resetPasswordController);
+
+// User locks their account if someone else changed their password
+router.post("/secure-account", secureAccountController);
+
+// Seller-specific login
 router.post("/seller/login", sellerLogin);
 
-// POST /api/v1/auth/seller/signup
-router.post("/seller/signup", sellerSignupController);
-
-// POST /api/v1/auth/buyer/login
+// Buyer-specific login
 router.post("/buyer/login", buyerLogin);
 
 export default router;

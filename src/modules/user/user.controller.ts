@@ -24,7 +24,7 @@ export const getUsers = async (req: AuthRequest, res: Response) => {
   }
 };
 
-// GET /api/v1/users/:id
+
 export const getUser = async (
   req: AuthRequestWithParams<{ id: string }>,
   res: Response
@@ -39,7 +39,7 @@ export const getUser = async (
   }
 };
 
-// PATCH /api/v1/users/:id/role
+
 export const patchUserRole = async (
   req: AuthRequestWithParams<{ id: string }>,
   res: Response
@@ -61,7 +61,7 @@ export const patchUserRole = async (
   }
 };
 
-// PATCH /api/v1/users/:id/status
+
 export const patchUserStatus = async (
   req: AuthRequestWithParams<{ id: string }>,
   res: Response

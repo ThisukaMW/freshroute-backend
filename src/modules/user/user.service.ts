@@ -13,7 +13,6 @@ const userSelect = {
   status: true,
 } as const;
 
-// -------------------- GET ALL USERS --------------------
 export const getAllUsers = async () => {
   return prisma.user.findMany({
     orderBy: { createdAt: "desc" },
@@ -21,7 +20,6 @@ export const getAllUsers = async () => {
   });
 };
 
-// -------------------- GET USER BY ID --------------------
 export const getUserById = async (id: string) => {
   const user = await prisma.user.findUnique({
     where: { id },
@@ -35,7 +33,6 @@ export const getUserById = async (id: string) => {
   return user;
 };
 
-// -------------------- UPDATE ROLE --------------------
 export const updateUserRole = async (id: string, role: UserRole) => {
   const user = await prisma.user.findUnique({ where: { id } });
   if (!user) throw new Error("User not found");
@@ -51,7 +48,6 @@ export const updateUserRole = async (id: string, role: UserRole) => {
   });
 };
 
-// -------------------- UPDATE STATUS --------------------
 export const updateUserStatus = async (id: string, status: UserStatus) => {
   const user = await prisma.user.findUnique({ where: { id } });
   if (!user) throw new Error("User not found");

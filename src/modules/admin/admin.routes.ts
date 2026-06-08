@@ -1,19 +1,44 @@
-import { Router } from "express";
-import { protect } from "../../middlewares/auth.middleware.js";
-import { createTruck, listTrucks, truckById } from "./admin.controller.js";
+// This file lists all the URL paths that admins can use.
+// It connects each URL to the right function in admin.controller.ts.
+
+import { Router } from 'express';
+import { protect, requireAdmin } from "../../middlewares/auth.middleware.js";
+import {
+  createTruck,
+  listTrucks,
+  truckById,
+  listAllOrders,
+  loginAdmin,
+  getPendingUsersController,
+  approveUserController,
+  rejectUserController,
+} from "./admin.controller.js";
+import { getUsers } from "../user/user.controller.js";
 
 const router = Router();
 
-// All routes require a valid JWT
-router.use(protect);
+// Anyone can call this — no login needed
+router.post('/login', loginAdmin);
 
+// All routes below need a valid login token AND admin role
+router.use(protect, requireAdmin);
 
-router.post("/", createTruck);
+// Get all users
+router.get("/users", getUsers);
 
-// GET /api/v1/trucks
-router.get("/", listTrucks);
+// Get users waiting for approval
+router.get("/users/pending", getPendingUsersController);
 
-// GET /api/v1/trucks/:id
-router.get("/:id", truckById);
+// Say yes or no to a user's registration
+router.patch("/users/:userId/approve", approveUserController);
+router.patch("/users/:userId/reject", rejectUserController);
+
+// Manage trucks
+router.post("/trucks", createTruck);
+router.get("/trucks", listTrucks);
+router.get("/trucks/:id", truckById);
+
+// See all orders ever placed
+router.get("/orders", listAllOrders);
 
 export default router;

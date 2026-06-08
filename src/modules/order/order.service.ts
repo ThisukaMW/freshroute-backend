@@ -1,6 +1,10 @@
 import prisma from "../../config/database.js";
 import * as inventoryService from "../inventory/inventory.service.js";
 import type { Prisma as PrismaTypes } from "../../../src/generated/prisma/index.js";
+import {
+  notifyBuyerOrderPlaced,
+  notifySellerNewOrder,
+} from "../notifications/notification.events.js";
 
 export interface CreateOrderInput {
   buyerId: string;
@@ -12,7 +16,7 @@ export interface CreateOrderInput {
   items: Array<{
     productId: string;
     quantity: number;
-    sellerId: string; // ✅ Added - seller who provided this product
+    sellerId: string;
   }>;
 }
 
@@ -22,7 +26,6 @@ export const createOrder = async (input: CreateOrderInput) => {
   const buyer = await prisma.buyer.findUnique({
     where: { id: input.buyerId },
   });
-
   if (!buyer) throw new Error("Buyer profile not found");
 
   // Reset stale CONFIRMED reservations from failed payment attempts
@@ -158,6 +161,7 @@ export const createOrder = async (input: CreateOrderInput) => {
     .padStart(3, "0")}`;
 
   // Create order
+  // Create order
   const order = await prisma.order.create({
     data: {
       buyerId: input.buyerId,
@@ -249,13 +253,24 @@ export const createOrder = async (input: CreateOrderInput) => {
     }
   }
 
+  // ─── NOTIFICATIONS ────────────────────────────────────────────────────────
+
+  // Notify buyer their order was placed
+  await notifyBuyerOrderPlaced(buyer.userId, order.orderNumber, totalAmount);
+
+  // Notify each unique seller they have a new order
+  const uniqueSellerIds = [...new Set(input.items.map((i) => i.sellerId))];
+  for (const sellerId of uniqueSellerIds) {
+    const itemCount = input.items.filter((i) => i.sellerId === sellerId).length;
+    await notifySellerNewOrder(sellerId, order.orderNumber, itemCount);
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+
   return order;
 };
 
-/**
- * Get Buyer's Saved Addresses
- * Returns buyer's profile address and any previously used addresses
- */
+// GET /api/v1/orders/addresses
 export const getBuyerAddresses = async (buyerId: string) => {
   const buyer = await prisma.buyer.findUnique({
     where: { id: buyerId },
@@ -269,8 +284,6 @@ export const getBuyerAddresses = async (buyerId: string) => {
 
   if (!buyer) throw new Error("Buyer not found");
 
-  // For now, return the buyer's current address as their primary saved address
-  // In the future, this could fetch from a SavedAddress model if multiple addresses are supported
   return {
     addresses: [
       {
@@ -307,7 +320,6 @@ export const getOrderById = async (orderId: string, buyerId: string) => {
   });
 
   if (!order) throw new Error("Order not found");
-
   if (order.buyerId !== buyerId) throw new Error("Forbidden");
 
   return order;
@@ -335,17 +347,10 @@ export const getBuyerOrders = async (buyerId: string) => {
 
 // ============= SELLER SPECIFIC FUNCTIONS =============
 
-/**
- * Get all orders for a seller (orders containing their products)
- */
 export const getSellerOrders = async (sellerId: string) => {
   return prisma.order.findMany({
     where: {
-      items: {
-        some: {
-          sellerId,
-        },
-      },
+      items: { some: { sellerId } },
     },
     orderBy: { createdAt: "desc" },
     include: {
@@ -371,9 +376,6 @@ export const getSellerOrders = async (sellerId: string) => {
   });
 };
 
-/**
- * Get a single order for seller verification
- */
 export const getSellerOrderById = async (orderId: string, sellerId: string) => {
   const order = await prisma.order.findUnique({
     where: { id: orderId },
@@ -410,20 +412,14 @@ export const getSellerOrderById = async (orderId: string, sellerId: string) => {
   return order;
 };
 
-/**
- * Get seller dashboard stats (orders, revenue, etc.)
- */
 export const getSellerStats = async (sellerId: string) => {
-  // Total orders containing seller's products
   const totalOrders = await prisma.order.count({
-    where: {
-      items: { some: { sellerId } },
-    },
+    where: { items: { some: { sellerId } } },
   });
 
-  // Today's orders
   const today = new Date();
   today.setHours(0, 0, 0, 0);
+
   const ordersToday = await prisma.order.count({
     where: {
       items: { some: { sellerId } },
@@ -431,14 +427,12 @@ export const getSellerStats = async (sellerId: string) => {
     },
   });
 
-  // Total revenue
   const revenueData = await prisma.orderItem.aggregate({
     where: { sellerId },
     _sum: { totalPrice: true },
   });
   const totalRevenue = revenueData._sum.totalPrice || 0;
 
-  // Today's revenue
   const revenueTodayData = await prisma.orderItem.aggregate({
     where: {
       sellerId,
@@ -448,12 +442,9 @@ export const getSellerStats = async (sellerId: string) => {
   });
   const revenueToday = revenueTodayData._sum.totalPrice || 0;
 
-  // Order status breakdown
   const statusBreakdown = await prisma.order.groupBy({
     by: ["status"],
-    where: {
-      items: { some: { sellerId } },
-    },
+    where: { items: { some: { sellerId } } },
     _count: true,
   });
 
@@ -462,11 +453,5 @@ export const getSellerStats = async (sellerId: string) => {
     statusMap[sb.status] = sb._count;
   });
 
-  return {
-    totalOrders,
-    ordersToday,
-    totalRevenue,
-    revenueToday,
-    ordersByStatus: statusMap,
-  };
+  return { totalOrders, ordersToday, totalRevenue, revenueToday, ordersByStatus: statusMap };
 };

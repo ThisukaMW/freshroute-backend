@@ -1,8 +1,12 @@
+// This is the main file that builds the Express server and plugs in all the routes.
+// Every part of the app (auth, orders, drivers, etc.) gets connected here.
+
 import "dotenv/config";
 
 import express from "express";
 import cors from "cors";
-import jwt from "jsonwebtoken";
+import dotenv from "dotenv";
+dotenv.config({ override: true });
 import authRoutes from "./modules/auth/auth.routes.js";
 import driverRoutes from "./modules/driver/driver.routes.js";
 import productRoutes from "./modules/product/product.routes.js";
@@ -10,34 +14,48 @@ import cartRoutes from "./modules/cart/cart.routes.js";
 import paymentRoutes from "./modules/payment/payment.route.js";
 import orderRoutes from "./modules/order/order.routes.js";
 import userRoutes from "./modules/user/user.route.js";
+import adminRoutes from "./modules/admin/admin.routes.js";
+import profileRoutes from "./modules/profile/profile.routes.js";
+import ratingRoutes from "./modules/rating/rating.routes.js";
+import notificationRoutes from "./modules/notifications/notification.routes.js";
+import ratingRouter from './modules/rating/rating.routes.js'
 import inventoryRoutes from "./modules/inventory/inventory.routes.js";
 import dashboardRoutes from "./modules/dashboard/dashboard.routes.js";
+import analyticsRouter from "./modules/analytics/analytics.routes.js";
 
 const app = express();
 
+// Allow requests from any website (needed for the frontend to talk to this backend)
 app.use(cors());
 
+// Simple check to see if the server is alive
 app.get("/", (req, res) => {
   res.send("Server is running 🚀");
 });
 
-// Health check
+// Another health check endpoint used by monitoring tools
 app.get("/api/v1/health", (_req, res) => {
   res.json({ status: "FreshRoute backend running 🚀" });
 });
 
+// Let the app read JSON data sent in request bodies
 app.use(express.json());
 
-// Routes
+// Connect each group of routes to its URL prefix
 app.use("/api/v1/auth", authRoutes);
 app.use("/api/v1/driver", driverRoutes);
 app.use("/api/v1/products", productRoutes);
 app.use("/api/v1/cart", cartRoutes);
 app.use("/api/v1/inventory", inventoryRoutes);
 app.use("/api/v1/dashboard", dashboardRoutes);
-
 app.use("/api/v1/payments", paymentRoutes);
 app.use("/api/v1/orders", orderRoutes);
 app.use("/api/v1/users", userRoutes);
+app.use("/api/v1/admin", adminRoutes);
+app.use("/api/v1/profile", profileRoutes);
+app.use("/api/v1/rating", ratingRoutes);
+app.use("/api/v1/notifications", notificationRoutes);
+app.use('/api/v1/ratings', ratingRouter)
+app.use("/api/v1/analytics", analyticsRouter);
 
 export default app;
