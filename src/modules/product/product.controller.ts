@@ -309,7 +309,9 @@ export const getAllProductsController = async (
   res: Response
 ) => {
   try {
-    const products = await getAllProducts(req.role);
+    // Default to "BUYER" for unauthenticated users to see only APPROVED products
+    const userRole = req.role || "BUYER";
+    const products = await getAllProducts(userRole);
 
     res.json(products);
   } catch (error) {
