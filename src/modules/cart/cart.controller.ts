@@ -9,6 +9,7 @@ import {
   calculateCartTotal,
   saveItemForLater,
   clearCart,
+  resetStaleConfirmedReservations,
 } from "./cart.service.js";
 
 /**
@@ -20,10 +21,15 @@ export const getCart = async (req: AuthRequest, res: Response) => {
     if (!req.userId) {
       return res.status(401).json({ message: "Not authenticated - userId is missing" });
     }
-    console.log(`\n🟢 [CART CONTROLLER] GET /api/v1/cart - userId: ${req.userId}`);
+
+    // Reset any stale confirmed reservations for this user before fetching cart
+    await resetStaleConfirmedReservations(req.userId);
+   
+
     const data = await getCartWithTotals(req.userId);
-    console.log(`🟢 [CART CONTROLLER] Sending response with ${data.items.length} items to frontend\n`);
+    
     res.json(data);
+
   } catch (error: unknown) {
     console.error("❌ Get cart error:", error);
     const message = error instanceof Error ? error.message : "Failed to fetch cart";
@@ -148,45 +154,22 @@ export const totalCart = async (req: AuthRequest, res: Response) => {
 };
 
 /**
- * POST /api/v1/cart/save-for-later
- * Save item for later (requires sellerId for multi-seller support)
- */
-export const saveForLater = async (req: AuthRequest, res: Response) => {
-  try {
-    const { productId, sellerId } = req.body;
-
-    if (!productId || !sellerId) {
-      return res.status(400).json({ message: "productId and sellerId are required" });
-    }
-
-    const item = await saveItemForLater(req.userId!, productId, sellerId);
-    res.json({
-      message: "Item saved for later",
-      item,
-    });
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : "Failed to save item for later";
-    res.status(400).json({ message });
-  }
-};
-
-/**
  * POST /api/v1/cart/clear
  * Clear entire cart
  */
 export const clearCartHandler = async (req: AuthRequest, res: Response) => {
   try {
-    console.log(`\n🔴 [CONTROLLER] POST /api/v1/cart/clear - userId: ${req.userId}`);
     const result = await clearCart(req.userId!);
-    console.log(`🔴 [CONTROLLER] Clear cart response: ${result.message} | ${result.itemsCleared} items cleared`);
+    
     res.json({
       message: result.message,
       itemsCleared: result.itemsCleared,
       reservationsCleared: result.reservationsCleared,
       timestamp: new Date().toISOString(),
     });
+
   } catch (error: unknown) {
-    console.error(`❌ [CONTROLLER] Clear cart error:`, error);
+    
     const message = error instanceof Error ? error.message : "Failed to clear cart";
     res.status(500).json({ message });
   }

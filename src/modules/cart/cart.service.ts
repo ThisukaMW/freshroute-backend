@@ -50,6 +50,56 @@ export const getOrCreateCart = async (buyerId: string) => {
   return cart;
 };
 
+// Reset stale CONFIRMED reservations from failed payment attempts
+export const resetStaleConfirmedReservations = async (buyerId: string) => {
+  // Find all PENDING orders for this buyer
+  const pendingOrders = await prisma.order.findMany({
+    where: {
+      buyerId,
+      status: "PENDING",
+    },
+  });
+
+  if (pendingOrders.length === 0) return;
+
+  // Get payments for all these orders
+  const payments = await prisma.payment.findMany({
+    where: {
+      orderId: { in: pendingOrders.map((o) => o.id) },
+    },
+  });
+
+  // Find order IDs with no COMPLETED payments
+  const completedOrderIds = new Set(
+    payments
+      .filter((p: any) => p.status === "COMPLETED")
+      .map((p: any) => p.orderId)
+  );
+
+  const staleOrderIds = pendingOrders
+    .filter((order: any) => !completedOrderIds.has(order.id))
+    .map((o: any) => o.id);
+
+  if (staleOrderIds.length === 0) return;
+
+  // Reset those reservations back to ACTIVE
+  const reset = await prisma.stockReservation.updateMany({
+    where: {
+      buyerId,
+      orderId: { in: staleOrderIds },
+      status: "CONFIRMED",
+    },
+    data: {
+      status: "ACTIVE",
+      orderId: null,
+    },
+  });
+
+  if (reset.count > 0) {
+    console.log(`🔄 Reset ${reset.count} stale reservations for buyer ${buyerId}`);
+  }
+};
+
 // ============= MAIN CART OPERATIONS =============
 
 /**
@@ -96,6 +146,8 @@ export const addItemToCart = async (
   console.log(`✅ [CART] Stock check passed - Available: ${sellerProduct.stock}`);
 
   // Get buyer and cart
+  32.
+
   const buyerId = await getBuyerIdFromUserId(userId);
   const cart = await getOrCreateCart(buyerId);
   console.log(`✅ [CART] Cart retrieved/created - cartId: ${cart.id}, buyerId: ${buyerId}`);
@@ -228,6 +280,9 @@ export const getCartWithTotals = async (userId: string) => {
   const buyerId = await getBuyerIdFromUserId(userId);
   console.log(`✅ [GET CART] buyerId resolved: ${buyerId}`);
 
+  // Reset stale CONFIRMED reservations from failed payment attempts
+  await resetStaleConfirmedReservations(buyerId);
+
   const cart = await prisma.cart.findUnique({
     where: { buyerId },
     include: {
@@ -254,7 +309,7 @@ export const getCartWithTotals = async (userId: string) => {
 
   console.log(`✅ [GET CART] Cart found with ${cart.items.length} total items`);
 
-  // Filter active items (not saved for later)
+  // Filter active items 
   const activeItems = cart.items.filter((item: any) => !item.savedForLater);
   console.log(`✅ [GET CART] After filtering: ${activeItems.length} active items`);
 
@@ -307,14 +362,14 @@ export const getCartWithTotals = async (userId: string) => {
   return formattedResponse;
 };
 
-/**
+/*
  * Remove Item from Cart
- * ✅ PROPERLY DELETES: CartItem + cascades to StockReservation
- * ✅ UPDATED: Now accepts sellerId for multi-seller support
- * ✅ VERIFIED: Checks item was actually deleted
+ * PROPERLY DELETES: CartItem + cascades to StockReservation
+ * UPDATED: Now accepts sellerId for multi-seller support
+ * VERIFIED: Checks item was actually deleted
  */
 export const removeItemFromCart = async (userId: string, productId: string, sellerId?: string) => {
-  console.log(`\n🟠 [REMOVE ITEM] removeItemFromCart START - productId: ${productId}, sellerId: ${sellerId || 'any'}`);
+  
   const buyerId = await getBuyerIdFromUserId(userId);
   const cart = await prisma.cart.findUnique({
     where: { buyerId },
@@ -329,7 +384,7 @@ export const removeItemFromCart = async (userId: string, productId: string, sell
   let cartItem;
   
   if (sellerId) {
-    // Get the specific cart item with this seller
+  // Get the specific cart item with this seller
     cartItem = await prisma.cartItem.findUnique({
       where: {
         cartId_productId_sellerId: {
@@ -354,8 +409,7 @@ export const removeItemFromCart = async (userId: string, productId: string, sell
     throw new Error("Item not found in cart");
   }
 
-  console.log(`✅ [REMOVE ITEM] Found CartItem to delete: ${cartItem.id} | seller: ${cartItem.sellerId}`);
-
+  
   // Delete the CartItem (this will cascade-delete StockReservation due to schema)
   console.log(`🔄 [REMOVE ITEM] Deleting CartItem...`);
   const deletedItem = await prisma.cartItem.delete({
@@ -606,7 +660,7 @@ export const saveItemForLater = async (userId: string, productId: string, seller
  * ⏳ Reverses the cart "hold" on inventory
  */
 export const clearCart = async (userId: string) => {
-  console.log(`\n🔴 [CLEAR CART] clearCart START - userId: ${userId}`);
+  
   const buyerId = await getBuyerIdFromUserId(userId);
   console.log(`✅ [CLEAR CART] buyerId resolved: ${buyerId}`);
 
@@ -634,6 +688,7 @@ export const clearCart = async (userId: string) => {
 
   const itemCount = cart.items.length;
   console.log(`📋 [CLEAR CART] Found ${itemCount} items to clear`);
+  
   cart.items.forEach((item, idx) => {
     console.log(`   Item #${idx + 1}: ${item.id} | product: ${item.productId} | seller: ${item.productId}`);
   });

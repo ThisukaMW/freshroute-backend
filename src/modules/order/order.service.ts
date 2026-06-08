@@ -25,8 +25,19 @@ export const createOrder = async (input: CreateOrderInput) => {
 
   if (!buyer) throw new Error("Buyer profile not found");
 
-  // VALIDATION 2: Check required delivery fields
-  if (!input.deliveryAddress || !input.deliveryLat || !input.deliveryLng || !input.deliveryTimeSlot) {
+  // Reset stale CONFIRMED reservations from failed payment attempts
+  const { resetStaleConfirmedReservations } = await import("../cart/cart.service.js");
+  await resetStaleConfirmedReservations(input.buyerId);
+
+  // VALIDATION 2: Check required delivery fields (explicit null/undefined check — avoids falsy 0 bug)
+  if (
+    !input.deliveryAddress ||
+    input.deliveryLat === undefined ||
+    input.deliveryLat === null ||
+    input.deliveryLng === undefined ||
+    input.deliveryLng === null ||
+    !input.deliveryTimeSlot
+  ) {
     throw new Error("Missing required delivery information: address, coordinates, or time slot");
   }
 
@@ -36,20 +47,25 @@ export const createOrder = async (input: CreateOrderInput) => {
   }
 
   const productIds = input.items.map((i) => i.productId);
+  // ✅ FIX: Get UNIQUE product IDs for validation (same product from different sellers)
+  const uniqueProductIds = [...new Set(productIds)];
 
   // VALIDATION 4: Check all products are approved
   const products = await prisma.product.findMany({
     where: {
-      id: { in: productIds },
+      id: { in: uniqueProductIds },
       status: "APPROVED",
     },
   });
 
-  if (products.length !== productIds.length) {
+  if (products.length !== uniqueProductIds.length) {
+    const foundIds = products.map((p) => p.id);
+    const missingIds = uniqueProductIds.filter((id) => !foundIds.includes(id));
+    console.error("Missing/unapproved product IDs:", missingIds);
     throw new Error("One or more products are unavailable or not approved");
   }
 
-  // ✅ VALIDATION 5: Verify all reservations exist and are ACTIVE (soft reserve exists)
+  // VALIDATION 5: Verify all reservations exist and are ACTIVE
   for (const item of input.items) {
     const reservation = await prisma.stockReservation.findFirst({
       where: {
@@ -61,6 +77,23 @@ export const createOrder = async (input: CreateOrderInput) => {
     });
 
     if (!reservation) {
+      // Check if there's a CONFIRMED one from a previous failed order
+      const confirmedReservation = await prisma.stockReservation.findFirst({
+        where: {
+          productId: item.productId,
+          sellerId: item.sellerId,
+          buyerId: input.buyerId,
+          status: "CONFIRMED",
+        },
+      });
+
+      if (confirmedReservation) {
+        throw new Error(
+          `Item ${item.productId} was already used in a previous order attempt. ` +
+          `Please remove it from your cart and re-add it.`
+        );
+      }
+
       throw new Error(
         `No active reservation found for ${item.productId} from seller ${item.sellerId}. ` +
         `Please add item to cart first.`
@@ -73,7 +106,6 @@ export const createOrder = async (input: CreateOrderInput) => {
       );
     }
 
-    // Verify quantity hasn't changed
     if (reservation.quantity !== item.quantity) {
       throw new Error(
         `Reservation quantity mismatch for ${item.productId}. ` +
@@ -82,18 +114,36 @@ export const createOrder = async (input: CreateOrderInput) => {
     }
   }
 
-  // Calculate order items
+  // ✅ Fetch SellerProduct prices for all items
+  const sellerProducts = await prisma.sellerProduct.findMany({
+    where: {
+      productId: { in: uniqueProductIds },
+    },
+  });
+
+  // Calculate order items with seller-specific prices
   const orderItems = input.items.map((item) => {
     const product = products.find((p) => p.id === item.productId)!;
-    const totalPrice = parseFloat(
-      (product.price * item.quantity).toFixed(2)
+    
+    // ✅ FIX: Get price from SellerProduct, not Product
+    const sellerProduct = sellerProducts.find(
+      (sp) => sp.productId === item.productId && sp.sellerId === item.sellerId
     );
+    
+    if (!sellerProduct) {
+      throw new Error(
+        `Seller ${item.sellerId} does not offer product ${item.productId}`
+      );
+    }
+
+    const unitPrice = sellerProduct.price;  // ← Use seller's price
+    const totalPrice = parseFloat((unitPrice * item.quantity).toFixed(2));
 
     return {
       productId: product.id,
-      sellerId: item.sellerId,  // ✅ Use sellerId from input (who offers it)
+      sellerId: item.sellerId,
       quantity: item.quantity,
-      unitPrice: product.price,
+      unitPrice,
       totalPrice,
     };
   });
@@ -107,7 +157,7 @@ export const createOrder = async (input: CreateOrderInput) => {
     .toString()
     .padStart(3, "0")}`;
 
-  // Create order with new delivery fields
+  // Create order
   const order = await prisma.order.create({
     data: {
       buyerId: input.buyerId,
@@ -134,11 +184,12 @@ export const createOrder = async (input: CreateOrderInput) => {
     },
   });
 
-  // ✅ HARD DEDUCTION: Update reservations to CONFIRMED and deduct stock
-  // This is where stock actually leaves the system
+  // HARD DEDUCTION: Confirm reservations and deduct stock
+  const confirmedReservationIds: string[] = [];
+
   for (const item of input.items) {
     try {
-      // STEP 1: Update reservation status to CONFIRMED
+      // STEP 1: Find and confirm the reservation
       const reservation = await prisma.stockReservation.findFirst({
         where: {
           productId: item.productId,
@@ -149,7 +200,6 @@ export const createOrder = async (input: CreateOrderInput) => {
       });
 
       if (reservation) {
-        // Update reservation to CONFIRMED and link to order
         await prisma.stockReservation.update({
           where: { id: reservation.id },
           data: {
@@ -157,13 +207,14 @@ export const createOrder = async (input: CreateOrderInput) => {
             orderId: order.id,
           },
         });
+        confirmedReservationIds.push(reservation.id);
       }
 
-      // STEP 2: Deduct stock from SellerProduct (FIRST - seller-specific)
+      // STEP 2: Deduct stock from SellerProduct
       await inventoryService.updateSellerProductStock({
         productId: item.productId,
         sellerId: item.sellerId,
-        quantity: -item.quantity, // negative = deduct
+        quantity: -item.quantity,
         type: "PURCHASE",
         reason: `Order ${order.orderNumber} created - payment pending`,
         orderId: order.id,
@@ -171,21 +222,29 @@ export const createOrder = async (input: CreateOrderInput) => {
       });
 
       // STEP 3: Recalculate Product.stock as SUM of all SellerProduct.stock
-      // ✅ This ensures Product.stock = sum of all SellerProduct.stock
       await inventoryService.recalculateProductStock(item.productId);
+
     } catch (error) {
       console.error(
-        `❌ Failed to deduct the stock for ${item.productId}:`,
+        `❌ Failed to deduct stock for ${item.productId}:`,
         error instanceof Error ? error.message : error
       );
-      // Partially roll back: update remaining reservations to ACTIVE
-      await prisma.stockReservation.updateMany({
-        where: {
-          orderId: order.id,
-          status: "CONFIRMED",
-        },
-        data: { status: "ACTIVE", orderId: null },
+
+      // ROLLBACK: Reset confirmed reservations back to ACTIVE
+      if (confirmedReservationIds.length > 0) {
+        await prisma.stockReservation.updateMany({
+          where: {
+            id: { in: confirmedReservationIds },
+          },
+          data: { status: "ACTIVE", orderId: null },
+        });
+      }
+
+      // Delete the order since stock deduction failed
+      await prisma.order.delete({
+        where: { id: order.id },
       });
+
       throw error;
     }
   }

@@ -21,6 +21,7 @@ export const placeOrder = async (req: AuthRequest, res: Response) => {
       res.status(401).json({ message: "Unauthorized" });
       return;
     }
+    
 
     // Extract all required fields from request body
     const {
@@ -38,7 +39,7 @@ export const placeOrder = async (req: AuthRequest, res: Response) => {
       return;
     }
 
-    // VALIDATION 1.5: Check each item has required fields (productId, quantity, sellerId)
+    // Check each item has required fields (productId, quantity, sellerId)
     for (const item of items) {
       if (!item.productId || !item.sellerId || !item.quantity || item.quantity <= 0) {
         res.status(400).json({
@@ -72,6 +73,8 @@ export const placeOrder = async (req: AuthRequest, res: Response) => {
       });
       return;
     }
+
+    
 
     // VALIDATION 5: Get buyer profile
     const buyer = await prisma.buyer.findUnique({

@@ -7,7 +7,6 @@ import {
   updateQuantity,
   applyPromo,
   totalCart,
-  saveForLater,
   clearCartHandler,
 } from "./cart.controller.js";
 
@@ -33,9 +32,6 @@ router.post("/apply-promo", applyPromo);
 
 // GET /api/v1/cart/total - Get cart total
 router.get("/total", totalCart);
-
-// POST /api/v1/cart/save-for-later - Save item for later
-router.post("/save-for-later", saveForLater);
 
 // POST /api/v1/cart/clear - Clear entire cart
 router.post("/clear", clearCartHandler);

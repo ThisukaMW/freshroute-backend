@@ -24,8 +24,7 @@ router.get("/", myOrders);
 // GET /api/v1/orders/addresses (buyer's saved addresses)
 router.get("/addresses", getAddresses);
 
-// GET /api/v1/orders/:id (buyer's specific order)
-router.get("/:id", orderById);
+
 
 // ============= SELLER ROUTES =============
 // GET /api/v1/orders/seller/list (all seller orders)
@@ -33,6 +32,9 @@ router.get("/seller/list", getSellerOrdersController);
 
 // GET /api/v1/orders/seller/stats (seller stats)
 router.get("/seller/stats", getSellerStatsController);
+
+// GET /api/v1/orders/:id (buyer's specific order)
+router.get("/:id", orderById);
 
 // GET /api/v1/orders/seller/:id (specific seller order)
 router.get("/seller/:id", getSellerOrderByIdController);

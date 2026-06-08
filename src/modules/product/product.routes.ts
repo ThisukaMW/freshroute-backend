@@ -33,24 +33,25 @@ const router = Router();
 // ============================
 // PUBLIC ROUTES (No Auth Required)
 // ============================
-// VIEW ALL PRODUCTS - PUBLIC ACCESS
+// Specific routes MUST come before wildcard /:productId routes
 router.get("/", getAllProductsController);
 router.get("/approved", getApprovedProductsController);
+
+// Specific nested routes before parent wildcard
+router.get("/:productId/sellers", getSellersByProductNameController);
+
+// Wildcard ID route (after specific routes)
+router.get("/:productId", getProductByIdController);
 
 // ============================
 // PROTECTED ROUTES (Auth Required)
 // ============================
-//router.use(protect);
+// POST and PATCH must have protect middleware
+router.post("/add", protect, upload.array("images"), addProduct);
+router.patch("/:productId/status", protect, updateProductStatusController);
+router.patch("/:productId", protect, editProductController);
 
-router.get("/pending", getPendingProductsController);
-router.post("/add", upload.array("images"), addProduct);
-
-router.get("/:productId", getProductByIdController);
-
-router.get("/:productId/sellers", getSellersByProductNameController);
-
-router.patch("/:productId", editProductController);
-
-router.patch("/:productId/status", updateProductStatusController);
+// Protected GET routes
+router.get("/pending", protect, getPendingProductsController);
 
 export default router;
