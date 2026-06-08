@@ -10,7 +10,7 @@ dotenv.config();
 // Set up the database connection using the URL from the .env file
 const adapter = new PrismaPg({
   connectionString: process.env.DATABASE_URL!,
-});
+}) as any;
 
 // Create the Prisma client (our tool to talk to the database) with the connection above
 const prisma = new PrismaClient({ adapter });
