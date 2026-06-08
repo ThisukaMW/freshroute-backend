@@ -12,8 +12,8 @@ export const notifyBuyerOrderPlaced = async (
   try {
     await createNotification({
       userId: buyerUserId,
-      title: "🛒 Order Placed!",
-      body: `Your order ${orderNumber} has been placed successfully. Total: Rs. ${totalAmount.toFixed(2)}`,
+      title: "🛒 ORDER PLACED — One Step Away!",
+      body: `Complete your payment to confirm order ${orderNumber}. Total: Rs. ${totalAmount.toFixed(2)}`,
       data: { type: "ORDER_PLACED", orderNumber },
     });
   } catch (err) {

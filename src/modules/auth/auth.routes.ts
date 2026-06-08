@@ -10,7 +10,7 @@ import {
   resetPasswordController,
   secureAccountController,
 } from "./auth.controller.js";
-import { sellerLogin, buyerLogin, sellerSignupController } from "./auth.controller.js";
+import { sellerLogin, buyerLogin } from "./auth.controller.js";
 
 const router = Router();
 
@@ -34,9 +34,6 @@ router.post("/secure-account", secureAccountController);
 
 // Seller-specific login
 router.post("/seller/login", sellerLogin);
-
-// Seller-specific signup
-router.post("/seller/signup", sellerSignupController);
 
 // Buyer-specific login
 router.post("/buyer/login", buyerLogin);

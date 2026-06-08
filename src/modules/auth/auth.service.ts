@@ -113,7 +113,7 @@ export const createCustomer = async (data: {
   passwordHash: string;
   phone?: string;
   city?: string;
-  address?: string;
+  address: string;
 }) => {
   const user = await prisma.user.create({
     data: {
@@ -193,76 +193,6 @@ export const createVendor = async (input: VendorSignupInput) => {
     },
     include: { sellerProfile: true },
   });
-};
-
-// ---------------- SELLER SIGNUP INPUT SHAPE ----------------
-export interface SellerSignupInput {
-  email: string;
-  password: string;
-  name: string;
-  businessName: string;
-  businessAddress: string;
-  latitude: number;
-  longitude: number;
-}
-
-// ---------------- SELLER SIGNUP ----------------
-// Creates seller user + seller profile, notifies admins, returns JWT
-export const sellerSignup = async (input: SellerSignupInput) => {
-  // Allow re-registration if previous attempt was INACTIVE (never approved)
-  const existingUser = await prisma.user.findUnique({ where: { email: input.email } });
-  if (existingUser && existingUser.status !== "INACTIVE") {
-    throw new Error("Email already registered");
-  }
-  if (existingUser && existingUser.status === "INACTIVE") {
-    await prisma.user.delete({ where: { id: existingUser.id } });
-  }
-
-  const hashedPassword = await bcrypt.hash(input.password, 10);
-
-  const user = await prisma.user.create({
-    data: {
-      email: input.email,
-      name: input.name,
-      role: "SELLER",
-      passwordHash: hashedPassword,
-      status: "INACTIVE",
-    },
-  });
-
-  const seller = await prisma.seller.create({
-    data: {
-      userId: user.id,
-      businessName: input.businessName,
-      businessAddress: input.businessAddress,
-      latitude: input.latitude,
-      longitude: input.longitude,
-      isApproved: false,
-    },
-  });
-
-  // Notify all admins that a new seller has registered
-  await notifyAdminsSellerRegistered(input.name, input.email, seller.id).catch(() => {});
-
-  const token = jwt.sign(
-    { userId: user.id, sellerId: seller.id, role: user.role },
-    process.env.JWT_SECRET!,
-    { expiresIn: "7d" }
-  );
-
-  return {
-    success: true,
-    message: "Seller account created successfully. Awaiting admin approval.",
-    token,
-    seller: {
-      id: seller.id,
-      name: user.name,
-      email: user.email,
-      businessName: seller.businessName,
-      businessAddress: seller.businessAddress,
-      isApproved: seller.isApproved,
-    },
-  };
 };
 
 // ---------------- SELLER LOGIN ----------------

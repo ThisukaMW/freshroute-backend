@@ -9,7 +9,7 @@ import { findCustomerByEmail, createCustomer } from "./auth.service.js";
 import { createVendor, findVendorByEmail } from "./auth.service.js";
 import { forgotPassword, resetPassword, secureAccount } from "./auth.service.js";
 import { sendPasswordChangedEmail } from "../../utils/mailer.js";
-import { loginSeller, loginBuyer, sellerSignup, type SellerSignupInput } from "./auth.service.js";
+import { loginSeller, loginBuyer } from "./auth.service.js";
 import {
   notifyAdminsBuyerRegistered,
   notifyAdminsSellerRegistered,
@@ -47,8 +47,8 @@ export const loginUserController = async (req: Request, res: Response) => {
 export const registerCustomer = async (req: Request, res: Response) => {
   try {
     const { name, email, password, phone, city, address } = req.body;
-    if (!name || !email || !password) {
-      return res.status(400).json({ message: "Name, email, and password are required" });
+    if (!name || !email || !password || !address) {
+      return res.status(400).json({ message: "Name, email, address, and password are required" });
     }
     const pwdError = validatePassword(password);
     if (pwdError) return res.status(400).json({ message: pwdError });
@@ -211,33 +211,5 @@ export const buyerLogin = async (req: Request, res: Response) => {
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Login failed";
     res.status(401).json({ message });
-  }
-};
-
-// Seller signup via the /seller/signup route; validates all required fields then creates the account
-export const sellerSignupController = async (req: Request, res: Response) => {
-  const { email, password, name, businessName, businessAddress, latitude, longitude } = req.body;
-
-  if (!email || !password || !name || !businessName) {
-    res.status(400).json({ message: "email, password, name, and businessName are required" });
-    return;
-  }
-  if (!businessAddress || latitude === undefined || longitude === undefined) {
-    res.status(400).json({ message: "businessAddress, latitude, and longitude are required" });
-    return;
-  }
-
-  try {
-    const signupInput: SellerSignupInput = {
-      email, password, name, businessName, businessAddress,
-      // Convert lat/lng from string (URL param) to float number
-      latitude: parseFloat(latitude),
-      longitude: parseFloat(longitude),
-    };
-    const result = await sellerSignup(signupInput);
-    res.status(201).json(result);
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : "Signup failed";
-    res.status(400).json({ message, success: false });
   }
 };
