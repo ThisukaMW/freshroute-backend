@@ -1,4 +1,4 @@
-/*import bcrypt from "bcrypt";
+import bcrypt from "bcrypt";
 import prisma from "../../config/database.js";
 import { createNotification } from "../notifications/notification.service.js";
 
@@ -93,4 +93,4 @@ export const deleteVendorAccount = async (userId: string) => {
   // delete related records first to avoid foreign key constraint errors
   await prisma.notification.deleteMany({ where: { userId } });
   await prisma.user.delete({ where: { id: userId } });
-};*/
+};

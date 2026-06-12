@@ -151,9 +151,9 @@ export const loginAdmin = async (req: Request, res: Response) => {
     const valid = password ? await bcrypt.compare(password, admin.passwordHash) : true;
     if (!valid) return res.status(401).json({ message: 'Invalid credentials' });
 
-    // Create a 7-day token with the admin's id and role inside it
+    // Create a 7-day token with the admin's id, role, and token version inside it
     const token = jwt.sign(
-      { userId: admin.id, role: 'admin' },
+      { userId: admin.id, role: 'admin', tokenVersion: admin.tokenVersion },
       process.env.JWT_SECRET!,
       { expiresIn: '7d' }
     );

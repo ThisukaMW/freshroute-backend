@@ -34,43 +34,61 @@ export const loginUser = async (email: string, password: string) => {
 
   // Block if account is pending admin approval
   if (user.status === "INACTIVE") {
-    const err: any = new Error("Your account is pending admin approval. You'll be notified once approved.");
+    const err: any = new Error(
+      "Your account is pending admin approval. You'll be notified once approved.",
+    );
     err.statusCode = 403;
     throw err;
   }
 
   // Block if account is suspended
   if (user.status === "SUSPENDED") {
-    const err: any = new Error("Your account has been suspended. Please contact admin for support.");
+    const err: any = new Error(
+      "Your account has been suspended. Please contact admin for support.",
+    );
     err.statusCode = 403;
     throw err;
   }
 
   // Block if account is locked for security reasons
   if (user.status === "LOCKED") {
-    const err: any = new Error("Your account has been locked for security reasons. Please contact support to recover access.");
+    const err: any = new Error(
+      "Your account has been locked for security reasons. Please contact support to recover access.",
+    );
     err.statusCode = 403;
     throw err;
   }
 
   // Extra check for sellers — seller profile must also be approved
-  if (user.role === "SELLER" && user.sellerProfile && !user.sellerProfile.isApproved) {
-    const err: any = new Error("Your seller account is pending admin approval. You'll be notified once approved.");
+  if (
+    user.role === "SELLER" &&
+    user.sellerProfile &&
+    !user.sellerProfile.isApproved
+  ) {
+    const err: any = new Error(
+      "Your seller account is pending admin approval. You'll be notified once approved.",
+    );
     err.statusCode = 403;
     throw err;
   }
 
   const role = user.role.toLowerCase();
-  const safeUser = { id: user.id, name: user.name, email: user.email, role, status: user.status };
+  const safeUser = {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    role,
+    status: user.status,
+  };
 
   // Create a JWT token with user info and token version (for session invalidation)
   const token = jwt.sign(
     {
-      userId:       safeUser.id,
-      name:         safeUser.name,
-      email:        safeUser.email,
-      role:         safeUser.role,
-      status:       safeUser.status,
+      userId: safeUser.id,
+      name: safeUser.name,
+      email: safeUser.email,
+      role: user.role,
+      status: safeUser.status,
       tokenVersion: user.tokenVersion,
     },
     process.env.JWT_SECRET!,
@@ -83,15 +101,23 @@ export const loginUser = async (email: string, password: string) => {
     profile = user.sellerProfile ?? null;
   } else if (role === "driver") {
     profile = user.driverProfile
-      ? { id: user.driverProfile.id, vehicleNumber: user.driverProfile.vehicleNumber, vehicleType: user.driverProfile.vehicleType }
+      ? {
+          id: user.driverProfile.id,
+          vehicleNumber: user.driverProfile.vehicleNumber,
+          vehicleType: user.driverProfile.vehicleType,
+        }
       : null;
   }
 
   // Tell the frontend where to redirect after login based on role
-  const redirectTo = role === "seller" ? "/seller"
-    : role === "admin" ? "/admin"
-    : role === "driver" ? "/driver"
-    : "/buyer/products";
+  const redirectTo =
+    role === "seller"
+      ? "/seller"
+      : role === "admin"
+        ? "/admin"
+        : role === "driver"
+          ? "/driver"
+          : "/buyer/products";
 
   return { token, user: safeUser, profile, redirectTo };
 };
@@ -101,7 +127,17 @@ export const loginUser = async (email: string, password: string) => {
 export const findCustomerByEmail = async (email: string) => {
   return prisma.user.findUnique({
     where: { email },
-    select: { id: true, name: true, email: true, role: true, passwordHash: true, phone: true, city: true, address: true, status: true },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      role: true,
+      passwordHash: true,
+      phone: true,
+      city: true,
+      address: true,
+      status: true,
+    },
   });
 };
 
@@ -164,7 +200,10 @@ export interface VendorSignupInput {
 
 // ---------------- FIND VENDOR BY EMAIL ----------------
 export const findVendorByEmail = async (email: string) => {
-  return prisma.user.findUnique({ where: { email }, include: { sellerProfile: true } });
+  return prisma.user.findUnique({
+    where: { email },
+    include: { sellerProfile: true },
+  });
 };
 
 // ---------------- CREATE VENDOR ----------------
@@ -206,19 +245,28 @@ export const loginSeller = async (email: string, password: string) => {
 
   // Block if not yet approved by admin
   if (user.status === "INACTIVE") {
-    throw new Error("Your account is pending admin approval. You'll be notified once approved.");
+    throw new Error(
+      "Your account is pending admin approval. You'll be notified once approved.",
+    );
   }
   if (!user.sellerProfile.isApproved) {
-    throw new Error("Your seller account is pending admin approval. You'll be notified once approved.");
+    throw new Error(
+      "Your seller account is pending admin approval. You'll be notified once approved.",
+    );
   }
 
   const isMatch = await bcrypt.compare(password, user.passwordHash);
   if (!isMatch) throw new Error("Invalid credentials");
 
   const token = jwt.sign(
-    { userId: user.id, sellerId: user.sellerProfile.id, role: user.role },
+    {
+      userId: user.id,
+      sellerId: user.sellerProfile.id,
+      role: user.role,
+      tokenVersion: user.tokenVersion,
+    },
     process.env.JWT_SECRET!,
-    { expiresIn: "7d" }
+    { expiresIn: "7d" },
   );
   return {
     token,
@@ -243,16 +291,23 @@ export const loginBuyer = async (email: string, password: string) => {
 
   // Block if not yet approved by admin
   if (user.status === "INACTIVE") {
-    throw new Error("Your account is pending admin approval. You'll be notified once approved.");
+    throw new Error(
+      "Your account is pending admin approval. You'll be notified once approved.",
+    );
   }
 
   const isMatch = await bcrypt.compare(password, user.passwordHash);
   if (!isMatch) throw new Error("Invalid credentials");
 
   const token = jwt.sign(
-    { userId: user.id, buyerId: user.buyerProfile.id, role: user.role },
+    {
+      userId: user.id,
+      buyerId: user.buyerProfile.id,
+      role: user.role,
+      tokenVersion: user.tokenVersion,
+    },
     process.env.JWT_SECRET!,
-    { expiresIn: "7d" }
+    { expiresIn: "7d" },
   );
   return {
     token,
@@ -349,7 +404,12 @@ export const getPendingUsers = async () => {
     },
     include: {
       sellerProfile: {
-        select: { id: true, businessName: true, businessAddress: true, isApproved: true },
+        select: {
+          id: true,
+          businessName: true,
+          businessAddress: true,
+          isApproved: true,
+        },
       },
     },
     orderBy: { createdAt: "desc" },
@@ -378,7 +438,10 @@ export const forgotPassword = async (email: string) => {
 // Validates the reset token and updates the password
 export const resetPassword = async (token: string, newPassword: string) => {
   const user = await prisma.user.findFirst({
-    where: { passwordResetToken: token, passwordResetExpiry: { gt: new Date() } },
+    where: {
+      passwordResetToken: token,
+      passwordResetExpiry: { gt: new Date() },
+    },
   });
 
   if (!user) throw new Error("Invalid or expired reset token");
@@ -388,7 +451,12 @@ export const resetPassword = async (token: string, newPassword: string) => {
   // Save old password hash in case user needs to revert via secureAccount
   await prisma.user.update({
     where: { id: user.id },
-    data: { prevPasswordHash: user.passwordHash, passwordHash, passwordResetToken: null, passwordResetExpiry: null },
+    data: {
+      prevPasswordHash: user.passwordHash,
+      passwordHash,
+      passwordResetToken: null,
+      passwordResetExpiry: null,
+    },
   });
 
   return { id: user.id, name: user.name, email: user.email };
@@ -416,7 +484,13 @@ export const invalidateUserSessions = async (userId: string) => {
 export const loginAdmin = async (email: string, password: string) => {
   const user = await prisma.user.findUnique({
     where: { email },
-    select: { id: true, name: true, email: true, role: true, passwordHash: true },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      role: true,
+      passwordHash: true,
+    },
   });
 
   if (!user) throw new Error("Invalid credentials");
@@ -437,7 +511,12 @@ export const loginAdmin = async (email: string, password: string) => {
 
   return {
     token,
-    user: { id: user.id, name: user.name, email: user.email, role: user.role.toLowerCase() },
+    user: {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role.toLowerCase(),
+    },
   };
 };
 
@@ -445,7 +524,14 @@ export const loginAdmin = async (email: string, password: string) => {
 export const getLockedUsers = async () => {
   return prisma.user.findMany({
     where: { status: "LOCKED" },
-    select: { id: true, name: true, email: true, role: true, city: true, updatedAt: true },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      role: true,
+      city: true,
+      updatedAt: true,
+    },
     orderBy: { updatedAt: "desc" },
   });
 };
@@ -482,7 +568,12 @@ export const recoverAccount = async (token: string, newPassword: string) => {
 
   await prisma.user.update({
     where: { id: user.id },
-    data: { passwordHash, status: "ACTIVE", passwordResetToken: null, passwordResetExpiry: null },
+    data: {
+      passwordHash,
+      status: "ACTIVE",
+      passwordResetToken: null,
+      passwordResetExpiry: null,
+    },
   });
 
   return { id: user.id, name: user.name, email: user.email };
@@ -510,7 +601,9 @@ export const secureAccount = async (email: string, googleIdToken: string) => {
 
   // Make sure the Google account matches the FreshRoute account
   if (googleEmail !== email.toLowerCase()) {
-    const err: any = new Error("The Google account does not match this FreshRoute account.");
+    const err: any = new Error(
+      "The Google account does not match this FreshRoute account.",
+    );
     err.statusCode = 403;
     throw err;
   }
@@ -519,7 +612,9 @@ export const secureAccount = async (email: string, googleIdToken: string) => {
   if (!user) return { message: "Account secured." };
 
   if (!user.prevPasswordHash) {
-    const err: any = new Error("No password snapshot found. Contact support@freshroute.lk");
+    const err: any = new Error(
+      "No password snapshot found. Contact support@freshroute.lk",
+    );
     err.statusCode = 400;
     throw err;
   }
@@ -527,12 +622,12 @@ export const secureAccount = async (email: string, googleIdToken: string) => {
   await prisma.user.update({
     where: { email },
     data: {
-      passwordHash:      user.prevPasswordHash, // revert to old password
-      prevPasswordHash:  null,
+      passwordHash: user.prevPasswordHash, // revert to old password
+      prevPasswordHash: null,
       passwordResetToken: null,
       passwordResetExpiry: null,
-      status:            "ACTIVE",
-      tokenVersion:      { increment: 1 }, // invalidate all existing sessions
+      status: "ACTIVE",
+      tokenVersion: { increment: 1 }, // invalidate all existing sessions
     },
   });
 

@@ -1,10 +1,15 @@
 import { PrismaClient } from "../src/generated/prisma/index.js";
+import { PrismaPg } from "@prisma/adapter-pg";
 import bcrypt from "bcrypt";
 import dotenv from "dotenv";
 
 dotenv.config();
 
-const prisma = new PrismaClient();
+const adapter = new PrismaPg({
+  connectionString: process.env.DATABASE_URL!,
+}) as any;
+
+const prisma = new PrismaClient({ adapter });
 
 async function main() {
   console.log("🌱 Seeding FreshRoute database...");
@@ -107,8 +112,8 @@ async function main() {
       userId: sellerUser2.id,
       businessName: "Green Valley Produce",
       businessAddress: "12 Valley Street, Colombo",
-      latitude: 6.9350,
-      longitude: 79.8500,
+      latitude: 6.935,
+      longitude: 79.85,
       isApproved: true,
     },
   });
@@ -128,8 +133,8 @@ async function main() {
       userId: sellerUser3.id,
       businessName: "City Fresh Market",
       businessAddress: "78 Market Lane, Colombo",
-      latitude: 6.9150,
-      longitude: 79.8700,
+      latitude: 6.915,
+      longitude: 79.87,
       isApproved: true,
     },
   });
@@ -149,8 +154,8 @@ async function main() {
       userId: sellerUser4.id,
       businessName: "Premium Harvest Ltd",
       businessAddress: "99 Premium Plaza, Colombo",
-      latitude: 6.9200,
-      longitude: 79.8600,
+      latitude: 6.92,
+      longitude: 79.86,
       isApproved: true,
     },
   });
@@ -213,39 +218,193 @@ async function main() {
           price: product.price,
           stock: product.stock,
         },
-      })
-    )
+      }),
+    ),
   );
 
-  await prisma.sellerProduct.create({ data: { productId: products[0]!.id, sellerId: seller2.id, price: 3.2, stock: 75 } });
-  await prisma.sellerProduct.create({ data: { productId: products[1]!.id, sellerId: seller2.id, price: 1.8, stock: 90 } });
-  await prisma.sellerProduct.create({ data: { productId: products[3]!.id, sellerId: seller2.id, price: 3.8, stock: 40 } });
+  await prisma.sellerProduct.create({
+    data: {
+      productId: products[0]!.id,
+      sellerId: seller2.id,
+      price: 3.2,
+      stock: 75,
+    },
+  });
+  await prisma.sellerProduct.create({
+    data: {
+      productId: products[1]!.id,
+      sellerId: seller2.id,
+      price: 1.8,
+      stock: 90,
+    },
+  });
+  await prisma.sellerProduct.create({
+    data: {
+      productId: products[3]!.id,
+      sellerId: seller2.id,
+      price: 3.8,
+      stock: 40,
+    },
+  });
 
-  await prisma.sellerProduct.create({ data: { productId: products[0]!.id, sellerId: seller3.id, price: 3.7, stock: 50 } });
-  await prisma.sellerProduct.create({ data: { productId: products[2]!.id, sellerId: seller3.id, price: 1.4, stock: 30 } });
-  await prisma.sellerProduct.create({ data: { productId: products[3]!.id, sellerId: seller3.id, price: 4.2, stock: 25 } });
+  await prisma.sellerProduct.create({
+    data: {
+      productId: products[0]!.id,
+      sellerId: seller3.id,
+      price: 3.7,
+      stock: 50,
+    },
+  });
+  await prisma.sellerProduct.create({
+    data: {
+      productId: products[2]!.id,
+      sellerId: seller3.id,
+      price: 1.4,
+      stock: 30,
+    },
+  });
+  await prisma.sellerProduct.create({
+    data: {
+      productId: products[3]!.id,
+      sellerId: seller3.id,
+      price: 4.2,
+      stock: 25,
+    },
+  });
 
-  await prisma.sellerProduct.create({ data: { productId: products[0]!.id, sellerId: seller4.id, price: 4.0, stock: 60 } });
-  await prisma.sellerProduct.create({ data: { productId: products[1]!.id, sellerId: seller4.id, price: 2.2, stock: 70 } });
-  await prisma.sellerProduct.create({ data: { productId: products[2]!.id, sellerId: seller4.id, price: 1.6, stock: 55 } });
-  await prisma.sellerProduct.create({ data: { productId: products[3]!.id, sellerId: seller4.id, price: 4.5, stock: 35 } });
+  await prisma.sellerProduct.create({
+    data: {
+      productId: products[0]!.id,
+      sellerId: seller4.id,
+      price: 4.0,
+      stock: 60,
+    },
+  });
+  await prisma.sellerProduct.create({
+    data: {
+      productId: products[1]!.id,
+      sellerId: seller4.id,
+      price: 2.2,
+      stock: 70,
+    },
+  });
+  await prisma.sellerProduct.create({
+    data: {
+      productId: products[2]!.id,
+      sellerId: seller4.id,
+      price: 1.6,
+      stock: 55,
+    },
+  });
+  await prisma.sellerProduct.create({
+    data: {
+      productId: products[3]!.id,
+      sellerId: seller4.id,
+      price: 4.5,
+      stock: 35,
+    },
+  });
 
   console.log("✅ SellerProduct listings created!");
 
   // ─── Buyers ───────────────────────────────────────────────────────────────────
   const buyerData = [
-    { name: "Sam Wilson",  address: "12 Oak Ave, Colombo 3",       lat: 6.914,  lng: 79.852,  amount: 30.0,  items: 3 },
-    { name: "Lisa Chen",   address: "34 Palm St, Colombo 4",       lat: 6.901,  lng: 79.861,  amount: 30.0,  items: 2 },
-    { name: "David Park",  address: "67 River Rd, Colombo 5",      lat: 6.889,  lng: 79.875,  amount: 30.0,  items: 4 },
-    { name: "Emma White",  address: "89 Hill Lane, Colombo 6",     lat: 6.876,  lng: 79.888,  amount: 30.0,  items: 2 },
-    { name: "Chris Lee",   address: "23 Beach Rd, Colombo 3",      lat: 6.921,  lng: 79.845,  amount: 30.0,  items: 3 },
-    { name: "Nadia Ali",   address: "56 Temple St, Colombo 7",     lat: 6.934,  lng: 79.857,  amount: 30.0,  items: 2 },
-    { name: "Tom Brown",   address: "78 Garden Ave, Colombo 8",    lat: 6.945,  lng: 79.862,  amount: 30.0,  items: 4 },
-    { name: "Sara Khan",   address: "90 Market St, Colombo 2",     lat: 6.956,  lng: 79.848,  amount: 30.0,  items: 3 },
-    { name: "John Doe",    address: "123 Main St, Downtown",       lat: 6.9319, lng: 79.8478, amount: 18.97, items: 3 },
-    { name: "Jane Smith",  address: "45 Lake View, Colombo 3",     lat: 6.9045, lng: 79.8636, amount: 12.98, items: 2 },
-    { name: "Bob Johnson", address: "78 Hill Top, Colombo 5",      lat: 6.8892, lng: 79.8821, amount: 24.96, items: 4 },
-    { name: "Alice Brown", address: "12 Sunset Blvd, Colombo 7",   lat: 6.9472, lng: 79.8702, amount: 22.5,  items: 2 },
+    {
+      name: "Sam Wilson",
+      address: "12 Oak Ave, Colombo 3",
+      lat: 6.914,
+      lng: 79.852,
+      amount: 30.0,
+      items: 3,
+    },
+    {
+      name: "Lisa Chen",
+      address: "34 Palm St, Colombo 4",
+      lat: 6.901,
+      lng: 79.861,
+      amount: 30.0,
+      items: 2,
+    },
+    {
+      name: "David Park",
+      address: "67 River Rd, Colombo 5",
+      lat: 6.889,
+      lng: 79.875,
+      amount: 30.0,
+      items: 4,
+    },
+    {
+      name: "Emma White",
+      address: "89 Hill Lane, Colombo 6",
+      lat: 6.876,
+      lng: 79.888,
+      amount: 30.0,
+      items: 2,
+    },
+    {
+      name: "Chris Lee",
+      address: "23 Beach Rd, Colombo 3",
+      lat: 6.921,
+      lng: 79.845,
+      amount: 30.0,
+      items: 3,
+    },
+    {
+      name: "Nadia Ali",
+      address: "56 Temple St, Colombo 7",
+      lat: 6.934,
+      lng: 79.857,
+      amount: 30.0,
+      items: 2,
+    },
+    {
+      name: "Tom Brown",
+      address: "78 Garden Ave, Colombo 8",
+      lat: 6.945,
+      lng: 79.862,
+      amount: 30.0,
+      items: 4,
+    },
+    {
+      name: "Sara Khan",
+      address: "90 Market St, Colombo 2",
+      lat: 6.956,
+      lng: 79.848,
+      amount: 30.0,
+      items: 3,
+    },
+    {
+      name: "John Doe",
+      address: "123 Main St, Downtown",
+      lat: 6.9319,
+      lng: 79.8478,
+      amount: 18.97,
+      items: 3,
+    },
+    {
+      name: "Jane Smith",
+      address: "45 Lake View, Colombo 3",
+      lat: 6.9045,
+      lng: 79.8636,
+      amount: 12.98,
+      items: 2,
+    },
+    {
+      name: "Bob Johnson",
+      address: "78 Hill Top, Colombo 5",
+      lat: 6.8892,
+      lng: 79.8821,
+      amount: 24.96,
+      items: 4,
+    },
+    {
+      name: "Alice Brown",
+      address: "12 Sunset Blvd, Colombo 7",
+      lat: 6.9472,
+      lng: 79.8702,
+      amount: 22.5,
+      items: 2,
+    },
   ];
 
   const buyers: Array<{ id: string; userId: string }> = [];
@@ -328,7 +487,9 @@ async function main() {
         buyerId: buyer.id,
         status: isCompleted ? "COMPLETED" : i === 8 ? "IN_PROGRESS" : "PENDING",
         estimatedArrival,
-        completedAt: isCompleted ? new Date(now.getTime() - (8 - i) * 13 * 60000) : null,
+        completedAt: isCompleted
+          ? new Date(now.getTime() - (8 - i) * 13 * 60000)
+          : null,
         notes: isCompleted ? null : i === 8 ? "Ring doorbell" : null,
       },
     });
@@ -345,7 +506,9 @@ async function main() {
         batchId: batch.id,
         stopId: stop.id,
         placedAt: new Date(today.getTime() - (12 - i) * 24 * 60 * 60000),
-        actualDelivery: isCompleted ? new Date(now.getTime() - (8 - i) * 13 * 60000) : null,
+        actualDelivery: isCompleted
+          ? new Date(now.getTime() - (8 - i) * 13 * 60000)
+          : null,
       },
     });
 

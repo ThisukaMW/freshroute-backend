@@ -1,4 +1,4 @@
-/*import { Router } from "express";
+import { Router } from "express";
 import { protect } from "../../middlewares/auth.middleware.js";
 import {
   updateVendorPersonalInfoController,
@@ -18,4 +18,4 @@ router.patch("/profile/business", updateBusinessInfoController);
 router.patch("/profile/password", updateVendorPasswordController);
 router.delete("/profile", deleteVendorAccountController);
 
-export default router;*/
+export default router;

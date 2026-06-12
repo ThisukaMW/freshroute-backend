@@ -159,6 +159,7 @@ export const findAdminByEmail = async (email: string) => {
       email: true,
       role: true,
       passwordHash: true,
+      tokenVersion: true,
     },
   });
 };

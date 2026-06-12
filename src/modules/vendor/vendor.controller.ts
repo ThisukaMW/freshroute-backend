@@ -1,4 +1,4 @@
-/*import type { Response } from "express";
+import type { Response } from "express";
 import type { AuthRequest } from "../../middlewares/auth.middleware.js";
 import {
   updateVendorPersonalInfo,
@@ -73,4 +73,4 @@ export const deleteVendorAccountController = async (req: AuthRequest, res: Respo
   } catch (err: any) {
     res.status(500).json({ message: err.message ?? "Failed to delete vendor account" });
   }
-};*/
+};
