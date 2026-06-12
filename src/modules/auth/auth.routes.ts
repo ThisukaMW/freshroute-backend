@@ -1,6 +1,7 @@
-import { Router } from "express";
-import { upload } from "../../middlewares/upload.middleware.js";
+// This file lists all the login, signup, and password URLs for buyers, sellers, and admins.
+// No login token is needed for any of these — they are all public.
 
+import { Router } from "express";
 import {
   loginUserController,
   registerCustomer,
@@ -9,20 +10,32 @@ import {
   resetPasswordController,
   secureAccountController,
 } from "./auth.controller.js";
+import { sellerLogin, buyerLogin } from "./auth.controller.js";
 
 const router = Router();
-// Single login for ALL roles (buyer, seller, driver, admin, field_admin)
+
+// One login that works for any role (buyer, seller, driver, admin)
 router.post("/login", loginUserController);
 
-// Register
+// Buyer registers a new account
 router.post("/customer/register", registerCustomer);
+
+// Seller (vendor) registers a new business account
 router.post("/vendor/signup", signupVendor);
 
-// Password reset
+// User asks for a password reset email
 router.post("/forgot-password", forgotPasswordController);
+
+// User sets a new password using the link from the email
 router.post("/reset-password", resetPasswordController);
 
-// Security — "wasn't me" account lock
+// User locks their account if someone else changed their password
 router.post("/secure-account", secureAccountController);
+
+// Seller-specific login
+router.post("/seller/login", sellerLogin);
+
+// Buyer-specific login
+router.post("/buyer/login", buyerLogin);
 
 export default router;

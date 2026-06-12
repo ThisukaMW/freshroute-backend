@@ -63,6 +63,10 @@ export const handleWebhookEvent = async (payload: Buffer, sig: string) => {
     const orderId = session.metadata?.orderId;
     if (!orderId) return;
 
+    // ✅ Stock already deducted when order was created
+    // Here we just finalize the payment status
+    
+    // Update order to PAID
     await prisma.order.update({
       where: { id: orderId },
       data: { status: "PAID" },
@@ -72,6 +76,8 @@ export const handleWebhookEvent = async (payload: Buffer, sig: string) => {
       where: { gatewayPaymentId: session.id },
       data: { status: "COMPLETED" },
     });
+
+    console.log(`✅ Order ${orderId} payment completed - stock already deducted`);
   }
 
   if (
@@ -82,15 +88,58 @@ export const handleWebhookEvent = async (payload: Buffer, sig: string) => {
     const orderId = session.metadata?.orderId;
     if (!orderId) return;
 
+    // ✅ PAYMENT FAILED: Need to release the reservation and restore stock
+    // Find all CONFIRMED reservations for this order
+    const reservations = await prisma.stockReservation.findMany({
+      where: {
+        orderId,
+        status: "CONFIRMED",
+      },
+    });
+
+    // Restore stock for each failed reservation
+    for (const reservation of reservations) {
+      try {
+        // Restore stock (positive quantity = add back)
+        const inventoryService = await import("../inventory/inventory.service.js");
+        await inventoryService.updateSellerProductStock({
+          productId: reservation.productId,
+          sellerId: reservation.sellerId,
+          quantity: reservation.quantity, // positive = restore
+          type: "RETURN",
+          reason: `Payment failed for order ${orderId} - restoring stock`,
+          orderId,
+        });
+
+        // Recalculate product stock
+        await inventoryService.recalculateProductStock(reservation.productId);
+      } catch (error) {
+        console.error(
+          `⚠️ Failed to restore stock after payment failure:`,
+          error instanceof Error ? error.message : error
+        );
+      }
+    }
+
+    // Update reservation status back to CANCELLED
+    await prisma.stockReservation.updateMany({
+      where: { orderId, status: "CONFIRMED" },
+      data: { status: "CANCELLED", orderId: null },
+    });
+
+    // Update order to PAYMENT_FAILED
     await prisma.order.update({
       where: { id: orderId },
       data: { status: "PAYMENT_FAILED" },
     });
 
+    // Update payment to FAILED
     await prisma.payment.updateMany({
       where: { gatewayPaymentId: session.id },
       data: { status: "FAILED" },
     });
+
+    console.log(`❌ Order ${orderId} payment failed - stock restored`);
   }
 };
 

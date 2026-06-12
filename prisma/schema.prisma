@@ -2,8 +2,9 @@
 // Database: PostgreSQL with PostGIS extension
 
 generator client {
-  provider = "prisma-client"
+  provider = "prisma-client-js"
   output   = "../src/generated/prisma"
+  
 }
 
 datasource db {
@@ -100,6 +101,19 @@ enum PaymentStatus {
   REFUNDED
 }
 
+enum DeliveryTimeSlot {
+  MORNING      // 6 AM - 12 PM
+  AFTERNOON    // 12 PM - 6 PM
+  EVENING      // 6 PM - 10 PM
+}
+
+enum ReservationStatus {
+  ACTIVE       // Soft hold in cart
+  CONFIRMED    // Hard deducted on payment
+  CANCELLED    // User removed from cart
+  EXPIRED      // Auto-released after timeout
+}
+
 // ============= USER MANAGEMENT =============
 
 model User {
@@ -112,6 +126,7 @@ model User {
   city          String?    
   address       String?
   passwordHash  String
+  prevPasswordHash  String?   // stores old hash before a reset, cleared after secure-account
 
   // Firebase Cloud Messaging token for push notifications
   fcmToken      String?
@@ -126,6 +141,9 @@ model User {
   sellerProfile Seller?
   buyerProfile  Buyer?
   notifications Notification[]
+
+  tokenVersion Int @default(0)
+
 
   @@index([email])
   @@index([role, status])
@@ -181,9 +199,17 @@ model Seller {
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
 
+  sellerProducts SellerProduct[]
+  cartItems     CartItem[]
+  reservations  StockReservation[]
+
   // Relationships
   products        Product[]
   pickupStops     Stop[]      @relation("SellerPickups")
+
+  averageRating   Float       @default(0)
+  totalRatings    Int         @default(0)
+  ratings         Rating[]
 
   @@index([isApproved])
   @@index([userId])
@@ -205,8 +231,11 @@ model Buyer {
   orders          Order[]
   deliveryStops   Stop[]      @relation("BuyerDeliveries")
   ratings         Rating[]
+  reservations    StockReservation[]
 
+  cart            Cart?
   @@index([userId])
+  
 }
 
 // ============= PRODUCTS & ORDERS =============
@@ -214,7 +243,7 @@ model Buyer {
 model Product {
   id          String          @id @default(uuid())
   sellerId    String
-  seller      Seller          @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  seller      Seller         @relation(fields: [sellerId], references: [id], onDelete: Cascade)
 
   name        String
   description String?
@@ -223,17 +252,40 @@ model Product {
   unit        String          // kg, piece, liter, etc.
   stock       Float
   imageUrl    String?
-
+  lowStock    Int      @default(10)
   status      ProductStatus   @default(PENDING_APPROVAL)
 
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
+  stockHistory    StockHistory[]
+
+  sellerProducts SellerProduct[]
+
+  ratings Rating[]
 
   // Relationships
   orderItems  OrderItem[]
 
+  cartItems   CartItem[]
+
+  reservations StockReservation[]
+
   @@index([sellerId, status])
   @@index([status])
+}
+
+model SellerProduct {
+  id        String @id @default(uuid())
+  productId String
+  sellerId  String
+
+  price Float
+  stock Float
+
+  product Product @relation(fields: [productId], references: [id])
+  seller  Seller  @relation(fields: [sellerId], references: [id])
+
+  @@unique([productId, sellerId])
 }
 
 model Order {
@@ -249,6 +301,8 @@ model Order {
   deliveryLat     Float
   deliveryLng     Float
   deliveryNotes   String?
+  deliveryTimeSlot DeliveryTimeSlot?
+  specialInstructions String?
 
   batchId         String?
   batch           Batch?          @relation(fields: [batchId], references: [id], onDelete: SetNull)
@@ -266,7 +320,8 @@ model Order {
   // Relationships
   items           OrderItem[]
   payment         Payment?
-  rating          Rating?
+  ratings         Rating[]  // ← replace with this (plural, no ?)
+  reservations    StockReservation[]
 
   @@index([buyerId, status])
   @@index([batchId])
@@ -293,6 +348,85 @@ model OrderItem {
   @@index([orderId])
   @@index([productId])
   @@index([sellerId])
+}
+// Cart and CartItems
+model Cart {
+  id        String      @id @default(uuid())
+  buyerId   String      @unique
+  buyer     Buyer       @relation(fields: [buyerId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  items     CartItem[]
+  promoCode PromoCode? @relation(fields: [promoCodeId], references: [id])
+  promoCodeId String?
+
+  expiresAt DateTime?
+}
+
+model CartItem {
+  id        String    @id @default(uuid())
+  cartId    String
+  cart      Cart      @relation(fields: [cartId], references: [id], onDelete: Cascade)
+
+  productId String
+  product   Product   @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  sellerId  String
+  seller    Seller    @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+
+  quantity  Float
+  savedForLater Boolean @default(false)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  // Allow same product from different sellers in cart
+  @@unique([cartId, productId, sellerId])
+  @@index([cartId])
+  @@index([productId, sellerId])
+  
+  // Link to stock reservation
+  reservation StockReservation?
+}
+
+model StockReservation {
+  id             String   @id @default(uuid())
+  
+  productId      String
+  product        Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  
+  sellerId       String
+  seller         Seller   @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  
+  buyerId        String
+  buyer          Buyer    @relation(fields: [buyerId], references: [id], onDelete: Cascade)
+  
+  quantity       Float    // How much is reserved
+  status         ReservationStatus @default(ACTIVE) // ACTIVE, CONFIRMED, CANCELLED, EXPIRED
+  
+  cartItemId     String?  @unique // Link to cart
+  cartItem       CartItem? @relation(fields: [cartItemId], references: [id], onDelete: Cascade)
+  
+  orderId        String?  // Link when order created
+  order          Order?   @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  
+  expiresAt      DateTime // When reservation auto-expires
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  
+  @@index([buyerId, status])
+  @@index([expiresAt]) // For cleanup job
+}
+
+model PromoCode {
+  id        String   @id @default(uuid())
+  code      String   @unique
+  discount  Float
+  active    Boolean  @default(true)
+
+  carts     Cart[] 
 }
 
 // ============= PAYMENT SYSTEM =============
@@ -501,26 +635,38 @@ model DriverSession {
 // ============= RATING SYSTEM =============
 
 model Rating {
-  id                    String   @id @default(uuid())
-  orderId               String   @unique
-  order                 Order    @relation(fields: [orderId], references: [id])
+  id String @id @default(uuid())
 
-  driverId              String
-  driver                Driver   @relation(fields: [driverId], references: [id])
+  orderId   String
+  order     Order   @relation(fields: [orderId], references: [id])
 
-  buyerId               String
-  buyer                 Buyer    @relation(fields: [buyerId], references: [id])
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
+
+  sellerId String
+  seller   Seller @relation(fields: [sellerId], references: [id])
+
+  driverId String
+  driver   Driver @relation(fields: [driverId], references: [id])
+
+  buyerId String
+  buyer   Buyer  @relation(fields: [buyerId], references: [id])
 
   rating                Int      // Overall rating (1-5)
   deliveryRating        Int?     // Delivery speed/accuracy
   productQualityRating  Int?     // Product condition on arrival
+  packagingRating       Int?
   comment               String?
   isVerifiedPurchase    Boolean  @default(false)
   isFlagged             Boolean  @default(false)
 
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
+  @@unique([orderId, productId])
+
+  @@index([sellerId])
+  @@index([productId])
   @@index([driverId])
   @@index([orderId])
   @@index([buyerId])
@@ -531,7 +677,7 @@ model Rating {
 model Notification {
   id        String   @id @default(uuid())
   userId    String
-  user      User     @relation(fields: [userId], references: [id])
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   title     String
   body      String
@@ -544,6 +690,7 @@ model Notification {
 
   @@index([userId, read])
   @@index([createdAt(sort: Desc)])
+
 }
 
 
@@ -591,3 +738,72 @@ model Truck {
   @@index([route])
 }
 
+// ============= TRUCK MANAGEMENT =============
+
+enum TruckType {
+  REFRIGERATED_VAN
+  FLATBED
+  BOX_TRUCK
+  SEMI_TRAILER
+  TANKER
+  DUMP_TRUCK
+}
+
+enum TemperatureSetting {
+  AMBIENT
+  CHILLED
+  FROZEN
+}
+
+model Truck {
+  id                      String              @id @default(uuid())
+  truckId                 String              @unique
+  operator                String?
+  truckType               TruckType
+  temperatureSetting      TemperatureSetting?
+  route                   String?
+  fuelNeeded              Float?
+  capacityLbs             Float?
+  palletCapacity          Int?
+  deliveryEfficiencyPercent Float?
+  avgDelayHours           Float?
+  isActive                Boolean             @default(true)
+
+  createdAt               DateTime            @default(now())
+  updatedAt               DateTime            @updatedAt
+
+  @@index([operator])
+  @@index([truckType])
+
+}
+// ============= INVENTORY SYSTEM =============
+
+enum StockChangeType {
+  INITIAL       // Product creation
+  PURCHASE      // Buyer purchases (decreases)
+  RESTOCK       // Seller adds stock (increases)
+  ADJUSTMENT    // Manual correction
+  RETURN        // Customer return (increases)
+}
+
+model StockHistory {
+  id              String            @id @default(uuid())
+  productId       String
+  product         Product           @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  type            StockChangeType   // What type of change
+  quantity        Float             // Amount changed (can be negative)
+  previousStock   Float             // Stock before this change
+  newStock        Float             // Stock after this change
+  
+  reason          String?           // Why changed (optional detail)
+  orderId         String?           // Related order ID if applicable
+  
+  performedBy     String?           // User ID who made change (seller or admin)
+
+  createdAt       DateTime          @default(now())
+
+  @@index([productId, createdAt(sort: Desc)])
+  @@index([type])
+  @@index([orderId])
+}

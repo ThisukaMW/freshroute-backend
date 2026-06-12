@@ -1,25 +1,63 @@
 import type { Request, Response } from 'express';
 import type { AuthRequest } from '../../middlewares/auth.middleware.js';
-import { createRating, getBuyerRatings, getDriverRatings, getRatingStats, deleteRating, editRating, flagRating } from './rating.service.js';
+import {
+  createRating,
+  checkRating,
+  getBuyerRatings,
+  getDriverRatings,
+  getSellerRatings,
+  getProductRatings,
+  getProductRatingStats,
+  getSellerProductsWithRatings,
+  getRatingStats,
+  getSellerRatingStats,
+  deleteRating,
+  editRating,
+  flagRating,
+} from './rating.service.js';
 
+// Extracts the first value from a param that may be a string or string array
 const getParam = (param: string | string[]): string =>
   Array.isArray(param) ? param[0] : param;
 
 // POST /api/v1/rating
 export const submitRating = async (req: AuthRequest, res: Response) => {
   try {
-    const { orderId, driverId, buyerId, ratings, comment } = req.body;
-    if (!orderId || !driverId || !buyerId || !ratings) {
+    const { orderId, productId, sellerId, driverId, buyerId, ratings, comment } = req.body;
+    if (!orderId || !productId || !sellerId || !driverId || !buyerId || !ratings) {
       return res.status(400).json({ message: 'Missing required fields' });
     }
-    const rating = await createRating({ orderId, driverId, buyerId, ratings, comment });
-    res.status(201).json({ message: 'Rating submitted', rating });
+    const rating = await createRating({ orderId, productId, sellerId, driverId, buyerId, ratings, comment });
+    return res.status(201).json({ message: 'Rating submitted', rating });
   } catch (err: any) {
-    res.status(400).json({ message: err.message ?? 'Failed to submit rating' });
+    return res.status(400).json({ message: err.message ?? 'Failed to submit rating' });
   }
 };
 
-// GET /api/v1/rating/my
+// GET /api/v1/rating/check?orderId=:orderId — returns { alreadyRated: boolean }
+export const checkRatingController = async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.userId;
+    if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+
+    const { orderId } = req.query;
+    if (!orderId || typeof orderId !== 'string') {
+      return res.status(400).json({ message: 'orderId query param is required' });
+    }
+
+    // Resolve the userId to a buyerId before querying the rating table
+    const db = await import('../../config/database.js').then(m => m.default);
+    const buyer = await db.buyer.findUnique({ where: { userId }, select: { id: true } });
+    if (!buyer) return res.status(404).json({ message: 'Buyer profile not found' });
+
+    const alreadyRated = await checkRating(orderId, buyer.id);
+    return res.json({ alreadyRated });
+  } catch (err) {
+    return res.status(500).json({ message: 'Failed to check rating status' });
+  }
+};
+
+// GET /api/v1/rating/my  (buyer sees their own ratings)
 export const getMyRatings = async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.userId;
@@ -31,21 +69,44 @@ export const getMyRatings = async (req: AuthRequest, res: Response) => {
     if (!buyer) return res.status(404).json({ message: 'Buyer profile not found' });
 
     const ratings = await getBuyerRatings(buyer.id);
-    res.json(ratings);
+    return res.json(ratings);
   } catch (err) {
-    res.status(500).json({ message: 'Failed to fetch ratings' });
+    return res.status(500).json({ message: 'Failed to fetch ratings' });
+  }
+};
+
+// GET /api/v1/rating/my-seller-ratings  (seller sees all their reviews + product summary)
+export const getMySellerRatings = async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.userId;
+    if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+
+    const seller = await import('../../config/database.js').then(m =>
+      m.default.seller.findUnique({ where: { userId }, select: { id: true } })
+    );
+    if (!seller) return res.status(404).json({ message: 'Seller profile not found' });
+
+    const [ratings, stats, products] = await Promise.all([
+      getSellerRatings(seller.id),
+      getSellerRatingStats(seller.id),
+      getSellerProductsWithRatings(seller.id),
+    ]);
+
+    return res.json({ ratings, stats, products });
+  } catch (err) {
+    return res.status(500).json({ message: 'Failed to fetch seller ratings' });
   }
 };
 
 // GET /api/v1/rating/driver/:driverId
 export const getDriverRatingsController = async (req: Request, res: Response) => {
   try {
-    const driverId = getParam(req.params.driverId);
+    const driverId   = getParam(req.params.driverId);
     const filterStar = req.query.star ? parseInt(req.query.star as string) : undefined;
-    const ratings = await getDriverRatings(driverId, filterStar);
-    res.json(ratings);
+    const ratings    = await getDriverRatings(driverId, filterStar);
+    return res.json(ratings);
   } catch (err) {
-    res.status(500).json({ message: 'Failed to fetch ratings' });
+    return res.status(500).json({ message: 'Failed to fetch ratings' });
   }
 };
 
@@ -53,10 +114,48 @@ export const getDriverRatingsController = async (req: Request, res: Response) =>
 export const getRatingStatsController = async (req: Request, res: Response) => {
   try {
     const driverId = getParam(req.params.driverId);
-    const stats = await getRatingStats(driverId);
-    res.json(stats);
+    const stats    = await getRatingStats(driverId);
+    return res.json(stats);
   } catch (err) {
-    res.status(500).json({ message: 'Failed to fetch stats' });
+    return res.status(500).json({ message: 'Failed to fetch stats' });
+  }
+};
+
+// GET /api/v1/rating/seller/:sellerId
+export const getSellerRatingsController = async (req: Request, res: Response) => {
+  try {
+    const sellerId   = getParam(req.params.sellerId);
+    const filterStar = req.query.star ? parseInt(req.query.star as string) : undefined;
+    const ratings    = await getSellerRatings(sellerId, filterStar);
+    return res.json(ratings);
+  } catch (err) {
+    return res.status(500).json({ message: 'Failed to fetch seller ratings' });
+  }
+};
+
+// GET /api/v1/rating/seller/:sellerId/stats
+export const getSellerRatingStatsController = async (req: Request, res: Response) => {
+  try {
+    const sellerId = getParam(req.params.sellerId);
+    const stats    = await getSellerRatingStats(sellerId);
+    return res.json(stats);
+  } catch (err) {
+    return res.status(500).json({ message: 'Failed to fetch seller stats' });
+  }
+};
+
+// GET /api/v1/rating/product/:productId
+export const getProductRatingsController = async (req: Request, res: Response) => {
+  try {
+    const productId  = getParam(req.params.productId);
+    const filterStar = req.query.star ? parseInt(req.query.star as string) : undefined;
+    const [ratings, stats] = await Promise.all([
+      getProductRatings(productId, filterStar),
+      getProductRatingStats(productId),
+    ]);
+    return res.json({ ratings, stats });
+  } catch (err) {
+    return res.status(500).json({ message: 'Failed to fetch product ratings' });
   }
 };
 
@@ -71,12 +170,12 @@ export const editRatingController = async (req: AuthRequest, res: Response) => {
     );
     if (!buyer) return res.status(404).json({ message: 'Buyer profile not found' });
 
-    const ratingId = getParam(req.params.id);
+    const ratingId             = getParam(req.params.id);
     const { ratings, comment } = req.body;
-    const updated = await editRating(ratingId, buyer.id, { ratings, comment });
-    res.json({ message: 'Rating updated', rating: updated });
+    const updated              = await editRating(ratingId, buyer.id, { ratings, comment });
+    return res.json({ message: 'Rating updated', rating: updated });
   } catch (err: any) {
-    res.status(400).json({ message: err.message ?? 'Failed to update rating' });
+    return res.status(400).json({ message: err.message ?? 'Failed to update rating' });
   }
 };
 
@@ -93,9 +192,9 @@ export const deleteRatingController = async (req: AuthRequest, res: Response) =>
 
     const ratingId = getParam(req.params.id);
     await deleteRating(ratingId, buyer.id);
-    res.json({ message: 'Rating deleted' });
+    return res.json({ message: 'Rating deleted' });
   } catch (err: any) {
-    res.status(400).json({ message: err.message ?? 'Failed to delete rating' });
+    return res.status(400).json({ message: err.message ?? 'Failed to delete rating' });
   }
 };
 
@@ -103,9 +202,9 @@ export const deleteRatingController = async (req: AuthRequest, res: Response) =>
 export const flagRatingController = async (req: Request, res: Response) => {
   try {
     const ratingId = getParam(req.params.id);
-    const result = await flagRating(ratingId);
-    res.json(result);
+    const result   = await flagRating(ratingId);
+    return res.json(result);
   } catch (err: any) {
-    res.status(400).json({ message: err.message ?? 'Failed to flag rating' });
+    return res.status(400).json({ message: err.message ?? 'Failed to flag rating' });
   }
 };

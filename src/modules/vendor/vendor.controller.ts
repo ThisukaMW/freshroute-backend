@@ -1,7 +1,14 @@
 import type { Response } from "express";
 import type { AuthRequest } from "../../middlewares/auth.middleware.js";
-import { updateVendorPersonalInfo, updateBusinessInfo, updateVendorPassword, getSellerStatus } from "./vendor.service.js";
+import {
+  updateVendorPersonalInfo,
+  updateBusinessInfo,
+  updateVendorPassword,
+  getSellerStatus,
+  deleteVendorAccount,
+} from "./vendor.service.js";
 
+// PATCH /api/v1/vendor/profile/personal
 export const updateVendorPersonalInfoController = async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.userId;
@@ -14,6 +21,7 @@ export const updateVendorPersonalInfoController = async (req: AuthRequest, res: 
   }
 };
 
+// PATCH /api/v1/vendor/profile/business
 export const updateBusinessInfoController = async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.userId;
@@ -26,13 +34,16 @@ export const updateBusinessInfoController = async (req: AuthRequest, res: Respon
   }
 };
 
+// PATCH /api/v1/vendor/profile/password
 export const updateVendorPasswordController = async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.userId;
     if (!userId) return res.status(401).json({ message: "Unauthorized" });
     const { currentPassword, newPassword } = req.body;
-    if (!currentPassword || !newPassword) return res.status(400).json({ message: "Current and new password are required" });
-    if (newPassword.length < 8) return res.status(400).json({ message: "Password must be at least 8 characters" });
+    if (!currentPassword || !newPassword)
+      return res.status(400).json({ message: "Current and new password are required" });
+    if (newPassword.length < 8)
+      return res.status(400).json({ message: "Password must be at least 8 characters" });
     await updateVendorPassword(userId, { currentPassword, newPassword });
     res.json({ message: "Password updated successfully" });
   } catch (err: any) {
@@ -40,6 +51,7 @@ export const updateVendorPasswordController = async (req: AuthRequest, res: Resp
   }
 };
 
+// GET /api/v1/vendor/profile/status
 export const getSellerStatusController = async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.userId;
@@ -48,5 +60,17 @@ export const getSellerStatusController = async (req: AuthRequest, res: Response)
     res.json(status);
   } catch (err: any) {
     res.status(500).json({ message: err.message ?? "Failed to get status" });
+  }
+};
+
+// DELETE /api/v1/vendor/profile
+export const deleteVendorAccountController = async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.userId;
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
+    await deleteVendorAccount(userId);
+    res.json({ message: "Vendor account deleted successfully" });
+  } catch (err: any) {
+    res.status(500).json({ message: err.message ?? "Failed to delete vendor account" });
   }
 };
