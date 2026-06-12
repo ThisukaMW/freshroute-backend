@@ -545,3 +545,49 @@ model Notification {
   @@index([userId, read])
   @@index([createdAt(sort: Desc)])
 }
+
+
+
+// ============= TRUCK / FLEET MANAGEMENT =============
+// Add this block to your existing schema.prisma
+
+enum TruckType {
+  REFRIGERATED_VAN
+  DRY_CARGO
+  REEFER
+}
+
+enum TiltRisk {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+model Truck {
+  id             String    @id  // User-supplied plate / truck ID (e.g. "NP1234567")
+  operator       String
+  departure      String    @default("")
+  arrival        String    @default("")
+  route          String
+  type           String    // Free-text to match frontend dropdown
+  capacityLbs    Float
+  loadedLbs      Float     @default(0)
+  palletsLoaded  Int       @default(0)
+  palletsCap     Int       @default(0)
+  cratesLoaded   Int       @default(0)
+  boxesLoaded    Int       @default(0)
+  temperature    String    @default("Ambient")
+  fuelNeeded     String
+  efficiency     Float
+  avgDelay       String
+  loadBalanceLeft  Float   @default(50)
+  loadBalanceRight Float   @default(50)
+  tiltRisk       String    @default("Low")
+
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([operator])
+  @@index([route])
+}
+

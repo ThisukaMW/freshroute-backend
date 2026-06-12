@@ -17,6 +17,7 @@ import customerRoutes from "./modules/customer/customer.routes.js";
 import vendorRoutes from "./modules/vendor/vendor.routes.js";
 import ratingRoutes from "./modules/rating/rating.routes.js";
 import notificationRoutes from "./modules/notifications/notification.routes.js";
+import truckRoutes from "./modules/truck/truck.routes.js";
 
 const app = express();
 
@@ -42,5 +43,6 @@ app.use("/api/v1/customer", customerRoutes);
 app.use("/api/v1/vendor", vendorRoutes);
 app.use("/api/v1/rating", ratingRoutes);
 app.use("/api/v1/notifications", notificationRoutes);
+app.use("/api/v1/trucks", truckRoutes);
 
 export default app;

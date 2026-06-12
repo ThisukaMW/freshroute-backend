@@ -13,7 +13,7 @@ const userSelect = {
   status: true,
 } as const;
 
-// Dependency injection: accept optional db parameter (defaults to real Prisma)
+
 export const getAllUsers = async (db: any = prisma) => {
   return db.user.findMany({
     orderBy: { createdAt: "desc" },
