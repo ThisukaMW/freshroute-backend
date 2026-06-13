@@ -11,7 +11,6 @@ import { forgotPassword, resetPassword, secureAccount } from "./auth.service.js"
 import { sendPasswordChangedEmail } from "../../utils/mailer.js";
 import { loginSeller, loginBuyer } from "./auth.service.js";
 import {
-  notifyAdminsBuyerRegistered,
   notifyAdminsSellerRegistered,
 } from "../notifications/notification.events.js";
 import prisma from "../../config/database.js";
@@ -67,21 +66,43 @@ export const registerCustomer = async (req: Request, res: Response) => {
     const customer = await createCustomer({ name, email, passwordHash, phone, city, address });
 
     // Tell all admins a new buyer just signed up
-    await notifyAdminsBuyerRegistered(customer.name, customer.email, customer.id);
+    /*await notifyAdminsBuyerRegistered(customer.name, customer.email, customer.id);
 
     return res.status(201).json({
       message: "Registration successful. Your account is pending admin approval.",
       user: customer,
+    });*/
+
+    // Buyers no longer need admin approval — auto-login immediately
+    const token = jwt.sign(
+      {
+        userId: customer.id,
+        name: customer.name,
+        email: customer.email,
+        role: "BUYER",
+        status: "ACTIVE",
+        tokenVersion: 0,
+      },
+      process.env.JWT_SECRET!,
+      { expiresIn: "7d" }
+    );
+    
+    return res.status(201).json({
+      message: "Registration successful.",
+      token,
+      user: { id: customer.id, name: customer.name, email: customer.email, role: "buyer", status: "ACTIVE" },
+      redirectTo: "/buyer/products",
     });
-  } catch (err: any) {
+
+    } catch (err: any) {
     console.error("[registerCustomer] error:", err);
     // P2002 is Prisma's code for a unique constraint violation (duplicate phone)
     if (err.code === "P2002") {
       return res.status(400).json({ message: "Phone number already exists" });
     }
     return res.status(500).json({ message: "Customer registration failed" });
-  }
-};
+    }
+   };
 
 // Register a new seller/vendor account; requires agreeing to policy and matching passwords
 export const signupVendor = async (req: Request, res: Response) => {
