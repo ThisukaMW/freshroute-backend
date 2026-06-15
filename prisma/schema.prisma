@@ -738,44 +738,6 @@ model Truck {
   @@index([route])
 }
 
-// ============= TRUCK MANAGEMENT =============
-
-enum TruckType {
-  REFRIGERATED_VAN
-  FLATBED
-  BOX_TRUCK
-  SEMI_TRAILER
-  TANKER
-  DUMP_TRUCK
-}
-
-enum TemperatureSetting {
-  AMBIENT
-  CHILLED
-  FROZEN
-}
-
-model Truck {
-  id                      String              @id @default(uuid())
-  truckId                 String              @unique
-  operator                String?
-  truckType               TruckType
-  temperatureSetting      TemperatureSetting?
-  route                   String?
-  fuelNeeded              Float?
-  capacityLbs             Float?
-  palletCapacity          Int?
-  deliveryEfficiencyPercent Float?
-  avgDelayHours           Float?
-  isActive                Boolean             @default(true)
-
-  createdAt               DateTime            @default(now())
-  updatedAt               DateTime            @updatedAt
-
-  @@index([operator])
-  @@index([truckType])
-
-}
 // ============= INVENTORY SYSTEM =============
 
 enum StockChangeType {

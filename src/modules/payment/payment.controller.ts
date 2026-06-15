@@ -69,8 +69,30 @@ export const createPayment: RequestHandler = async (req, res) => {
   }
 };
 
+// export const stripeWebhook: RequestHandler = async (req, res) => {
+//   const sig = req.headers["stripe-signature"] as string;
+
+//   if (!sig) {
+//     res.status(400).json({ message: "Missing stripe-signature header" });
+//     return;
+//   }
+
+//   try {
+//     const data = await handleWebhookEvent(req.body as Buffer, sig);
+//     res.json(data);
+//   } catch (error: unknown) {
+//     const message = error instanceof Error ? error.message : "Webhook error";
+//     res.status(400).json({ message });
+//   }
+// };
+
 export const stripeWebhook: RequestHandler = async (req, res) => {
   const sig = req.headers["stripe-signature"] as string;
+
+  console.log("📦 Body is Buffer:", Buffer.isBuffer(req.body));
+  console.log("📦 Body type:", typeof req.body);
+  console.log("🔐 Webhook secret present:", !!process.env.STRIPE_WEBHOOK_SECRET);
+  console.log("🔑 Sig present:", !!sig);
 
   if (!sig) {
     res.status(400).json({ message: "Missing stripe-signature header" });
@@ -82,6 +104,7 @@ export const stripeWebhook: RequestHandler = async (req, res) => {
     res.json(data);
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Webhook error";
+    console.error("❌ Webhook error:", message); // ← this will show the actual error
     res.status(400).json({ message });
   }
 };

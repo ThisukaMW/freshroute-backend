@@ -1,12 +1,6 @@
-// This file lists all the URL paths that admins can use.
-// It connects each URL to the right function in admin.controller.ts.
-
 import { Router } from 'express';
 import { protect, requireAdmin } from "../../middlewares/auth.middleware.js";
 import {
-  // createTruck,
-  // listTrucks,
-  // truckById,
   listAllOrders,
   loginAdmin,
   getPendingUsersController,
@@ -32,11 +26,6 @@ router.get("/users/pending", getPendingUsersController);
 // Say yes or no to a user's registration
 router.patch("/users/:userId/approve", approveUserController);
 router.patch("/users/:userId/reject", rejectUserController);
-
-// Manage trucks
-// router.post("/trucks", createTruck);
-// router.get("/trucks", listTrucks);
-// router.get("/trucks/:id", truckById);
 
 // See all orders ever placed
 router.get("/orders", listAllOrders);
