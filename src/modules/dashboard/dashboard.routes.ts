@@ -7,6 +7,7 @@ import {
   getActiveProductsMetric,
   getFulfillmentSLAMetric,
   getRecentProducts,
+  getLowStockAlertsController, 
 } from "./dashboard.controller.js";
 
 const router = Router();
@@ -56,5 +57,7 @@ router.get("/seller/fulfillment-sla", getFulfillmentSLAMetric);
  * Returns: Array of recent products with name, price, stock, status
  */
 router.get("/seller/recent-products", getRecentProducts);
+
+router.get("/seller/low-stock-alerts", getLowStockAlertsController);
 
 export default router;

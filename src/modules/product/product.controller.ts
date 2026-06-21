@@ -14,6 +14,9 @@ import {
   getSellersByProductName,
 } from "./product.service.js"
 import { log } from "console";
+import prisma from "../../config/database.js";
+import { notifySellerProductReviewed } from "../notifications/notification.events.js";
+import { notifyAdminsProductSubmitted } from "../notifications/notification.events.js";
 
 // =====================================
 // SELLER ADD PRODUCT
@@ -54,6 +57,17 @@ export const addProduct = async (req: AuthRequest, res: Response) => {
     };
 
     const product = await createProduct(req.userId!, productData);
+
+    // Look up the seller's name to include in the admin notification
+    const seller = await prisma.seller.findUnique({
+      where: { userId: req.userId! },
+      include: { user: { select: { name: true } } },
+    });
+    await notifyAdminsProductSubmitted(
+      seller?.user.name ?? "A seller",
+      productData.name,
+      product.product.id
+    );
 
     res.status(201).json({
       message: "Product submitted for admin approval",
@@ -129,7 +143,7 @@ export const getPendingProductsController = async (
   res: Response,
 ) => {
   try {
-    if (req.role !== "ADMIN") {
+    if (req.role !== "admin") {
       return res.status(403).json({
         message: "Only admins can view pending products",
       });
@@ -152,7 +166,7 @@ export const updateProductStatusController = async (
   res: Response,
 ) => {
   try {
-    if (req.role !== "ADMIN") {
+    if (req.role !== "admin") {
       return res.status(403).json({
         message: "Only admins can approve or reject products",
       });
@@ -175,6 +189,23 @@ export const updateProductStatusController = async (
     }
 
     const updatedProduct = await updateProductStatus(productId, status);
+
+    // Find the seller's userId to send them a notification
+    const product = await prisma.product.findUnique({
+      where: { id: productId },
+      include: {
+        seller: {
+          include: { user: { select: { id: true, name: true } } }
+        }
+      },
+    });
+    if (product?.seller?.user) {
+      await notifySellerProductReviewed(
+        product.seller.user.id,
+        product.name,
+        status
+      );
+    }
 
     res.json({
       message: `Product ${status.toLowerCase()} successfully`,

@@ -65,14 +65,6 @@ export const registerCustomer = async (req: Request, res: Response) => {
     const passwordHash = await bcrypt.hash(password, 10);
     const customer = await createCustomer({ name, email, passwordHash, phone, city, address });
 
-    // Tell all admins a new buyer just signed up
-    /*await notifyAdminsBuyerRegistered(customer.name, customer.email, customer.id);
-
-    return res.status(201).json({
-      message: "Registration successful. Your account is pending admin approval.",
-      user: customer,
-    });*/
-
     // Buyers no longer need admin approval — auto-login immediately
     const token = jwt.sign(
       {

@@ -270,3 +270,49 @@ export const getSellerDashboardMetrics = async (userId: string) => {
     recentProducts,
   };
 };
+
+/**
+ * Get low stock alerts for a seller
+ * Returns products where stock <= lowStock threshold
+ */
+export const getLowStockAlerts = async (userId: string) => {
+  const sellerId = await getSellerIdFromUserId(userId);
+
+  // Get all approved products for this seller with low stock
+  const alerts = await prisma.sellerProduct.findMany({
+    where: {
+      sellerId,
+      product: {
+        status: "APPROVED",
+      },
+    },
+    include: {
+      product: {
+        select: {
+          id: true,
+          name: true,
+          unit: true,
+          lowStock: true,
+        },
+      },
+    },
+    orderBy: {
+      stock: "asc", // Show lowest stock first
+    },
+  });
+
+  // Filter and format: only include items below their lowStock threshold
+  const formattedAlerts = alerts
+    .filter((sp) => sp.stock <= sp.product.lowStock)
+    .map((sp) => ({
+      id: sp.product.id,
+      name: sp.product.name,
+      unit: sp.product.unit,
+      stock: sp.stock,
+      lowStock: sp.product.lowStock,
+    }));
+
+  return {
+    alerts: formattedAlerts,
+  };
+};
