@@ -715,7 +715,7 @@ model Truck {
   operator       String
   departure      String    @default("")
   arrival        String    @default("")
-  route          String
+  route          String    @default("")
   type           String    // Free-text to match frontend dropdown
   capacityLbs    Float
   loadedLbs      Float     @default(0)
@@ -725,8 +725,8 @@ model Truck {
   boxesLoaded    Int       @default(0)
   temperature    String    @default("Ambient")
   fuelNeeded     String
-  efficiency     Float
-  avgDelay       String
+  efficiency     Float     @default(0)
+  avgDelay       String    @default("")
   loadBalanceLeft  Float   @default(50)
   loadBalanceRight Float   @default(50)
   tiltRisk       String    @default("Low")

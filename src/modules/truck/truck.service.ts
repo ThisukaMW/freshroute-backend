@@ -17,9 +17,8 @@ export const PER_PALLET_WEIGHT = 1800;
 export type CreateTruckInput = {
   id: string;
   operator: string;
-  departure?: string;
-  arrival?: string;
-  route: string;
+  departure: string;
+  arrival: string;
   type: string;
   capacityLbs: number;
   loadedLbs?: number;
@@ -29,8 +28,6 @@ export type CreateTruckInput = {
   boxesLoaded?: number;
   temperature?: string;
   fuelNeeded: string;
-  efficiency: number;
-  avgDelay: string;
   loadBalance?: { left: number; right: number };
   tiltRisk?: string;
 };
@@ -44,7 +41,6 @@ const truckSelect = {
   operator: true,
   departure: true,
   arrival: true,
-  route: true,
   type: true,
   capacityLbs: true,
   loadedLbs: true,
@@ -54,8 +50,6 @@ const truckSelect = {
   boxesLoaded: true,
   temperature: true,
   fuelNeeded: true,
-  efficiency: true,
-  avgDelay: true,
   loadBalanceLeft: true,
   loadBalanceRight: true,
   tiltRisk: true,
@@ -103,6 +97,8 @@ export const createTruck = async (data: CreateTruckInput, db: any = prisma) => {
   const truck = await db.truck.create({
     data: {
       ...rest,
+      // DB still has route column (not null default "") — satisfy it silently
+      route: `${data.departure} → ${data.arrival}`,
       loadBalanceLeft: loadBalance?.left ?? 50,
       loadBalanceRight: loadBalance?.right ?? 50,
     },
@@ -118,8 +114,16 @@ export const updateTruck = async (id: string, data: UpdateTruckInput, db: any = 
 
   const { loadBalance, ...rest } = data;
   const updateData: Record<string, unknown> = { ...rest };
+
+  // Keep the legacy route column in sync if departure/arrival change
+  if (data.departure || data.arrival) {
+    const departure = data.departure ?? existing.departure;
+    const arrival   = data.arrival   ?? existing.arrival;
+    updateData.route = `${departure} → ${arrival}`;
+  }
+
   if (loadBalance) {
-    updateData.loadBalanceLeft = loadBalance.left;
+    updateData.loadBalanceLeft  = loadBalance.left;
     updateData.loadBalanceRight = loadBalance.right;
   }
 
