@@ -7,6 +7,7 @@ import {
   getActiveProducts,
   getFulfillmentSLA,
   getRecentCatalogUpdates,
+  getLowStockAlerts,
 } from "./dashboard.service.js";
 
 /**
@@ -138,6 +139,28 @@ export const getRecentProducts = async (
     res.json(data);
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Error fetching recent products";
+    res.status(500).json({ message });
+  }
+};
+
+/**
+ * GET /api/v1/dashboard/seller/low-stock-alerts
+ * Get low stock alerts for a seller
+ */
+export const getLowStockAlertsController = async (
+  req: AuthRequest,
+  res: Response
+): Promise<void> => {
+  try {
+    if (!req.userId) {
+      res.status(401).json({ message: "Unauthorized" });
+      return;
+    }
+
+    const data = await getLowStockAlerts(req.userId);
+    res.json(data);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Error fetching low stock alerts";
     res.status(500).json({ message });
   }
 };

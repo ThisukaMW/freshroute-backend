@@ -92,39 +92,83 @@ export const notifyAdminsSellerRegistered = async (
 };
 
 // ─────────────────────────────────────────────
-// 👑 ADMIN: Notifies all admins when a new buyer registers and needs approval
+// 📦 ADMIN: Notifies all admins when a seller submits a new product for approval
 // ─────────────────────────────────────────────
-export const notifyAdminsBuyerRegistered = async (
-  buyerName: string,
-  buyerEmail: string,
-  buyerUserId: string
+export const notifyAdminsProductSubmitted = async (
+  sellerName: string,
+  productName: string,
+  productId: string
 ) => {
   try {
-    // Find all admin users in the database
     const admins = await prisma.user.findMany({
       where: { role: "ADMIN" },
       select: { id: true },
     });
+    if (admins.length === 0) return;
 
-    if (admins.length === 0) {
-      console.warn("[notifyAdminsBuyerRegistered] no admin users found in DB");
-      return;
-    }
-
-    console.log(`[notifyAdminsBuyerRegistered] notifying ${admins.length} admin(s)`);
-
-    // Send notification to every admin at the same time
     await Promise.allSettled(
       admins.map((admin) =>
         createNotification({
           userId: admin.id,
-          title: "👤 New Buyer Registered",
-          body: `${buyerName} (${buyerEmail}) just created an account and is awaiting approval.`,
-          data: { type: "BUYER_REGISTRATION", buyerUserId, buyerName, buyerEmail },
+          title: "📦 New Product Pending Approval",
+          body: `${sellerName} submitted "${productName}" for review.`,
+          data: { type: "PRODUCT_SUBMITTED", productId, sellerName, productName },
         })
       )
     );
   } catch (err) {
-    console.error("[notifyAdminsBuyerRegistered] failed:", err);
+    console.error("[notifyAdminsProductSubmitted] failed:", err);
+  }
+};
+
+// ─────────────────────────────────────────────
+// 🏪 SELLER: Notifies the seller when their product is approved or rejected
+// ─────────────────────────────────────────────
+export const notifySellerProductReviewed = async (
+  sellerUserId: string,
+  productName: string,
+  status: "APPROVED" | "REJECTED",
+  reason?: string
+) => {
+  try {
+    const isApproved = status === "APPROVED";
+    await createNotification({
+      userId: sellerUserId,
+      title: isApproved ? "✅ Product Approved!" : "❌ Product Rejected",
+      body: isApproved
+        ? `Your product "${productName}" has been approved and is now live.`
+        : `Your product "${productName}" was rejected.${reason ? ` Reason: ${reason}` : ""}`,
+      data: { type: "PRODUCT_REVIEWED", productName, status },
+    });
+  } catch (err) {
+    console.error("[notifySellerProductReviewed] failed:", err);
+  }
+};
+
+// ─────────────────────────────────────────────
+// 🚨 SELLER: Notifies the seller when a product hits low stock
+// ─────────────────────────────────────────────
+export const notifySellerLowStock = async (
+  sellerUserId: string,
+  productName: string,
+  currentStock: number,
+  unit: string,
+  lowStockThreshold: number
+) => {
+  try {
+    await createNotification({
+      userId: sellerUserId,
+      title: "⚠️ Low Stock Alert",
+      body: `${productName} is running low: ${currentStock} ${unit} remaining. Reorder at ${lowStockThreshold} ${unit}.`,
+      data: { 
+        type: "LOW_STOCK", 
+        productName, 
+        currentStock: String(currentStock),
+        unit,
+        lowStockThreshold: String(lowStockThreshold)
+      },
+    });
+  } catch (err) {
+    console.error("[notifySellerLowStock] failed:", err);
   }
 };

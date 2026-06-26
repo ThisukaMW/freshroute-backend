@@ -421,6 +421,16 @@ export const restockProduct = async (
   // STEP 2: Recalculate Product.stock as SUM of all seller products
   await recalculateProductStock(productId);
 
+  // Check if stock went below low-stock threshold → trigger notification
+  const product = await prisma.product.findUnique({
+    where: { id: productId },
+    select: { lowStock: true },
+  });
+
+  if (product && updatedSellerProduct.stock <= product.lowStock) {
+    await createLowStockNotification(sellerId, productId, updatedSellerProduct.stock);
+  }
+
   return updatedSellerProduct;
 };
 
@@ -472,28 +482,34 @@ async function createLowStockNotification(
   productId: string,
   currentStock: number
 ) {
-  const seller = await prisma.seller.findUnique({
-    where: { id: sellerId },
-    include: { user: true },
-  });
+  try {
+    // Import at the top of the file
+    const { notifySellerLowStock } = await import(
+      "../notifications/notification.events.js"
+    );
 
-  if (!seller) return;
+    const seller = await prisma.seller.findUnique({
+      where: { id: sellerId },
+      select: { userId: true },
+    });
 
-  const product = await prisma.product.findUnique({
-    where: { id: productId },
-  });
+    if (!seller) return;
 
-  await prisma.notification.create({
-    data: {
-      userId: seller.userId,
-      title: "⚠️ Low Stock Alert",
-      body: `${product?.name} is running low (${currentStock}/${product?.lowStock} remaining)`,
-      data: {
-        type: "LOW_STOCK",
-        productId,
-        currentStock,
-        lowStockThreshold: product?.lowStock,
-      },
-    },
-  });
+    const product = await prisma.product.findUnique({
+      where: { id: productId },
+      select: { name: true, unit: true, lowStock: true },
+    });
+
+    if (!product) return;
+
+    await notifySellerLowStock(
+      seller.userId,
+      product.name,
+      currentStock,
+      product.unit,
+      product.lowStock
+    );
+  } catch (err) {
+    console.error("[createLowStockNotification] failed:", err);
+  }
 }

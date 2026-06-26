@@ -6,6 +6,7 @@
  */
 
 import prisma from "../../config/database.js";
+import { notifySellerLowStock } from "../notifications/notification.events.js";
 
 export type CreateProductInput = {
   name: string;
@@ -33,7 +34,7 @@ export type UpdateProductInput = {
 // ✅ Creates Product + SellerProduct entry
 // ⏳ Status: PENDING_APPROVAL until admin approves
 // 📦 Product.stock starts at 0 (will be calculated from SellerProduct)
-export const createProduct = async (
+/*export const createProduct = async (
   userId: string,
   data: CreateProductInput
 ) => {
@@ -72,6 +73,73 @@ export const createProduct = async (
     product,
     sellerProduct,
     message: "Product created successfully. Awaiting admin approval.",
+  };
+};*/
+
+export const createProduct = async (
+  userId: string,
+  data: CreateProductInput
+) => {
+  const seller = await prisma.seller.findUnique({
+    where: { userId },
+  });
+  if (!seller) throw new Error("Seller profile not found");
+
+  // ✅ Check if this product already exists (by name + category)
+  let product = await prisma.product.findFirst({
+    where: {
+      name: { equals: data.name, mode: "insensitive" },
+      category: { equals: data.category, mode: "insensitive" },
+    },
+  });
+
+  if (!product) {
+    // First time this product is being listed — create catalog entry
+    product = await prisma.product.create({
+      data: {
+        name: data.name,
+        description: data.description ?? null,
+        category: data.category,
+        price: data.price,
+        unit: data.unit,
+        stock: 0,
+        imageUrl: data.imageUrl ?? null,
+        status: "PENDING_APPROVAL",
+        seller: { connect: { id: seller.id } },
+      },
+    });
+  } else {
+    // ✅ Make sure this seller doesn't already have a listing for this product
+    const existingSellerProduct = await prisma.sellerProduct.findUnique({
+      where: {
+        productId_sellerId: {
+          productId: product.id,
+          sellerId: seller.id,
+        },
+      },
+    });
+    if (existingSellerProduct) {
+      throw new Error("You already have a listing for this product");
+    }
+  }
+
+  // Create SellerProduct entry (always)
+  const sellerProduct = await prisma.sellerProduct.create({
+    data: {
+      productId: product.id,
+      sellerId: seller.id,
+      price: data.price,
+      stock: data.stock,
+    },
+  });
+
+  return {
+    product,
+    sellerProduct,
+    message:
+      product.status === "PENDING_APPROVAL"
+        ? "Product created successfully. Awaiting admin approval."
+        : "Your listing has been added to this product.",
   };
 };
 
@@ -253,6 +321,37 @@ export const updateProduct = async (
     "../inventory/inventory.service.js"
   );
   const finalProduct = await recalculateProductStock(productId);
+
+  // ✅ Check if stock went below low-stock threshold → trigger notification
+  // ✅ Check if stock went below low-stock threshold → trigger notification
+  // ✅ Check if stock went below low-stock threshold → trigger notification
+  // ✅ Check if stock went below low-stock threshold → trigger notification
+  // ✅ Check if THIS SELLER's stock went below threshold
+  const sellerProductForNotif = await prisma.sellerProduct.findUnique({
+    where: {
+      productId_sellerId: {
+        productId,
+        sellerId: seller.id,
+      },
+    },
+  });
+
+  console.log("🔍 [updateProduct] Seller stock check:", {
+    sellerStock: sellerProductForNotif?.stock,
+    lowStockThreshold: finalProduct.lowStock,
+    shouldNotify: sellerProductForNotif && sellerProductForNotif.stock <= finalProduct.lowStock && sellerProductForNotif.stock > 0,
+  });
+
+  if (sellerProductForNotif && sellerProductForNotif.stock <= finalProduct.lowStock && sellerProductForNotif.stock > 0) {
+    console.log("⚠️ Triggering low stock notification");
+    await notifySellerLowStock(
+      seller.userId,
+      finalProduct.name,
+      sellerProductForNotif.stock,
+      finalProduct.unit,
+      finalProduct.lowStock
+    );
+  }
 
   return {
     product: finalProduct,
