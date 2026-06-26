@@ -1,5 +1,5 @@
 import prisma from "../../config/database.js";
-import { messaging } from "../../config/firebase.config.js";
+import { getMessaging } from "../../config/firebase.config.js";
 
 // ---------------- CREATE NOTIFICATION ----------------
 // Saves notification to DB and sends FCM push if user has a token
@@ -28,7 +28,7 @@ export const createNotification = async (data: {
   if (user?.fcmToken) {
     try {
       // Send the push notification to the user's browser via Firebase
-      await messaging.send({
+      await getMessaging().send({
         token: user.fcmToken,
         notification: {
           title: data.title,

@@ -343,7 +343,18 @@
 import Stripe from "stripe";
 import prisma from "../../config/database.js";
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string);
+let stripeInstance: Stripe | null = null;
+
+function getStripe(): Stripe {
+  if (!stripeInstance) {
+    const apiKey = process.env.STRIPE_SECRET_KEY;
+    if (!apiKey) {
+      throw new Error("STRIPE_SECRET_KEY environment variable is not set");
+    }
+    stripeInstance = new Stripe(apiKey);
+  }
+  return stripeInstance;
+}
 
 export type PaymentCurrency = "usd" | "lkr";
 
@@ -357,7 +368,7 @@ export const createPaymentIntent = async (orderId: string, currency: string) => 
   const order = await prisma.order.findUnique({ where: { id: orderId } });
   if (!order) throw new Error("Order not found");
 
-  const session = await stripe.checkout.sessions.create({
+  const session = await getStripe().checkout.sessions.create({
     payment_method_types: ["card"],
     line_items: [
       {
@@ -394,7 +405,7 @@ export const createPaymentIntent = async (orderId: string, currency: string) => 
 };
 
 export const handleWebhookEvent = async (payload: Buffer, sig: string) => {
-  const event = stripe.webhooks.constructEvent(
+  const event = getStripe().webhooks.constructEvent(
     payload,
     sig,
     process.env.STRIPE_WEBHOOK_SECRET!

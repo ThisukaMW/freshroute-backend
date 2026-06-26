@@ -1,5 +1,6 @@
-// This file handles all login and signup requests from the frontend.
-// It checks the data, calls the right service function, and sends back the result.
+// auth.controller.ts
+// Handles all login and signup requests from the frontend.
+// Checks data, validates inputs, calls the right service, and sends back the result.
 
 import type { Request, Response } from "express";
 import { loginUser } from "./auth.service.js";
@@ -10,12 +11,12 @@ import { createVendor, findVendorByEmail } from "./auth.service.js";
 import { forgotPassword, resetPassword, secureAccount } from "./auth.service.js";
 import { sendPasswordChangedEmail } from "../../utils/mailer.js";
 import { loginSeller, loginBuyer } from "./auth.service.js";
-import {
-  notifyAdminsSellerRegistered,
-} from "../notifications/notification.events.js";
+import { notifyAdminsSellerRegistered } from "../notifications/notification.events.js";
 import prisma from "../../config/database.js";
 
-// Check that a password has 8+ chars, one uppercase, one number, and one special character
+// ─── Validation helpers ────────────────────────────────────────────
+
+/** Password must have 8+ chars, one uppercase, one number, one special character. */
 const validatePassword = (pwd: string): string | null => {
   if (pwd.length < 8)            return "Password must be at least 8 characters";
   if (!/[A-Z]/.test(pwd))        return "Password must contain at least 1 uppercase letter";
@@ -24,7 +25,40 @@ const validatePassword = (pwd: string): string | null => {
   return null;
 };
 
-// Single login that works for all roles; returns a token and user info on success
+/** Personal name (owner, customer) must contain only letters and spaces. */
+const validatePersonName = (name: string): string | null => {
+  if (!name || !name.trim()) return "Name is required";
+  if (!/^[A-Za-z\s]+$/.test(name.trim())) return "Name can only contain letters and spaces";
+  return null;
+};
+
+/**
+ * Sri Lankan phone validation.
+ * Accepts: +94XXXXXXXXX  |  94XXXXXXXXX  |  9-digit local part
+ * Phone is always optional — returns null (valid) when the value is empty/undefined.
+ */
+const validatePhone = (phone: string | undefined): string | null => {
+  if (!phone || !phone.trim()) return null;  // optional field
+  const n = phone.replace(/\s/g, "");
+  if (/^\+94\d{9}$/.test(n)) return null;
+  if (/^94\d{9}$/.test(n))   return null;
+  if (/^\d{9}$/.test(n))     return null;
+  return "Phone number must be a valid Sri Lankan number (e.g. +94771234567 or 771234567)";
+};
+
+/** Normalise phone to +94XXXXXXXXX before saving. */
+const normalizePhone = (phone: string | undefined): string | undefined => {
+  if (!phone || !phone.trim()) return undefined;
+  const n = phone.replace(/\s/g, "");
+  if (n.startsWith("+94")) return n;
+  if (n.startsWith("94") && n.length === 11) return `+${n}`;
+  if (/^\d{9}$/.test(n)) return `+94${n}`;
+  return undefined;
+};
+
+// ─── Controllers ──────────────────────────────────────────────────
+
+/** Single login that works for all roles; returns a token and user info on success. */
 export const loginUserController = async (req: Request, res: Response) => {
   try {
     const { email, password } = req.body;
@@ -33,7 +67,6 @@ export const loginUserController = async (req: Request, res: Response) => {
     }
     const result = await loginUser(email, password);
     const response: Record<string, any> = { token: result.token, user: result.user };
-    // Only include profile in the response if the service returned one
     if (result.profile !== null) response.profile = result.profile;
     return res.json(response);
   } catch (err: any) {
@@ -42,61 +75,76 @@ export const loginUserController = async (req: Request, res: Response) => {
   }
 };
 
-// Register a new buyer account; deletes old INACTIVE account with same email to allow re-register
+/** Register a new buyer account. Deletes old INACTIVE account with same email to allow re-register. */
 export const registerCustomer = async (req: Request, res: Response) => {
   try {
     const { name, email, password, phone, city, address } = req.body;
+
+    // Required fields
     if (!name || !email || !password || !address) {
       return res.status(400).json({ message: "Name, email, address, and password are required" });
     }
+
+    // Name validation (letters and spaces only)
+    const nameError = validatePersonName(name);
+    if (nameError) return res.status(400).json({ message: nameError });
+
+    // Password validation
     const pwdError = validatePassword(password);
     if (pwdError) return res.status(400).json({ message: pwdError });
 
+    // Phone validation (optional)
+    const phoneError = validatePhone(phone);
+    if (phoneError) return res.status(400).json({ message: phoneError });
+
     const existing = await findCustomerByEmail(email);
-    // Block re-registration if the account is already active/suspended/locked
     if (existing && existing.status !== "INACTIVE") {
       return res.status(409).json({ message: "Email already exists" });
     }
-    // Delete the old pending account so the user can start fresh
     if (existing && existing.status === "INACTIVE") {
       await prisma.user.delete({ where: { id: existing.id } });
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
-    const customer = await createCustomer({ name, email, passwordHash, phone, city, address });
+    const customer = await createCustomer({
+      name,
+      email,
+      passwordHash,
+      phone:   normalizePhone(phone),
+      city,
+      address,
+    });
 
-    // Buyers no longer need admin approval — auto-login immediately
+    // Buyers auto-login — no admin approval needed
     const token = jwt.sign(
       {
-        userId: customer.id,
-        name: customer.name,
-        email: customer.email,
-        role: "BUYER",
-        status: "ACTIVE",
+        userId:       customer.id,
+        name:         customer.name,
+        email:        customer.email,
+        role:         "BUYER",
+        status:       "ACTIVE",
         tokenVersion: 0,
       },
       process.env.JWT_SECRET!,
       { expiresIn: "7d" }
     );
-    
+
     return res.status(201).json({
-      message: "Registration successful.",
+      message:    "Registration successful.",
       token,
-      user: { id: customer.id, name: customer.name, email: customer.email, role: "buyer", status: "ACTIVE" },
+      user:       { id: customer.id, name: customer.name, email: customer.email, role: "buyer", status: "ACTIVE" },
       redirectTo: "/buyer/products",
     });
-
-    } catch (err: any) {
+  } catch (err: any) {
     console.error("[registerCustomer] error:", err);
-    // P2002 is Prisma's code for a unique constraint violation (duplicate phone)
     if (err.code === "P2002") {
       return res.status(400).json({ message: "Phone number already exists" });
     }
     return res.status(500).json({ message: "Customer registration failed" });
-    }
-   };
+  }
+};
 
-// Register a new seller/vendor account; requires agreeing to policy and matching passwords
+/** Register a new seller/vendor account. Requires agreeing to policy and matching passwords. */
 export const signupVendor = async (req: Request, res: Response) => {
   try {
     const {
@@ -104,20 +152,37 @@ export const signupVendor = async (req: Request, res: Response) => {
       businessAddress, city, latitude, longitude, agreedToPolicy,
     } = req.body;
 
+    // Required fields
     if (!businessName || !ownerName || !email || !password || !confirmPassword || !businessAddress || !city) {
       return res.status(400).json({ message: "Missing required fields" });
     }
+
+    // Business name: no character restriction (can have &, Co., etc.)
+    if (!businessName.trim()) {
+      return res.status(400).json({ message: "Business name is required" });
+    }
+
+    // Owner name: letters and spaces only
+    const nameError = validatePersonName(ownerName);
+    if (nameError) return res.status(400).json({ message: nameError });
+
+    // Password
     const pwdError = validatePassword(password);
     if (pwdError) return res.status(400).json({ message: pwdError });
+
     if (password !== confirmPassword) {
       return res.status(400).json({ message: "Passwords do not match" });
     }
+
+    // Phone (optional)
+    const phoneError = validatePhone(phone);
+    if (phoneError) return res.status(400).json({ message: phoneError });
+
     if (!agreedToPolicy) {
       return res.status(400).json({ message: "You must agree to vendor policy" });
     }
 
     const existing = await findVendorByEmail(email);
-    // Block re-registration if not in INACTIVE state
     if (existing && existing.status !== "INACTIVE") {
       return res.status(409).json({ message: "Vendor already exists" });
     }
@@ -126,17 +191,22 @@ export const signupVendor = async (req: Request, res: Response) => {
     }
 
     const vendor = await createVendor({
-      businessName, ownerName, email, phone, password, businessAddress, city,
-      latitude: latitude ? Number(latitude) : undefined,
+      businessName,
+      ownerName,
+      email,
+      phone:     normalizePhone(phone),
+      password,
+      businessAddress,
+      city,
+      latitude:  latitude  ? Number(latitude)  : undefined,
       longitude: longitude ? Number(longitude) : undefined,
     });
 
-    // Tell all admins a new seller just signed up
     await notifyAdminsSellerRegistered(vendor.name, vendor.email, vendor.id);
 
     return res.status(201).json({
       message: "Vendor registration successful. Your account is pending admin approval.",
-      user: { id: vendor.id, name: vendor.name, email: vendor.email, role: "seller", status: "INACTIVE" },
+      user:    { id: vendor.id, name: vendor.name, email: vendor.email, role: "seller", status: "INACTIVE" },
     });
   } catch (err: any) {
     console.error("[signupVendor] error:", err);
@@ -147,13 +217,13 @@ export const signupVendor = async (req: Request, res: Response) => {
   }
 };
 
-// Send a password reset email if the given email exists in the system
+/** Send a password reset email if the given email exists in the system. */
 export const forgotPasswordController = async (req: Request, res: Response) => {
   const { email } = req.body;
   if (!email) return res.status(400).json({ message: "Email is required" });
   try {
     await forgotPassword(email);
-    // Always say the same thing whether the email exists or not — prevents email fishing
+    // Always return the same message — prevents email enumeration attacks
     return res.json({ message: "If that email exists, a reset link has been sent." });
   } catch (err) {
     console.error(err);
@@ -161,7 +231,7 @@ export const forgotPasswordController = async (req: Request, res: Response) => {
   }
 };
 
-// Use the reset token to save a new password, then email the user a security notice
+/** Use the reset token to save a new password, then email the user a security notice. */
 export const resetPasswordController = async (req: Request, res: Response) => {
   const { token, newPassword } = req.body;
   if (!token || !newPassword) {
@@ -171,7 +241,6 @@ export const resetPasswordController = async (req: Request, res: Response) => {
   if (pwdError) return res.status(400).json({ message: pwdError });
   try {
     const user = await resetPassword(token, newPassword);
-    // Send the "your password changed" email without waiting — failure won't break the response
     sendPasswordChangedEmail(user.email, user.name).catch((err) =>
       console.error("[email] Failed to send password changed email:", err)
     );
@@ -181,7 +250,7 @@ export const resetPasswordController = async (req: Request, res: Response) => {
   }
 };
 
-// Use a Google ID token to verify the user, then roll back their password to the previous one
+/** Use a Google ID token to verify the user, then roll back their password to the previous one. */
 export const secureAccountController = async (req: Request, res: Response) => {
   const { email, googleIdToken } = req.body;
   if (!email || !googleIdToken) {
@@ -195,7 +264,7 @@ export const secureAccountController = async (req: Request, res: Response) => {
   }
 };
 
-// Seller-specific login — checks credentials and returns a token with seller profile info
+/** Seller-specific login — checks credentials and returns a token with seller profile info. */
 export const sellerLogin = async (req: Request, res: Response) => {
   const { email, password } = req.body;
   if (!email || !password) {
@@ -211,7 +280,7 @@ export const sellerLogin = async (req: Request, res: Response) => {
   }
 };
 
-// Buyer-specific login — checks credentials and returns a token with buyer profile info
+/** Buyer-specific login — checks credentials and returns a token with buyer profile info. */
 export const buyerLogin = async (req: Request, res: Response) => {
   const { email, password } = req.body;
   if (!email || !password) {
