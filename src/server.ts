@@ -8,6 +8,10 @@ import { startRouteRerouteWorker } from "./modules/planner/route-reroute.worker.
 const PORT = process.env.PORT || 5000;
 const HOST = process.env.HOST || "0.0.0.0";
 const isProduction = process.env.NODE_ENV === "production";
+const socketPingIntervalMs =
+  Number.parseInt(process.env.SOCKET_PING_INTERVAL_MS ?? "25000", 10) || 25000;
+const socketPingTimeoutMs =
+  Number.parseInt(process.env.SOCKET_PING_TIMEOUT_MS ?? "60000", 10) || 60000;
 
 // Create HTTP server
 const httpServer = createServer(app);
@@ -15,6 +19,8 @@ const httpServer = createServer(app);
 // Initialize Socket.io
 const io = new Server(httpServer, {
   allowEIO3: false,
+  pingInterval: socketPingIntervalMs,
+  pingTimeout: socketPingTimeoutMs,
   cors: {
     origin: isProduction
       ? (process.env.CORS_ORIGINS ?? process.env.CLIENT_URL ?? false)
@@ -78,4 +84,7 @@ httpServer.on("error", (error: NodeJS.ErrnoException) => {
 // Start server
 httpServer.listen(Number(PORT), HOST, () => {
   console.log(`Server running on http://${HOST}:${PORT}`);
+  console.log(
+    `[socket] heartbeat config | pingIntervalMs=${socketPingIntervalMs} pingTimeoutMs=${socketPingTimeoutMs}`
+  );
 });

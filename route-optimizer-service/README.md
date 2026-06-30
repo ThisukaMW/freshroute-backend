@@ -8,7 +8,11 @@ Standalone FastAPI service that solves batch routes with OR-Tools.
 python -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
+# Development (auto-reload, single worker — fine for testing):
 uvicorn app.main:app --host 0.0.0.0 --port 8001 --reload
+
+# Production (4 parallel workers — needed for 15+ concurrent batches):
+uvicorn app.main:app --host 0.0.0.0 --port 8001 --workers 4
 ```
 
 ## API

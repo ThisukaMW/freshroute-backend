@@ -116,9 +116,18 @@ export const setupSocketHandlers = (io: Server) => {
         error instanceof Error ? error.message : "An unexpected error occurred";
       const payload: SocketErrorPayload = { event, message };
       console.error(
-        `[socket] ${event} rejected | driverId=${driverId} message=${message}`
+        `[socket] ${event} rejected | socketId=${socket.id} driverId=${driverId} message=${message}`
       );
       socket.emit("error", payload);
+
+      if (event === "driver:location:update") {
+        socket.emit("driver:location:rejected", {
+          event,
+          message,
+          driverId,
+          serverTimestamp: new Date().toISOString(),
+        });
+      }
     };
 
     const ensureString = (value: unknown, fieldName: string) => {
@@ -166,7 +175,7 @@ export const setupSocketHandlers = (io: Server) => {
         ensureNumber(payload?.longitude, "longitude");
 
         console.log(
-          `[socket] location update requested | driverId=${driverId} sessionId=${payload.sessionId} lat=${payload.latitude} lng=${payload.longitude}`
+          `[socket] location update requested | socketId=${socket.id} driverId=${driverId} sessionId=${payload.sessionId} lat=${payload.latitude} lng=${payload.longitude}`
         );
 
         const location = await saveLocation(driverId, payload);
@@ -175,7 +184,7 @@ export const setupSocketHandlers = (io: Server) => {
         const serverTimestamp = new Date().toISOString();
 
         console.log(
-          `[socket] location accepted | driverId=${driverId} sessionId=${payload.sessionId} locationId=${location.id}`
+          `[socket] location accepted | socketId=${socket.id} driverId=${driverId} sessionId=${payload.sessionId} locationId=${location.id}`
         );
 
         socket.emit("driver:location:accepted", {
@@ -277,13 +286,15 @@ export const setupSocketHandlers = (io: Server) => {
           select: { id: true },
         });
 
-        await prisma.driverSession.updateMany({
-          where: { driverId, endedAt: null },
-          data: { endedAt: new Date() },
-        });
-
         for (const session of openSessions) {
+          await endSession(driverId, session.id);
           sequenceBySession.delete(session.id);
+        }
+
+        if (openSessions.length > 0) {
+          console.log(
+            `[socket] auto-closed ${openSessions.length} session(s) | driverId=${driverId}`
+          );
         }
       } catch {
         // Non-critical — log silently, don't crash the server

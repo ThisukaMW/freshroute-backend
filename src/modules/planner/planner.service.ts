@@ -877,4 +877,67 @@ export async function rerouteActiveRoutesOnce() {
   return results;
 }
 
-export default { planBatch, dispatchRoute, rerouteActiveRoutesOnce };
+export async function planManyBatches(
+  batchIds: string[],
+  options: PlannerBatchPlanOptions = {}
+) {
+  if (batchIds.length === 0) throw new Error("batchIds must not be empty");
+
+  const results = await Promise.allSettled(
+    batchIds.map((id) => planBatch(id, options))
+  );
+
+  return batchIds.map((id, index) => {
+    const result = results[index]!;
+    if (result.status === "fulfilled") {
+      return { batchId: id, success: true, ...result.value };
+    }
+    return {
+      batchId: id,
+      success: false,
+      error: (result.reason as Error)?.message ?? String(result.reason),
+    };
+  });
+}
+
+export async function autoDispatchRoute(routeId: string) {
+  const route = await prisma.route.findUnique({
+    where: { id: routeId },
+    include: { stops: { orderBy: { sequenceOrder: "asc" }, take: 1 } },
+  });
+
+  if (!route) throw new Error("Route not found");
+  if (!["PLANNED", "ASSIGNED"].includes(route.status)) {
+    throw new Error(`Route cannot be auto-dispatched from status ${route.status}`);
+  }
+
+  const firstStop = route.stops[0];
+  const refLat = firstStop?.latitude ?? 13.0707;
+  const refLng = firstStop?.longitude ?? 80.2507;
+
+  const availableDrivers = await prisma.driver.findMany({
+    where: { isAvailable: true, isActive: true, routes: { none: { status: { in: ["STARTED", "IN_PROGRESS"] } } } },
+    select: { id: true, currentLat: true, currentLng: true, vehicleCapacity: true },
+  });
+
+  if (availableDrivers.length === 0) throw new Error("No available drivers found");
+
+  const { haversineDistanceKm } = await import("../../utils/geo.js");
+
+  const nearest = availableDrivers.reduce((best, driver) => {
+    const driverLat = driver.currentLat ?? refLat;
+    const driverLng = driver.currentLng ?? refLng;
+    const dist = haversineDistanceKm(driverLat, driverLng, refLat, refLng);
+    const bestDist = haversineDistanceKm(
+      best.currentLat ?? refLat,
+      best.currentLng ?? refLng,
+      refLat,
+      refLng
+    );
+    return dist < bestDist ? driver : best;
+  });
+
+  return dispatchRoute(routeId, nearest.id);
+}
+
+export default { planBatch, planManyBatches, dispatchRoute, autoDispatchRoute, rerouteActiveRoutesOnce };

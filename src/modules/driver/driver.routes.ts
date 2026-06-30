@@ -7,6 +7,11 @@ import {
   myRoute,
   myOrders,
   myLiveSeed,
+  completeStopHandler,
+  toggleAvailabilityHandler,
+  stopItemsHandler,
+  reportIssueHandler,
+  earningsHandler,
 } from "./driver.controller.js";
 
 const router = Router();
@@ -31,5 +36,20 @@ router.get("/me/orders", myOrders);
 
 // GET /api/v1/driver/me/live-seed?limit=30
 router.get("/me/live-seed", myLiveSeed);
+
+// PATCH /api/v1/driver/me/stops/:stopId/complete
+router.patch("/me/stops/:stopId/complete", completeStopHandler);
+
+// PATCH /api/v1/driver/me/availability
+router.patch("/me/availability", toggleAvailabilityHandler);
+
+// GET /api/v1/driver/me/stops/:stopId/items
+router.get("/me/stops/:stopId/items", stopItemsHandler);
+
+// POST /api/v1/driver/me/issues
+router.post("/me/issues", reportIssueHandler);
+
+// GET /api/v1/driver/me/earnings
+router.get("/me/earnings", earningsHandler);
 
 export default router;

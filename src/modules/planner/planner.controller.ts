@@ -1,5 +1,6 @@
 import express from "express";
 import plannerService from "./planner.service.js";
+import { planManyBatches, autoDispatchRoute } from "./planner.service.js";
 
 export const planBatchHandler = async (req: express.Request, res: express.Response) => {
   const batchId = Array.isArray(req.params.batchId) ? req.params.batchId[0] : req.params.batchId;
@@ -23,4 +24,35 @@ export const dispatchRouteHandler = async (req: express.Request, res: express.Re
   }
 };
 
-export default { planBatchHandler, dispatchRouteHandler };
+export const planManyBatchesHandler = async (req: express.Request, res: express.Response) => {
+  const { batchIds, ...options } = req.body ?? {};
+  if (!Array.isArray(batchIds) || batchIds.length === 0) {
+    res.status(400).json({ error: "batchIds must be a non-empty array" });
+    return;
+  }
+  try {
+    const results = await planManyBatches(batchIds, options);
+    const failed = results.filter((r) => !r.success);
+    res.status(failed.length > 0 && failed.length === results.length ? 500 : 200).json({
+      total: results.length,
+      succeeded: results.filter((r) => r.success).length,
+      failed: failed.length,
+      results,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message ?? String(err) });
+  }
+};
+
+export const autoDispatchRouteHandler = async (req: express.Request, res: express.Response) => {
+  const routeId = Array.isArray(req.params.routeId) ? req.params.routeId[0] : req.params.routeId;
+  try {
+    const result = await autoDispatchRoute(routeId);
+    res.json(result);
+  } catch (err: any) {
+    const status = (err.message ?? "").includes("No available") ? 409 : 400;
+    res.status(status).json({ error: err.message ?? String(err) });
+  }
+};
+
+export default { planBatchHandler, planManyBatchesHandler, dispatchRouteHandler, autoDispatchRouteHandler };

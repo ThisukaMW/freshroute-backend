@@ -54,7 +54,7 @@ export async function solveRouteWithOrtools(
 ): Promise<OrtoolsSolveResponse> {
   const baseUrl = process.env.ORTOOLS_SERVICE_URL ?? "http://127.0.0.1:8001";
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 30_000);
+  const timeout = setTimeout(() => controller.abort(), 90_000);
 
   try {
     //Send JSON payload to OR-Tools service and parse response(Pyhton service)
