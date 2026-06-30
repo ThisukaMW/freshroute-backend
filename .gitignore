@@ -33,5 +33,7 @@ tmpclaude-*
 # Test files (optional - you can keep these if you want to commit them)
 test-socket.html
 
+firebase-service-account.json
+
 # Markdown notes/summaries
 *.md
