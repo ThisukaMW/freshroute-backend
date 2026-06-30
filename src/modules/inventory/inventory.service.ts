@@ -20,55 +20,31 @@ export interface InventoryStats {
 
 // ============= CORE FUNCTIONS =============
 
-/**
- * Update product stock and create history
- * ✅ Decreases stock after order payment
- * ✅ Increases stock when seller restocks
- */
 export const updateProductStock = async (input: StockUpdateInput) => {
   const { productId, quantity, type, reason, orderId, performedBy } = input;
 
-  const product = await prisma.product.findUnique({
-    where: { id: productId },
-  });
+  const product = await prisma.product.findUnique({ where: { id: productId } });
+  if (!product) throw new Error(`Product ${productId} not found`);
 
-  if (!product) {
-    throw new Error(`Product ${productId} not found`);
-  }
-
-  const newStock = product.stock + quantity; // quantity can be negative
-  
+  const newStock = product.stock + quantity;
   if (newStock < 0) {
     throw new Error(
       `Insufficient stock for product ${product.name}. Available: ${product.stock}, Requested: ${Math.abs(quantity)}`
     );
   }
 
-  // 1️⃣ Update product stock
   const updatedProduct = await prisma.product.update({
     where: { id: productId },
     data: {
       stock: newStock,
-      // Auto-update status if out of stock
       status: newStock === 0 ? "OUT_OF_STOCK" : "APPROVED",
     },
   });
 
-  // 2️⃣ Create stock history record
   const history = await prisma.stockHistory.create({
-    data: {
-      productId,
-      type,
-      quantity,
-      previousStock: product.stock,
-      newStock,
-      reason,
-      orderId,
-      performedBy,
-    },
+    data: { productId, type, quantity, previousStock: product.stock, newStock, reason, orderId, performedBy },
   });
 
-  // 3️⃣ Check if stock went below low-stock threshold → Create notification
   if (newStock > 0 && newStock <= product.lowStock) {
     await createLowStockNotification(product.sellerId, product.id, newStock);
   }
@@ -76,62 +52,33 @@ export const updateProductStock = async (input: StockUpdateInput) => {
   return { product: updatedProduct, history };
 };
 
-/**
- * Update seller-specific product stock (SellerProduct table)
- * ✅ PRIORITY 1: Decreases stock for specific seller's offering
- * ✅ Creates history record for audit trail
- * ⚠️ Call this FIRST before updating Product.stock
- */
 export const updateSellerProductStock = async (
   input: StockUpdateInput & { sellerId: string }
 ) => {
   const { productId, sellerId, quantity, type, reason, orderId, performedBy } = input;
 
-  // Get the SellerProduct record
   const sellerProduct = await prisma.sellerProduct.findUnique({
-    where: {
-      productId_sellerId: {
-        productId,
-        sellerId,
-      },
-    },
+    where: { productId_sellerId: { productId, sellerId } },
   });
-
-  if (!sellerProduct) {
-    throw new Error(
-      `Product ${productId} not found for seller ${sellerId}`
-    );
-  }
+  if (!sellerProduct) throw new Error(`Product ${productId} not found for seller ${sellerId}`);
 
   const newStock = sellerProduct.stock + quantity;
-
   if (newStock < 0) {
     throw new Error(
       `Insufficient stock for seller's product. Available: ${sellerProduct.stock}, Requested: ${Math.abs(quantity)}`
     );
   }
 
-  // ✅ Update SellerProduct.stock (PRIORITY 1 - Update this first)
   const updatedSellerProduct = await prisma.sellerProduct.update({
-    where: {
-      productId_sellerId: {
-        productId,
-        sellerId,
-      },
-    },
+    where: { productId_sellerId: { productId, sellerId } },
     data: { stock: newStock },
   });
 
-  // ✅ Create stock history record
   const history = await prisma.stockHistory.create({
     data: {
-      productId,
-      type,
-      quantity,
-      previousStock: sellerProduct.stock,
-      newStock,
-      reason,
-      orderId,
+      productId, type, quantity,
+      previousStock: sellerProduct.stock, newStock,
+      reason, orderId,
       performedBy: performedBy || sellerId,
     },
   });
@@ -139,79 +86,48 @@ export const updateSellerProductStock = async (
   return { sellerProduct: updatedSellerProduct, history };
 };
 
-/**
- * RECALCULATE PRODUCT STOCK FROM SELLER PRODUCTS
- * ✅ PRIORITY 2: Called after SellerProduct updates
- * ✅ Product.stock = SUM of all seller's stocks for that product
- * ✅ Industry standard: Aggregate stock = sum of individual seller stocks
- */
 export const recalculateProductStock = async (productId: string) => {
-  // Get all SellerProduct records for this product
-  const sellerProducts = await prisma.sellerProduct.findMany({
-    where: { productId },
-  });
+  const sellerProducts = await prisma.sellerProduct.findMany({ where: { productId } });
 
   if (!sellerProducts || sellerProducts.length === 0) {
-    // No sellers have this product, set stock to 0
-    const product = await prisma.product.update({
-      where: { id: productId },
-      data: { stock: 0 },
-    });
-    return product;
+    return prisma.product.update({ where: { id: productId }, data: { stock: 0 } });
   }
 
-  // Calculate total stock from all sellers
   const totalStock = sellerProducts.reduce((sum, sp) => sum + sp.stock, 0);
 
-  // Update Product.stock with the sum
-  const updatedProduct = await prisma.product.update({
+  return prisma.product.update({
     where: { id: productId },
     data: {
       stock: totalStock,
-      // Auto-update status based on stock level
       status: totalStock === 0 ? "OUT_OF_STOCK" : "APPROVED",
     },
   });
-
-  return updatedProduct;
 };
 
-/**
- * Get all products for a seller with stock info
- * ✅ Returns seller's SellerProducts (all products they're selling)
- * ✅ For InventoryPage dashboard
- */
 export const getSellerInventory = async (sellerId: string) => {
-  // Get all SellerProduct records for this seller
   const sellerProducts = await prisma.sellerProduct.findMany({
     where: { sellerId },
     include: {
       product: {
         include: {
-          stockHistory: {
-            orderBy: { createdAt: "desc" },
-            take: 5, // Last 5 changes
-          },
+          stockHistory: { orderBy: { createdAt: "desc" }, take: 5 },
         },
       },
     },
     orderBy: { product: { createdAt: "desc" } },
   });
 
-  if (!sellerProducts) {
-    throw new Error(`No products found for seller ${sellerId}`);
-  }
+  if (!sellerProducts) throw new Error(`No products found for seller ${sellerId}`);
 
-  // Format response with both product and seller-specific info
   return sellerProducts.map((sp) => ({
     id: sp.product.id,
     sellerProductId: sp.id,
     name: sp.product.name,
     category: sp.product.category,
     description: sp.product.description,
-    sellerPrice: sp.price, // This seller's price
-    sellerStock: sp.stock, // This seller's stock
-    aggregateStock: sp.product.stock, // Total stock from all sellers
+    sellerPrice: sp.price,
+    sellerStock: sp.stock,
+    aggregateStock: sp.product.stock,
     status: sp.product.status,
     imageUrl: sp.product.imageUrl,
     stockHistory: sp.product.stockHistory,
@@ -219,65 +135,41 @@ export const getSellerInventory = async (sellerId: string) => {
   }));
 };
 
-/**
- * Get stock details for a single product
- */
 export const getProductStock = async (productId: string) => {
   const product = await prisma.product.findUnique({
     where: { id: productId },
     include: {
-      stockHistory: {
-        orderBy: { createdAt: "desc" },
-        take: 10,
-      },
-      seller: {
-        include: { user: true },
-      },
+      stockHistory: { orderBy: { createdAt: "desc" }, take: 10 },
+      seller: { include: { user: true } },
     },
   });
-
-  if (!product) {
-    throw new Error(`Product ${productId} not found`);
-  }
-
+  if (!product) throw new Error(`Product ${productId} not found`);
   return product;
 };
 
-/**
- * Get complete stock history for a product
- * ✅ Shows timeline of all changes
- */
 export const getStockHistory = async (productId: string, limit = 50) => {
   const history = await prisma.stockHistory.findMany({
     where: { productId },
     orderBy: { createdAt: "desc" },
     take: limit,
   });
-
-  if (!history) {
-    throw new Error(`No history found for product ${productId}`);
-  }
-
+  if (!history) throw new Error(`No history found for product ${productId}`);
   return history;
 };
 
 /**
- * Get all products with low stock (< threshold) for a seller
- * ✅ For alerts & dashboard
+ * LOW STOCK: stock > 0 AND stock <= lowStock threshold
+ * ✅ Excludes out-of-stock (stock === 0) items
  */
 export const getLowStockProducts = async (sellerId: string) => {
-  // Get all SellerProducts for this seller
   const sellerProducts = await prisma.sellerProduct.findMany({
     where: { sellerId },
-    include: {
-      product: true,
-    },
+    include: { product: true },
   });
 
-  // Filter: where seller's stock < product's lowStock threshold
-  const lowStockProducts = sellerProducts
-    .filter((sp) => sp.stock <= sp.product.lowStock)
-    .sort((a, b) => a.stock - b.stock) // Lowest first
+  return sellerProducts
+    .filter((sp) => sp.stock > 0 && sp.stock <= sp.product.lowStock) // ✅ strictly > 0
+    .sort((a, b) => a.stock - b.stock)
     .map((sp) => ({
       id: sp.product.id,
       name: sp.product.name,
@@ -286,41 +178,58 @@ export const getLowStockProducts = async (sellerId: string) => {
       lowStockThreshold: sp.product.lowStock,
       status: sp.product.status,
     }));
-
-  return lowStockProducts;
 };
+
 /**
- * Get inventory dashboard stats for seller
+ * OUT OF STOCK: seller's stock === 0
+ * ✅ New service function
  */
-export const getInventoryStats = async (
-  sellerId: string
-): Promise<InventoryStats> => {
+export const getOutOfStockProducts = async (sellerId: string) => {
   const sellerProducts = await prisma.sellerProduct.findMany({
     where: { sellerId },
-    include: {
-      product: true,
-    },
+    include: { product: true },
   });
 
-  // Only APPROVED/active products
-  const activeProducts = sellerProducts.filter(
-    (sp) => sp.product.status === "APPROVED"
-  );
-
-  const stats: InventoryStats = {
-    totalSkus: activeProducts.length,                                                    // ← only active
-    totalUnits: activeProducts.reduce((sum, sp) => sum + sp.stock, 0),                  // ← only active
-    lowStockItems: activeProducts.filter((sp) => sp.stock <= sp.product.lowStock).length, // ← only active
-    outOfStockItems: activeProducts.filter((sp) => sp.stock === 0).length,               // ← only active
-  };
-
-  return stats;
+  return sellerProducts
+    .filter((sp) => sp.stock === 0)
+    .map((sp) => ({
+      id: sp.product.id,
+      name: sp.product.name,
+      sellerStock: sp.stock,
+      aggregateStock: sp.product.stock,
+      lowStockThreshold: sp.product.lowStock,
+      status: sp.product.status,
+    }));
 };
 
 /**
- * Check if cart items are still in stock
- * ✅ Called before checkout
+ * OUT OF STOCK COUNT: returns just the number
+ * ✅ New service function — for dashboard badge/stat
  */
+export const getOutOfStockCount = async (sellerId: string): Promise<number> => {
+  const sellerProducts = await prisma.sellerProduct.findMany({
+    where: { sellerId },
+    select: { stock: true },
+  });
+  return sellerProducts.filter((sp) => sp.stock === 0).length;
+};
+
+export const getInventoryStats = async (sellerId: string): Promise<InventoryStats> => {
+  const sellerProducts = await prisma.sellerProduct.findMany({
+    where: { sellerId },
+    include: { product: true },
+  });
+
+  const activeProducts = sellerProducts.filter((sp) => sp.product.status === "APPROVED");
+
+  return {
+    totalSkus: activeProducts.length,
+    totalUnits: activeProducts.reduce((sum, sp) => sum + sp.stock, 0),
+    lowStockItems: activeProducts.filter((sp) => sp.stock > 0 && sp.stock <= sp.product.lowStock).length, // ✅ excludes 0
+    outOfStockItems: activeProducts.filter((sp) => sp.stock === 0).length,
+  };
+};
+
 export const validateCartStock = async (
   cartItems: Array<{ productId: string; quantity: number; sellerId: string; cartQuantity: number }>
 ) => {
@@ -328,124 +237,65 @@ export const validateCartStock = async (
 
   for (const item of cartItems) {
     const sellerProduct = await prisma.sellerProduct.findUnique({
-      where: {
-        productId_sellerId: {
-          productId: item.productId,
-          sellerId: item.sellerId,
-        },
-      },
+      where: { productId_sellerId: { productId: item.productId, sellerId: item.sellerId } },
     });
 
     if (!sellerProduct) {
-      issues.push({
-        productId: item.productId,
-        requested: item.quantity,
-        available: 0,
-      });
+      issues.push({ productId: item.productId, requested: item.quantity, available: 0 });
       continue;
     }
 
-    // ✅ The stock was already deducted when added to cart
-    // So real available = current stock + what this buyer already holds (cartQuantity)
     const realAvailable = sellerProduct.stock + item.cartQuantity;
-
     if (realAvailable < item.quantity) {
-      issues.push({
-        productId: item.productId,
-        requested: item.quantity,
-        available: realAvailable,
-      });
+      issues.push({ productId: item.productId, requested: item.quantity, available: realAvailable });
     }
   }
 
-  return {
-    isValid: issues.length === 0,
-    issues,
-  };
+  return { isValid: issues.length === 0, issues };
 };
-/**
- * Restock a product (seller restocking their inventory)
- * ✅ Updates SellerProduct.stock (seller-specific)
- * ✅ Then recalculates Product.stock as SUM of all sellers
- */
+
 export const restockProduct = async (
   productId: string,
   quantity: number,
   reason: string,
   sellerId: string
 ) => {
-  if (quantity <= 0) {
-    throw new Error("Restock quantity must be positive");
-  }
+  if (quantity <= 0) throw new Error("Restock quantity must be positive");
 
-  // Verify SellerProduct exists (seller has this product in their inventory)
   const sellerProduct = await prisma.sellerProduct.findUnique({
-    where: {
-      productId_sellerId: {
-        productId,
-        sellerId,
-      },
-    },
+    where: { productId_sellerId: { productId, sellerId } },
   });
+  if (!sellerProduct) throw new Error("Product not found in your inventory");
 
-  if (!sellerProduct) {
-    throw new Error("Product not found in your inventory");
-  }
-
-  // STEP 1: Update SellerProduct.stock (seller-specific)
   const updatedSellerProduct = await prisma.sellerProduct.update({
-    where: {
-      productId_sellerId: {
-        productId,
-        sellerId,
-      },
-    },
-    data: {
-      stock: sellerProduct.stock + quantity,
-    },
+    where: { productId_sellerId: { productId, sellerId } },
+    data: { stock: sellerProduct.stock + quantity },
   });
 
-  // Create stock history for audit trail
   await prisma.stockHistory.create({
     data: {
-      productId,
-      type: "RESTOCK",
-      quantity,
+      productId, type: "RESTOCK", quantity,
       previousStock: sellerProduct.stock,
       newStock: updatedSellerProduct.stock,
-      reason,
-      performedBy: sellerId,
+      reason, performedBy: sellerId,
     },
   });
 
-  // STEP 2: Recalculate Product.stock as SUM of all seller products
   await recalculateProductStock(productId);
-
   return updatedSellerProduct;
 };
 
-/**
- * Get restock recommendations based on sales trends
- * (Advanced: can be improved with AI later)
- */
 export const getRestockSuggestions = async (sellerId: string) => {
-  // Get all SellerProducts for this seller
   const sellerProducts = await prisma.sellerProduct.findMany({
     where: { sellerId },
     include: {
       product: {
-        include: {
-          orderItems: {
-            take: 10,
-            orderBy: { createdAt: "desc" },
-          },
-        },
+        include: { orderItems: { take: 10, orderBy: { createdAt: "desc" } } },
       },
     },
   });
 
-  // Filter those with low stock and generate suggestions
-  const suggestions = sellerProducts
+  return sellerProducts
     .filter((sp) => sp.stock <= sp.product.lowStock)
     .map((sp) => ({
       productId: sp.product.id,
@@ -454,34 +304,22 @@ export const getRestockSuggestions = async (sellerId: string) => {
       currentSellerStock: sp.stock,
       aggregateStock: sp.product.stock,
       lowStockThreshold: sp.product.lowStock,
-      recommendedQuantity: Math.max(50, sp.product.lowStock * 5), // Simple: 5x threshold
-      reason: "Low stock detected",
+      recommendedQuantity: Math.max(50, sp.product.lowStock * 5),
+      reason: sp.stock === 0 ? "Out of stock" : "Low stock detected",
       priority: sp.stock === 0 ? "critical" : "high",
     }));
-
-  return suggestions;
 };
 
-// ============= HELPER FUNCTIONS =============
+// ============= HELPERS =============
 
-/**
- * Create low-stock notification for seller
- */
-async function createLowStockNotification(
-  sellerId: string,
-  productId: string,
-  currentStock: number
-) {
+async function createLowStockNotification(sellerId: string, productId: string, currentStock: number) {
   const seller = await prisma.seller.findUnique({
     where: { id: sellerId },
     include: { user: true },
   });
-
   if (!seller) return;
 
-  const product = await prisma.product.findUnique({
-    where: { id: productId },
-  });
+  const product = await prisma.product.findUnique({ where: { id: productId } });
 
   await prisma.notification.create({
     data: {
