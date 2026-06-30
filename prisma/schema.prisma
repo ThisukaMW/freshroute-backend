@@ -713,9 +713,6 @@ enum TiltRisk {
 model Truck {
   id             String    @id  // User-supplied plate / truck ID (e.g. "NP1234567")
   operator       String
-  departure      String    @default("")
-  arrival        String    @default("")
-  route          String    @default("")
   type           String    // Free-text to match frontend dropdown
   capacityLbs    Float
   loadedLbs      Float     @default(0)
@@ -724,7 +721,6 @@ model Truck {
   cratesLoaded   Int       @default(0)
   boxesLoaded    Int       @default(0)
   temperature    String    @default("Ambient")
-  fuelNeeded     String
   efficiency     Float     @default(0)
   avgDelay       String    @default("")
   loadBalanceLeft  Float   @default(50)
@@ -735,7 +731,6 @@ model Truck {
   updatedAt      DateTime  @updatedAt
 
   @@index([operator])
-  @@index([route])
 }
 
 // ============= INVENTORY SYSTEM =============

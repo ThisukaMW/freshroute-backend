@@ -12,13 +12,9 @@ export type TiltRisk = (typeof TILT_RISKS)[number];
 
 export const PER_PALLET_WEIGHT = 1800;
 
-// ── Types ──────────────────────────────────────────────────────────────────────
-
 export type CreateTruckInput = {
   id: string;
   operator: string;
-  departure: string;
-  arrival: string;
   type: string;
   capacityLbs: number;
   loadedLbs?: number;
@@ -27,20 +23,15 @@ export type CreateTruckInput = {
   cratesLoaded?: number;
   boxesLoaded?: number;
   temperature?: string;
-  fuelNeeded: string;
   loadBalance?: { left: number; right: number };
   tiltRisk?: string;
 };
 
 export type UpdateTruckInput = Partial<Omit<CreateTruckInput, "id">>;
 
-// ── Select shape ───────────────────────────────────────────────────────────────
-
 const truckSelect = {
   id: true,
   operator: true,
-  departure: true,
-  arrival: true,
   type: true,
   capacityLbs: true,
   loadedLbs: true,
@@ -49,15 +40,12 @@ const truckSelect = {
   cratesLoaded: true,
   boxesLoaded: true,
   temperature: true,
-  fuelNeeded: true,
   loadBalanceLeft: true,
   loadBalanceRight: true,
   tiltRisk: true,
   createdAt: true,
   updatedAt: true,
 } as const;
-
-// ── Helpers ────────────────────────────────────────────────────────────────────
 
 /** Reshape the flat DB columns back to the nested { left, right } the frontend expects */
 function shapeTruck(truck: {
@@ -97,8 +85,6 @@ export const createTruck = async (data: CreateTruckInput, db: any = prisma) => {
   const truck = await db.truck.create({
     data: {
       ...rest,
-      // DB still has route column (not null default "") — satisfy it silently
-      route: `${data.departure} → ${data.arrival}`,
       loadBalanceLeft: loadBalance?.left ?? 50,
       loadBalanceRight: loadBalance?.right ?? 50,
     },
@@ -114,13 +100,6 @@ export const updateTruck = async (id: string, data: UpdateTruckInput, db: any = 
 
   const { loadBalance, ...rest } = data;
   const updateData: Record<string, unknown> = { ...rest };
-
-  // Keep the legacy route column in sync if departure/arrival change
-  if (data.departure || data.arrival) {
-    const departure = data.departure ?? existing.departure;
-    const arrival   = data.arrival   ?? existing.arrival;
-    updateData.route = `${departure} → ${arrival}`;
-  }
 
   if (loadBalance) {
     updateData.loadBalanceLeft  = loadBalance.left;
