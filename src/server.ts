@@ -14,6 +14,10 @@ import { setPlannerRealtimeIo } from "./modules/planner/planner.realtime.js";
 import { startRouteRerouteWorker } from "./modules/planner/route-reroute.worker.js";
 
 const PORT = process.env.PORT || 5000;
+const HOST = process.env.HOST || "0.0.0.0";
+const isProduction = process.env.NODE_ENV === "production";
+const socketPingIntervalMs = 25_000;
+const socketPingTimeoutMs = 20_000;
 
 const httpServer = createServer(app);
 
@@ -80,13 +84,15 @@ httpServer.on("error", (error: NodeJS.ErrnoException) => {
   process.exit(1);
 });
 
-httpServer.listen(PORT, async () => {
-  console.log(`Server running on port ${PORT}`);
+httpServer.listen(Number(PORT), HOST, async () => {
+  console.log(`Server running on http://${HOST}:${PORT}`);
+  console.log(
+    `[socket] heartbeat config | pingIntervalMs=${socketPingIntervalMs} pingTimeoutMs=${socketPingTimeoutMs}`
+  );
 
   const clearExpiredCarts = await loadClearExpiredCarts();
 
-  // Run once immediately on boot to catch any carts that
-  // expired while the server was down
+  // Run once immediately on boot to catch any carts that expired while the server was down
   try {
     await clearExpiredCarts();
   } catch (error) {
@@ -102,11 +108,4 @@ httpServer.listen(PORT, async () => {
       console.error("Cart expiry cleanup failed:", error);
     }
   }, 30 * 60 * 1000);
-});
-// Start server
-httpServer.listen(Number(PORT), HOST, () => {
-  console.log(`Server running on http://${HOST}:${PORT}`);
-  console.log(
-    `[socket] heartbeat config | pingIntervalMs=${socketPingIntervalMs} pingTimeoutMs=${socketPingTimeoutMs}`
-  );
 });

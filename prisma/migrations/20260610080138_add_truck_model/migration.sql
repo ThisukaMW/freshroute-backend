@@ -1,38 +1,33 @@
--- CreateEnum
-CREATE TYPE "TruckType" AS ENUM ('REFRIGERATED_VAN', 'DRY_CARGO', 'REEFER');
+-- CreateEnum (idempotent — may already exist from a partial prior run)
+DO $$ BEGIN
+    CREATE TYPE "TruckType" AS ENUM ('REFRIGERATED_VAN', 'DRY_CARGO', 'REEFER');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
--- CreateEnum
-CREATE TYPE "TiltRisk" AS ENUM ('LOW', 'MEDIUM', 'HIGH');
+DO $$ BEGIN
+    CREATE TYPE "TiltRisk" AS ENUM ('LOW', 'MEDIUM', 'HIGH');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
--- CreateTable
-CREATE TABLE "Truck" (
-    "id" TEXT NOT NULL,
-    "operator" TEXT NOT NULL,
-    "departure" TEXT NOT NULL DEFAULT '',
-    "arrival" TEXT NOT NULL DEFAULT '',
-    "route" TEXT NOT NULL,
-    "type" TEXT NOT NULL,
-    "capacityLbs" DOUBLE PRECISION NOT NULL,
-    "loadedLbs" DOUBLE PRECISION NOT NULL DEFAULT 0,
-    "palletsLoaded" INTEGER NOT NULL DEFAULT 0,
-    "palletsCap" INTEGER NOT NULL DEFAULT 0,
-    "cratesLoaded" INTEGER NOT NULL DEFAULT 0,
-    "boxesLoaded" INTEGER NOT NULL DEFAULT 0,
-    "temperature" TEXT NOT NULL DEFAULT 'Ambient',
-    "fuelNeeded" TEXT NOT NULL,
-    "efficiency" DOUBLE PRECISION NOT NULL,
-    "avgDelay" TEXT NOT NULL,
-    "loadBalanceLeft" DOUBLE PRECISION NOT NULL DEFAULT 50,
-    "loadBalanceRight" DOUBLE PRECISION NOT NULL DEFAULT 50,
-    "tiltRisk" TEXT NOT NULL DEFAULT 'Low',
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
+-- AlterTable: Truck table already exists from aggregator_phase1_foundation.
+-- Add the new fleet-dashboard columns only if they are missing.
+ALTER TABLE "Truck"
+  ADD COLUMN IF NOT EXISTS "operator"         TEXT,
+  ADD COLUMN IF NOT EXISTS "type"             TEXT,
+  ADD COLUMN IF NOT EXISTS "capacityLbs"      DOUBLE PRECISION,
+  ADD COLUMN IF NOT EXISTS "loadedLbs"        DOUBLE PRECISION NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS "palletsLoaded"    INTEGER NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS "palletsCap"       INTEGER NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS "cratesLoaded"     INTEGER NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS "boxesLoaded"      INTEGER NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS "temperature"      TEXT NOT NULL DEFAULT 'Ambient',
+  ADD COLUMN IF NOT EXISTS "efficiency"       DOUBLE PRECISION NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS "avgDelay"         TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS "loadBalanceLeft"  DOUBLE PRECISION NOT NULL DEFAULT 50,
+  ADD COLUMN IF NOT EXISTS "loadBalanceRight" DOUBLE PRECISION NOT NULL DEFAULT 50,
+  ADD COLUMN IF NOT EXISTS "tiltRisk"         TEXT NOT NULL DEFAULT 'Low',
+  ADD COLUMN IF NOT EXISTS "createdAt"        TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  ADD COLUMN IF NOT EXISTS "updatedAt"        TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
 
-    CONSTRAINT "Truck_pkey" PRIMARY KEY ("id")
-);
-
--- CreateIndex
-CREATE INDEX "Truck_operator_idx" ON "Truck"("operator");
-
--- CreateIndex
-CREATE INDEX "Truck_route_idx" ON "Truck"("route");
+-- CreateIndex (IF NOT EXISTS so retries are safe)
+CREATE INDEX IF NOT EXISTS "Truck_operator_idx" ON "Truck"("operator");

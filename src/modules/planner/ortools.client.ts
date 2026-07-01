@@ -49,6 +49,30 @@ export type OrtoolsSolveResponse = {
   solver: string;
 };
 
+function toSnakeCasePayload(payload: OrtoolsSolveRequest) {
+  return {
+    depot: payload.depot,
+    nodes: payload.nodes.map((n) => ({
+      node_id: n.nodeId,
+      kind: n.kind,
+      latitude: n.latitude,
+      longitude: n.longitude,
+      load_delta: n.loadDelta,
+      order_id: n.orderId ?? null,
+      buyer_id: n.buyerId ?? null,
+      pair_id: n.pairId ?? null,
+      seller_id: n.sellerId ?? null,
+      service_seconds: n.serviceSeconds ?? 0,
+    })),
+    vehicle_capacity: payload.vehicleCapacity,
+    initial_load: payload.initialLoad,
+    route_start_time_unix: payload.routeStartTimeUnix,
+    time_limit_seconds: payload.timeLimitSeconds ?? 10,
+    travel_time_matrix_seconds: payload.travelTimeMatrixSeconds,
+    travel_distance_matrix_meters: payload.travelDistanceMatrixMeters,
+  };
+}
+
 export async function solveRouteWithOrtools(
   payload: OrtoolsSolveRequest
 ): Promise<OrtoolsSolveResponse> {
@@ -63,7 +87,7 @@ export async function solveRouteWithOrtools(
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(toSnakeCasePayload(payload)),
       signal: controller.signal,
     });
 

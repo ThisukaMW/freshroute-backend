@@ -1,4 +1,4 @@
-import { PrismaClient, TruckStorageSupport } from "../src/generated/prisma/client.js";
+import { PrismaClient, TruckStorageSupport } from "../src/generated/prisma/index.js";
 import { PrismaPg } from "@prisma/adapter-pg";
 import bcrypt from "bcrypt";
 import dotenv from "dotenv";

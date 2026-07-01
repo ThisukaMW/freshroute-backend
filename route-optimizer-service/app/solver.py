@@ -68,10 +68,14 @@ def solve_route(request: SolveRequest) -> SolveResponse:
 
     time_callback_index = routing.RegisterTransitCallback(time_callback)
     routing.SetArcCostEvaluatorOfAllVehicles(time_callback_index)
+
+    # Max must accommodate unix timestamps as absolute cumulative values.
+    # OR-Tools uses signed 64-bit internally; 2^31-1 is safe for any near-future unix timestamp.
+    _MAX_TIME = 2_147_483_647
     routing.AddDimension(
         time_callback_index,
         1200,
-        24 * 3600,
+        _MAX_TIME,
         False,
         "Time",
     )
