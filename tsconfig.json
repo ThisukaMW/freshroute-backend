@@ -1,37 +1,3 @@
-// {
-//   "compilerOptions": {
-//     // File Layout
-//     "rootDir": ".",
-//     "outDir": "./dist",
-
-//     // Environment Settings
-//     "module": "nodenext",
-//     "moduleResolution": "nodenext",
-//     "target": "esnext",
-//     "lib": ["esnext"],
-//     "types": ["node"],
-
-//     // Interop
-//     "esModuleInterop": true,
-//     "allowSyntheticDefaultImports": true,
-
-//     // Other Outputs
-//     "sourceMap": true,
-//     "declaration": true,
-//     "declarationMap": true,
-
-//     // Recommended Options
-//     "strict": true,
-//     "verbatimModuleSyntax": true,
-//     "isolatedModules": true,
-//     "moduleDetection": "force",
-//     "skipLibCheck": true
-//   },
-//   "include": ["src/**/*", "prisma/**/*", "test/**/*"],
-//   "exclude": ["node_modules", "dist"]
-// }
-
-
 {
   "compilerOptions": {
     // File Layout
