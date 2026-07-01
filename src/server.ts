@@ -1,22 +1,22 @@
+import "dotenv/config";
+
 import { createServer } from "http";
 import { Server } from "socket.io";
 import app from "./app.js";
 import { setupSocketHandlers } from "./socket.js";
+
+const loadClearExpiredCarts = async () => {
+  const modulePath = "./jobs/cartExpiry.job." + "js";
+  const { clearExpiredCarts } = await import(modulePath);
+  return clearExpiredCarts;
+};
 import { setPlannerRealtimeIo } from "./modules/planner/planner.realtime.js";
 import { startRouteRerouteWorker } from "./modules/planner/route-reroute.worker.js";
 
 const PORT = process.env.PORT || 5000;
-const HOST = process.env.HOST || "0.0.0.0";
-const isProduction = process.env.NODE_ENV === "production";
-const socketPingIntervalMs =
-  Number.parseInt(process.env.SOCKET_PING_INTERVAL_MS ?? "25000", 10) || 25000;
-const socketPingTimeoutMs =
-  Number.parseInt(process.env.SOCKET_PING_TIMEOUT_MS ?? "60000", 10) || 60000;
 
-// Create HTTP server
 const httpServer = createServer(app);
 
-// Initialize Socket.io
 const io = new Server(httpServer, {
   allowEIO3: false,
   pingInterval: socketPingIntervalMs,
@@ -53,7 +53,6 @@ const io = new Server(httpServer, {
   },
 });
 
-// Setup socket event handlers
 setupSocketHandlers(io);
 setPlannerRealtimeIo(io);
 startRouteRerouteWorker();
@@ -81,6 +80,29 @@ httpServer.on("error", (error: NodeJS.ErrnoException) => {
   process.exit(1);
 });
 
+httpServer.listen(PORT, async () => {
+  console.log(`Server running on port ${PORT}`);
+
+  const clearExpiredCarts = await loadClearExpiredCarts();
+
+  // Run once immediately on boot to catch any carts that
+  // expired while the server was down
+  try {
+    await clearExpiredCarts();
+  } catch (error) {
+    console.error("Cart expiry cleanup failed on startup:", error);
+  }
+
+  // Then repeat every 30 minutes
+  setInterval(async () => {
+    try {
+      const clearExpiredCarts = await loadClearExpiredCarts();
+      await clearExpiredCarts();
+    } catch (error) {
+      console.error("Cart expiry cleanup failed:", error);
+    }
+  }, 30 * 60 * 1000);
+});
 // Start server
 httpServer.listen(Number(PORT), HOST, () => {
   console.log(`Server running on http://${HOST}:${PORT}`);

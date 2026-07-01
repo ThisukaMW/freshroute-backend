@@ -1,0 +1,118 @@
+{
+  "runId": "run-001",
+  "generatedAt": "2026-05-08T07:48:54.757Z",
+  "gitSha": "2582094",
+  "batchingSettings": {
+    "triggerMode": "manual",
+    "windowStart": "2026-05-07T18:30:00.000Z",
+    "windowEnd": "2026-05-08T18:29:59.999Z",
+    "autoAssignRoutes": true
+  },
+  "marketRegionInformation": {
+    "zones": [
+      {
+        "id": "38b29a14-3f21-4647-a7b1-132a87a20620",
+        "code": "CMB_CENTRAL",
+        "name": "Colombo Central",
+        "bounds": {
+          "minLat": 6.9,
+          "maxLat": 6.9399,
+          "minLng": 79.84,
+          "maxLng": 79.91
+        }
+      },
+      {
+        "id": "dd9ef679-7904-4929-9319-7f77313cd9e0",
+        "code": "CMB_NORTH",
+        "name": "Colombo North",
+        "bounds": {
+          "minLat": 6.94,
+          "maxLat": 7.02,
+          "minLng": 79.83,
+          "maxLng": 79.91
+        }
+      },
+      {
+        "id": "cf1e5801-1d4c-4e8c-9f1b-92993168d1fc",
+        "code": "CMB_SOUTH",
+        "name": "Colombo South",
+        "bounds": {
+          "minLat": 6.84,
+          "maxLat": 6.8999,
+          "minLng": 79.84,
+          "maxLng": 79.91
+        }
+      }
+    ],
+    "hubs": [
+      {
+        "id": "ea2ba564-846f-476f-a4c2-3b04777d2407",
+        "name": "Central Aggregation Hub",
+        "lat": 6.914,
+        "lng": 79.872,
+        "type": "AGGREGATION_CENTER"
+      },
+      {
+        "id": "af58d909-15a4-4d10-8a3d-e43ae8dd45b7",
+        "name": "North Collection Hub",
+        "lat": 6.968,
+        "lng": 79.868,
+        "type": "MARKET"
+      },
+      {
+        "id": "2358b37a-bae2-415c-ae9d-a1e5f3f7debf",
+        "name": "South Collection Hub",
+        "lat": 6.858,
+        "lng": 79.864,
+        "type": "FARM"
+      }
+    ]
+  },
+  "truckLoadConstraints": [
+    {
+      "truckId": "013b866b-5d8d-48be-a9dc-2a5d987fcf4a",
+      "vehicleNumber": "TRK-SIM-004",
+      "maxWeight": 420,
+      "maxVolume": 90,
+      "maxStops": 16,
+      "storageSupport": "NORMAL"
+    },
+    {
+      "truckId": "93543252-fd3b-4def-b293-ed1a1795eeb1",
+      "vehicleNumber": "TRK-SIM-003",
+      "maxWeight": 480,
+      "maxVolume": 100,
+      "maxStops": 18,
+      "storageSupport": "COLD"
+    },
+    {
+      "truckId": "7a58c92b-c206-4c34-ac01-983e5d6b1615",
+      "vehicleNumber": "TRK-SIM-002",
+      "maxWeight": 520,
+      "maxVolume": 115,
+      "maxStops": 20,
+      "storageSupport": "NORMAL"
+    },
+    {
+      "truckId": "f4007d0c-77da-463a-8339-a6c756559ca4",
+      "vehicleNumber": "TRK-SIM-001",
+      "maxWeight": 650,
+      "maxVolume": 140,
+      "maxStops": 24,
+      "storageSupport": "BOTH"
+    }
+  ],
+  "simulationParameters": {
+    "scenarioTag": "simulation-seed-v1",
+    "expectedOrderBand": "50-70",
+    "inputOrderCount": 68
+  },
+  "algorithmSettings": {
+    "clusterRadiusKm": 8,
+    "dbscanMinPoints": 2,
+    "maxStopsPerBatch": 20,
+    "maxWeightPerBatch": 500,
+    "maxVolumePerBatch": 100,
+    "packingHeuristic": "greedy-capacity + truck-feasibility-splitting"
+  }
+}
