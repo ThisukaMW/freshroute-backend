@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { protect } from "../../middlewares/auth.middleware.js";
+import { protect, authorize } from "../../middlewares/auth.middleware.js";
 import {
   myProfile,
   myStats,
@@ -10,8 +10,8 @@ import {
 
 const router = Router();
 
-// All routes require a valid JWT
-router.use(protect);
+// All routes require a valid JWT and DRIVER role
+router.use(protect, authorize("DRIVER"));
 
 // GET /api/v1/driver/me
 router.get("/me", myProfile);

@@ -1,0 +1,3227 @@
+{
+  "runId": "run-001",
+  "generatedAt": "2026-05-08T07:48:54.757Z",
+  "scenarioTag": "simulation-seed-v1",
+  "orderCount": 68,
+  "inventorySnapshots": [
+    {
+      "productId": "e48c6e9d-ca1e-4533-bd9a-cc61aa0036fb",
+      "name": "Demo Product 1",
+      "stock": 500,
+      "unit": "kg",
+      "price": 2.5
+    },
+    {
+      "productId": "8e07cdee-04d9-48fe-bc37-d3d4d572873f",
+      "name": "Demo Product 2",
+      "stock": 500,
+      "unit": "kg",
+      "price": 3.5
+    },
+    {
+      "productId": "ce3e7222-d5af-4be0-a9c5-3037b99ffca5",
+      "name": "Demo Product 3",
+      "stock": 500,
+      "unit": "kg",
+      "price": 4.5
+    }
+  ],
+  "orders": [
+    {
+      "orderId": "cc3005a4-0abf-42da-8763-a38aa28329e8",
+      "orderNumber": "SIM-ORD-001",
+      "status": "PAID",
+      "isCancelled": false,
+      "storageType": "NORMAL",
+      "totalWeight": 12.5,
+      "totalVolume": 2,
+      "totalAmount": 42.75,
+      "deliveryDate": "2026-05-08T04:00:00.000Z",
+      "placedAt": "2026-05-08T02:30:00.000Z",
+      "delivery": {
+        "address": "Simulation Address 1, Zone CMB_NORTH",
+        "lat": 6.943478,
+        "lng": 79.834211,
+        "zone": {
+          "id": "dd9ef679-7904-4929-9319-7f77313cd9e0",
+          "code": "CMB_NORTH",
+          "name": "Colombo North"
+        }
+      },
+      "pickupHub": {
+        "id": "af58d909-15a4-4d10-8a3d-e43ae8dd45b7",
+        "name": "North Collection Hub",
+        "lat": 6.968,
+        "lng": 79.868
+      },
+      "buyer": {
+        "id": "55a0ee4c-f45f-4d3b-8837-6536dbeac85e",
+        "name": "Simulation Buyer 1",
+        "email": "sim-buyer-001@freshroute.com"
+      },
+      "supplierSelections": [
+        {
+          "orderItemId": "d676e43b-0ac8-43a9-a082-b9d35674bdb9",
+          "productId": "e48c6e9d-ca1e-4533-bd9a-cc61aa0036fb",
+          "productName": "Demo Product 1",
+          "quantity": 2,
+          "unitPrice": 2.5,
+          "seller": {
+            "sellerId": "4a11a058-102a-4a0c-9253-5a66934a95bf",
+            "businessName": "North Valley Farms",
+            "contactName": "North Valley Farms"
+          }
+        }
+      ]
+    },
+    {
+      "orderId": "512e2ccc-fd81-4368-b1a6-43512b7b4fff",
+      "orderNumber": "SIM-ORD-002",
+      "status": "PAID",
+      "isCancelled": false,
+      "storageType": "NORMAL",
+      "totalWeight": 17,
+      "totalVolume": 2.8,
+      "totalAmount": 45.5,
+      "deliveryDate": "2026-05-08T04:30:00.000Z",
+      "placedAt": "2026-05-08T01:30:00.000Z",
+      "delivery": {
+        "address": "Simulation Address 2, Zone CMB_CENTRAL",
+        "lat": 6.90347,
+        "lng": 79.847368,
+        "zone": {
+          "id": "38b29a14-3f21-4647-a7b1-132a87a20620",
+          "code": "CMB_CENTRAL",
+          "name": "Colombo Central"
+        }
+      },
+      "pickupHub": {
+        "id": "2358b37a-bae2-415c-ae9d-a1e5f3f7debf",
+        "name": "South Collection Hub",
+        "lat": 6.858,
+        "lng": 79.864
+      },
+      "buyer": {
+        "id": "f1284ef4-c242-4687-bdfa-3dc6e1580886",
+        "name": "Simulation Buyer 2",
+        "email": "sim-buyer-002@freshroute.com"
+      },
+      "supplierSelections": [
+        {
+          "orderItemId": "75dd5884-cb78-40ca-a37f-e9e2a354d3c4",
+          "productId": "8e07cdee-04d9-48fe-bc37-d3d4d572873f",
+          "productName": "Demo Product 2",
+          "quantity": 3,
+          "unitPrice": 3.5,
+          "seller": {
+            "sellerId": "3a1a5b12-c3dc-4ffb-8154-decb21a3ad3b",
+            "businessName": "Southern Greens Cooperative",
+            "contactName": "Southern Greens Cooperative"
+          }
+        }
+      ]
+    },
+    {
+      "orderId": "599e79af-7e5c-457b-aa4d-ad8190c9b910",
+      "orderNumber": "SIM-ORD-003",
+      "status": "PAID",
+      "isCancelled": false,
+      "storageType": "NORMAL",
+      "totalWeight": 21.5,
+      "totalVolume": 3.6,
+      "totalAmount": 48.25,
+      "deliveryDate": "2026-05-08T05:00:00.000Z",
+      "placedAt": "2026-05-08T00:30:00.000Z",
+      "delivery": {
+        "address": "Simulation Address 3, Zone CMB_SOUTH",
+        "lat": 6.847813,
+        "lng": 79.851053,
+        "zone": {
+          "id": "cf1e5801-1d4c-4e8c-9f1b-92993168d1fc",
+          "code": "CMB_SOUTH",
+          "name": "Colombo South"
+        }
+      },
+      "pickupHub": {
+        "id": "ea2ba564-846f-476f-a4c2-3b04777d2407",
+        "name": "Central Aggregation Hub",
+        "lat": 6.914,
+        "lng": 79.872
+      },
+      "buyer": {
+        "id": "0a80f35e-bde4-4f39-9c64-649175c2fed4",
+        "name": "Simulation Buyer 3",
+        "email": "sim-buyer-003@freshroute.com"
+      },
+      "supplierSelections": [
+        {
+          "orderItemId": "ca8f3b54-aebb-45b1-88a5-77ebeeb070f2",
+          "productId": "ce3e7222-d5af-4be0-a9c5-3037b99ffca5",
+          "productName": "Demo Product 3",
+          "quantity": 4,
+          "unitPrice": 4.5,
+          "seller": {
+            "sellerId": "99e7e9b3-c591-46d2-a23d-2f65d9fc4154",
+            "businessName": "Central Harvest Hub",
+            "contactName": "Central Harvest Hub"
+          }
+        }
+      ]
+    },
+    {
+      "orderId": "c411d7b0-4f45-4b57-9fa5-93ad15567056",
+      "orderNumber": "SIM-ORD-004",
+      "status": "PAID",
+      "isCancelled": false,
+      "storageType": "NORMAL",
+      "totalWeight": 26,
+      "totalVolume": 4.4,
+      "totalAmount": 51,
+      "deliveryDate": "2026-05-08T05:30:00.000Z",
+      "placedAt": "2026-05-07T23:30:00.000Z",
+      "delivery": {
+        "address": "Simulation Address 4, Zone CMB_NORTH",
+        "lat": 6.953913,
+        "lng": 79.846842,
+        "zone": {
+          "id": "dd9ef679-7904-4929-9319-7f77313cd9e0",
+          "code": "CMB_NORTH",
+          "name": "Colombo North"
+        }
+      },
+      "pickupHub": {
+        "id": "af58d909-15a4-4d10-8a3d-e43ae8dd45b7",
+        "name": "North Collection Hub",
+        "lat": 6.968,
+        "lng": 79.868
+      },
+      "buyer": {
+        "id": "93e8c00f-1feb-4a1c-a496-41ace182b58b",
+        "name": "Simulation Buyer 4",
+        "email": "sim-buyer-004@freshroute.com"
+      },
+      "supplierSelections": [
+        {
+          "orderItemId": "a7bab455-4376-4727-88e9-52ded188deba",
+          "productId": "e48c6e9d-ca1e-4533-bd9a-cc61aa0036fb",
+          "productName": "Demo Product 1",
+          "quantity": 1,
+          "unitPrice": 2.5,
+          "seller": {
+            "sellerId": "4a11a058-102a-4a0c-9253-5a66934a95bf",
+            "businessName": "North Valley Farms",
+            "contactName": "North Valley Farms"
+          }
+        }
+      ]
+    },
+    {
+      "orderId": "a279dac6-862b-4f1a-b0a3-f58699a868e5",
+      "orderNumber": "SIM-ORD-005",
+      "status": "PAID",
+      "isCancelled": false,
+      "storageType": "COLD",
+      "totalWeight": 30.5,
+      "totalVolume": 5.2,
+      "totalAmount": 53.75,
+      "deliveryDate": "2026-05-08T06:00:00.000Z",
+      "placedAt": "2026-05-07T22:30:00.000Z",
+      "delivery": {
+        "address": "Simulation Address 5, Zone CMB_CENTRAL",
+        "lat": 6.908674,
+        "lng": 79.858421,
+        "zone": {
+          "id": "38b29a14-3f21-4647-a7b1-132a87a20620",
+          "code": "CMB_CENTRAL",
+          "name": "Colombo Central"
+        }
+      },
+      "pickupHub": {
+        "id": "2358b37a-bae2-415c-ae9d-a1e5f3f7debf",
+        "name": "South Collection Hub",
+        "lat": 6.858,
+        "lng": 79.864
+      },
+      "buyer": {
+        "id": "bac27612-0228-45ba-955b-d7b2ceaf3d28",
+        "name": "Simulation Buyer 5",
+        "email": "sim-buyer-005@freshroute.com"
+      },
+      "supplierSelections": [
+        {
+          "orderItemId": "646c62e2-9c70-4007-a6bc-40f25cfc132e",
+          "productId": "8e07cdee-04d9-48fe-bc37-d3d4d572873f",
+          "productName": "Demo Product 2",
+          "quantity": 2,
+          "unitPrice": 3.5,
+          "seller": {
+            "sellerId": "3a1a5b12-c3dc-4ffb-8154-decb21a3ad3b",
+            "businessName": "Southern Greens Cooperative",
+            "contactName": "Southern Greens Cooperative"
+          }
+        }
+      ]
+    },
+    {
+      "orderId": "787ecce7-c248-412f-8776-1683b6518cd3",
+      "orderNumber": "SIM-ORD-006",
+      "status": "PAID",
+      "isCancelled": false,
+      "storageType": "NORMAL",
+      "totalWeight": 35,
+      "totalVolume": 6,
+      "totalAmount": 56.5,
+      "deliveryDate": "2026-05-08T03:30:00.000Z",
+      "placedAt": "2026-05-07T21:30:00.000Z",
+      "delivery": {
+        "address": "Simulation Address 6, Zone CMB_SOUTH",
+        "lat": 6.855626,
+        "lng": 79.862105,
+        "zone": {
+          "id": "cf1e5801-1d4c-4e8c-9f1b-92993168d1fc",
+          "code": "CMB_SOUTH",
+          "name": "Colombo South"
+        }
+      },
+      "pickupHub": {
+        "id": "ea2ba564-846f-476f-a4c2-3b04777d2407",
+        "name": "Central Aggregation Hub",
+        "lat": 6.914,
+        "lng": 79.872
+      },
+      "buyer": {
+        "id": "3f5cf8fe-6d31-4da8-b496-4effef040ea3",
+        "name": "Simulation Buyer 6",
+        "email": "sim-buyer-006@freshroute.com"
+      },
+      "supplierSelections": [
+        {
+          "orderItemId": "157325cf-a9cb-490c-b902-0835640f6bfd",
+          "productId": "ce3e7222-d5af-4be0-a9c5-3037b99ffca5",
+          "productName": "Demo Product 3",
+          "quantity": 3,
+          "unitPrice": 4.5,
+          "seller": {
+            "sellerId": "99e7e9b3-c591-46d2-a23d-2f65d9fc4154",
+            "businessName": "Central Harvest Hub",
+            "contactName": "Central Harvest Hub"
+          }
+        }
+      ]
+    },
+    {
+      "orderId": "a2e8b797-dc37-4bb0-9ff6-c16d52cd4776",
+      "orderNumber": "SIM-ORD-007",
+      "status": "PAID",
+      "isCancelled": false,
+      "storageType": "NORMAL",
+      "totalWeight": 39.5,
+      "totalVolume": 1.2,
+      "totalAmount": 59.25,
+      "deliveryDate": "2026-05-08T04:00:00.000Z",
+      "placedAt": "2026-05-07T20:30:00.000Z",
+      "delivery": {
+        "address": "Simulation Address 7, Zone CMB_NORTH",
+        "lat": 6.964348,
+        "lng": 79.859474,
+        "zone": {
+          "id": "dd9ef679-7904-4929-9319-7f77313cd9e0",
+          "code": "CMB_NORTH",
+          "name": "Colombo North"
+        }
+      },
+      "pickupHub": {
+        "id": "af58d909-15a4-4d10-8a3d-e43ae8dd45b7",
+        "name": "North Collection Hub",
+        "lat": 6.968,
+        "lng": 79.868
+      },
+      "buyer": {
+        "id": "602105c1-934e-408a-940e-c2fa4670a442",
+        "name": "Simulation Buyer 7",
+        "email": "sim-buyer-007@freshroute.com"
+      },
+      "supplierSelections": [
+        {
+          "orderItemId": "b4a3fd7f-3fca-4bf1-912b-45e5cfad031f",
+          "productId": "e48c6e9d-ca1e-4533-bd9a-cc61aa0036fb",
+          "productName": "Demo Product 1",
+          "quantity": 4,
+          "unitPrice": 2.5,
+          "seller": {
+            "sellerId": "4a11a058-102a-4a0c-9253-5a66934a95bf",
+            "businessName": "North Valley Farms",
+            "contactName": "North Valley Farms"
+          }
+        }
+      ]
+    },
+    {
+      "orderId": "8c7a510f-baba-4165-9784-7b571477db8e",
+      "orderNumber": "SIM-ORD-008",
+      "status": "PAID",
+      "isCancelled": false,
+      "storageType": "NORMAL",
+      "totalWeight": 44,
+      "totalVolume": 2,
+      "totalAmount": 62,
+      "deliveryDate": "2026-05-08T04:30:00.000Z",
+      "placedAt": "2026-05-07T19:30:00.000Z",
+      "delivery": {
+        "address": "Simulation Address 8, Zone CMB_CENTRAL",
+        "lat": 6.913878,
+        "lng": 79.869474,
+        "zone": {
+          "id": "38b29a14-3f21-4647-a7b1-132a87a20620",
+          "code": "CMB_CENTRAL",
+          "name": "Colombo Central"
+        }
+      },
+      "pickupHub": {
+        "id": "2358b37a-bae2-415c-ae9d-a1e5f3f7debf",
+        "name": "South Collection Hub",
+        "lat": 6.858,
+        "lng": 79.864
+      },
+      "buyer": {
+        "id": "2f0f245b-39e0-42fd-9011-76a40bc2edb4",
+        "name": "Simulation Buyer 8",
+        "email": "sim-buyer-008@freshroute.com"
+      },
+      "supplierSelections": [
+        {
+          "orderItemId": "e9342df7-28d5-4604-aa6b-2ac816ba2c9e",
+          "productId": "8e07cdee-04d9-48fe-bc37-d3d4d572873f",
+          "productName": "Demo Product 2",
+          "quantity": 1,
+          "unitPrice": 3.5,
+          "seller": {
+            "sellerId": "3a1a5b12-c3dc-4ffb-8154-decb21a3ad3b",
+            "businessName": "Southern Greens Cooperative",
+            "contactName": "Southern Greens Cooperative"
+          }
+        }
+      ]
+    },
+    {
+      "orderId": "ba053dec-311d-4b43-95aa-673e87a9e34e",
+      "orderNumber": "SIM-ORD-009",
+      "status": "PAID",
+      "isCancelled": false,
+      "storageType": "NORMAL",
+      "totalWeight": 8,
+      "totalVolume": 2.8,
+      "totalAmount": 64.75,
+      "deliveryDate": "2026-05-08T05:00:00.000Z",
+      "placedAt": "2026-05-07T18:30:00.000Z",
+      "delivery": {
+        "address": "Simulation Address 9, Zone CMB_SOUTH",
+        "lat": 6.863439,
+        "lng": 79.873158,
+        "zone": {
+          "id": "cf1e5801-1d4c-4e8c-9f1b-92993168d1fc",
+          "code": "CMB_SOUTH",
+          "name": "Colombo South"
+        }
+      },
+      "pickupHub": {
+        "id": "ea2ba564-846f-476f-a4c2-3b04777d2407",
+        "name": "Central Aggregation Hub",
+        "lat": 6.914,
+        "lng": 79.872
+      },
+      "buyer": {
+        "id": "131a12a4-3b0b-4af2-8e28-212c94b1651f",
+        "name": "Simulation Buyer 9",
+        "email": "sim-buyer-009@freshroute.com"
+      },
+      "supplierSelections": [
+        {
+          "orderItemId": "73262ee5-552f-47a8-9606-02ba86586f2a",
+          "productId": "ce3e7222-d5af-4be0-a9c5-3037b99ffca5",
+          "productName": "Demo Product 3",
+          "quantity": 2,
+          "unitPrice": 4.5,
+          "seller": {
+            "sellerId": "99e7e9b3-c591-46d2-a23d-2f65d9fc4154",
+            "businessName": "Central Harvest Hub",
+            "contactName": "Central Harvest Hub"
+          }
+        }
+      ]
+    },
+    {
+      "orderId": "5fc1a5af-37d2-4fb2-bb7e-a3e440db4d53",
+      "orderNumber": "SIM-ORD-010",
+      "status": "PAID",
+      "isCancelled": false,
+      "storageType": "COLD",
+      "totalWeight": 12.5,
+      "totalVolume": 3.6,
+      "totalAmount": 67.5,
+      "deliveryDate": "2026-05-08T05:30:00.000Z",
+      "placedAt": "2026-05-07T17:30:00.000Z",
+      "delivery": {
+        "address": "Simulation Address 10, Zone CMB_NORTH",
+        "lat": 6.974783,
+        "lng": 79.872105,
+        "zone": {
+          "id": "dd9ef679-7904-4929-9319-7f77313cd9e0",
+          "code": "CMB_NORTH",
+          "name": "Colombo North"
+        }
+      },
+      "pickupHub": {
+        "id": "af58d909-15a4-4d10-8a3d-e43ae8dd45b7",
+        "name": "North Collection Hub",
+        "lat": 6.968,
+        "lng": 79.868
+      },
+      "buyer": {
+        "id": "5b7acb19-bc22-40b6-be1f-8461102a7d71",
+        "name": "Simulation Buyer 10",
+        "email": "sim-buyer-010@freshroute.com"
+      },
+      "supplierSelections": [
+        {
+          "orderItemId": "18a82b02-aaed-47ab-9956-9899c548655b",
+          "productId": "e48c6e9d-ca1e-4533-bd9a-cc61aa0036fb",
+          "productName": "Demo Product 1",
+          "quantity": 3,
+          "unitPrice": 2.5,
+          "seller": {
+            "sellerId": "4a11a058-102a-4a0c-9253-5a66934a95bf",
+            "businessName": "North Valley Farms",
+            "contactName": "North Valley Farms"
+          }
+        }
+      ]
+    },
+    {
+      "orderId": "52d66aa4-d282-460d-a46d-388e97d25aad",
+      "orderNumber": "SIM-ORD-011",
+      "status": "PAID",
+      "isCancelled": false,
+      "storageType": "NORMAL",
+      "totalWeight": 17,
+      "totalVolume": 4.4,
+      "totalAmount": 70.25,
+      "deliveryDate": "2026-05-08T06:00:00.000Z",
+      "placedAt": "2026-05-07T16:30:00.000Z",
+      "delivery": {
+        "address": "Simulation Address 11, Zone CMB_CENTRAL",
+        "lat": 6.919083,
+        "lng": 79.880526,
+        "zone": {
+          "id": "38b29a14-3f21-4647-a7b1-132a87a20620",
+          "code": "CMB_CENTRAL",
+          "name": "Colombo Central"
+        }
+      },
+      "pickupHub": {
+        "id": "2358b37a-bae2-415c-ae9d-a1e5f3f7debf",
+        "name": "South Collection Hub",
+        "lat": 6.858,
+        "lng": 79.864
+      },
+      "buyer": {
+        "id": "015e5daf-609d-4d0d-b8c5-78bdb77236bc",
+        "name": "Simulation Buyer 11",
+        "email": "sim-buyer-011@freshroute.com"
+      },
+      "supplierSelections": [
+        {
+          "orderItemId": "0e668a2e-b065-4078-b6f5-8ff2e9d38ade",
+          "productId": "8e07cdee-04d9-48fe-bc37-d3d4d572873f",
+          "productName": "Demo Product 2",
+          "quantity": 4,
+          "unitPrice": 3.5,
+          "seller": {
+            "sellerId": "3a1a5b12-c3dc-4ffb-8154-decb21a3ad3b",
+            "businessName": "Southern Greens Cooperative",
+            "contactName": "Southern Greens Cooperative"
+          }
+        }
+      ]
+    },
+    {
+      "orderId": "6d9d6395-4c1a-4ee1-8cc1-cb0f17808404",
+      "orderNumber": "SIM-ORD-012",
+      "status": "PAID",
+      "isCancelled": false,
+      "storageType": "NORMAL",
+      "totalWeight": 21.5,
+      "totalVolume": 5.2,
+      "totalAmount": 73,
+      "deliveryDate": "2026-05-08T03:30:00.000Z",
+      "placedAt": "2026-05-08T03:30:00.000Z",
+      "delivery": {
+        "address": "Simulation Address 12, Zone CMB_SOUTH",
+        "lat": 6.871252,
+        "lng": 79.884211,
+        "zone": {
+          "id": "cf1e5801-1d4c-4e8c-9f1b-92993168d1fc",
+          "code": "CMB_SOUTH",
+          "name": "Colombo South"
+        }
+      },
+      "pickupHub": {
+        "id": "ea2ba564-846f-476f-a4c2-3b04777d2407",
+        "name": "Central Aggregation Hub",
+        "lat": 6.914,
+        "lng": 79.872
+      },
+      "buyer": {
+        "id": "73cce016-3546-432d-9ffa-33af3dab4294",
+        "name": "Simulation Buyer 12",
+        "email": "sim-buyer-012@freshroute.com"
+      },
+      "supplierSelections": [
+        {
+          "orderItemId": "5986181e-41ae-4075-a7d0-e051dc26a2f8",
+          "productId": "ce3e7222-d5af-4be0-a9c5-3037b99ffca5",
+          "productName": "Demo Product 3",
+          "quantity": 1,
+          "unitPrice": 4.5,
+          "seller": {
+            "sellerId": "99e7e9b3-c591-46d2-a23d-2f65d9fc4154",
+            "businessName": "Central Harvest Hub",
+            "contactName": "Central Harvest Hub"
+          }
+        }
+      ]
+    },
+    {
+      "orderId": "6dc695f7-1c72-4c1b-b568-127d7fccd3fa",
+      "orderNumber": "SIM-ORD-013",
+      "status": "PAID",
+      "isCancelled": false,
+      "storageType": "NORMAL",
+      "totalWeight": 26,
+      "totalVolume": 6,
+      "totalAmount": 75.75,
+      "deliveryDate": "2026-05-08T04:00:00.000Z",
+      "placedAt": "2026-05-08T02:30:00.000Z",
+      "delivery": {
+        "address": "Simulation Address 13, Zone CMB_NORTH",
+        "lat": 6.985217,
+        "lng": 79.884737,
+        "zone": {
+          "id": "dd9ef679-7904-4929-9319-7f77313cd9e0",
+          "code": "CMB_NORTH",
+          "name": "Colombo North"
+        }
+      },
+      "pickupHub": {
+        "id": "af58d909-15a4-4d10-8a3d-e43ae8dd45b7",
+        "name": "North Collection Hub",
+        "lat": 6.968,
+        "lng": 79.868
+      },
+      "buyer": {
+        "id": "1b96ac7a-f9b2-44c2-b7c0-ea30ddea1db5",
+        "name": "Simulation Buyer 13",
+        "email": "sim-buyer-013@freshroute.com"
+      },
+      "supplierSelections": [
+        {
+          "orderItemId": "ef545693-d898-4d98-9aa6-f994ecab7174",
+          "productId": "e48c6e9d-ca1e-4533-bd9a-cc61aa0036fb",
+          "productName": "Demo Product 1",
+          "quantity": 2,
+          "unitPrice": 2.5,
+          "seller": {
+            "sellerId": "4a11a058-102a-4a0c-9253-5a66934a95bf",
+            "businessName": "North Valley Farms",
+            "contactName": "North Valley Farms"
+          }
+        }
+      ]
+    },
+    {
+      "orderId": "2215258e-ec89-420a-9c05-49bc89e4fe6a",
+      "orderNumber": "SIM-ORD-014",
+      "status": "PAID",
+      "isCancelled": false,
+      "storageType": "NORMAL",
+      "totalWeight": 30.5,
+      "totalVolume": 1.2,
+      "totalAmount": 78.5,
+      "deliveryDate": "2026-05-08T04:30:00.000Z",
+      "placedAt": "2026-05-08T01:30:00.000Z",
+      "delivery": {
+        "address": "Simulation Address 14, Zone CMB_CENTRAL",
+        "lat": 6.924287,
+        "lng": 79.891579,
+        "zone": {
+          "id": "38b29a14-3f21-4647-a7b1-132a87a20620",
+          "code": "CMB_CENTRAL",
+          "name": "Colombo Central"
+        }
+      },
+      "pickupHub": {
+        "id": "2358b37a-bae2-415c-ae9d-a1e5f3f7debf",
+        "name": "South Collection Hub",
+        "lat": 6.858,
+        "lng": 79.864
+      },
+      "buyer": {
+        "id": "9e4f3eae-4fe6-469d-8ad6-7dd005a94395",
+        "name": "Simulation Buyer 14",
+        "email": "sim-buyer-014@freshroute.com"
+      },
+      "supplierSelections": [
+        {
+          "orderItemId": "49e81627-1927-421e-a5ca-c476749d9994",
+          "productId": "8e07cdee-04d9-48fe-bc37-d3d4d572873f",
+          "productName": "Demo Product 2",
+          "quantity": 3,
+          "unitPrice": 3.5,
+          "seller": {
+            "sellerId": "3a1a5b12-c3dc-4ffb-8154-decb21a3ad3b",
+            "businessName": "Southern Greens Cooperative",
+            "contactName": "Southern Greens Cooperative"
+          }
+        }
+      ]
+    },
+    {
+      "orderId": "6a62e596-3f22-4dcf-a051-369f3e76c1d8",
+      "orderNumber": "SIM-ORD-015",
+      "status": "PAID",
+      "isCancelled": false,
+      "storageType": "COLD",
+      "totalWeight": 35,
+      "totalVolume": 2,
+      "totalAmount": 81.25,
+      "deliveryDate": "2026-05-08T05:00:00.000Z",
+      "placedAt": "2026-05-08T00:30:00.000Z",
+      "delivery": {
+        "address": "Simulation Address 15, Zone CMB_SOUTH",
+        "lat": 6.879065,
+        "lng": 79.895263,
+        "zone": {
+          "id": "cf1e5801-1d4c-4e8c-9f1b-92993168d1fc",
+          "code": "CMB_SOUTH",
+          "name": "Colombo South"
+        }
+      },
+      "pickupHub": {
+        "id": "ea2ba564-846f-476f-a4c2-3b04777d2407",
+        "name": "Central Aggregation Hub",
+        "lat": 6.914,
+        "lng": 79.872
+      },
+      "buyer": {
+        "id": "cf4130a3-a054-40da-bc9d-f540ece06fcd",
+        "name": "Simulation Buyer 15",
+        "email": "sim-buyer-015@freshroute.com"
+      },
+      "supplierSelections": [
+        {
+          "orderItemId": "2a89b656-05c8-437a-851c-9bb93090e5b1",
+          "productId": "ce3e7222-d5af-4be0-a9c5-3037b99ffca5",
+          "productName": "Demo Product 3",
+          "quantity": 4,
+          "unitPrice": 4.5,
+          "seller": {
+            "sellerId": "99e7e9b3-c591-46d2-a23d-2f65d9fc4154",
+            "businessName": "Central Harvest Hub",
+            "contactName": "Central Harvest Hub"
+          }
+        }
+      ]
+    },
+    {
+      "orderId": "5f99a05f-73d7-47cc-b8d1-b7a45a7d7aec",
+      "orderNumber": "SIM-ORD-016",
+      "status": "PAID",
+      "isCancelled": false,
+      "storageType": "NORMAL",
+      "totalWeight": 39.5,
+      "totalVolume": 2.8,
+      "totalAmount": 84,
+      "deliveryDate": "2026-05-08T05:30:00.000Z",
+      "placedAt": "2026-05-07T23:30:00.000Z",
+      "delivery": {
+        "address": "Simulation Address 16, Zone CMB_NORTH",
+        "lat": 6.995652,
+        "lng": 79.897368,
+        "zone": {
+          "id": "dd9ef679-7904-4929-9319-7f77313cd9e0",
+          "code": "CMB_NORTH",
+          "name": "Colombo North"
+        }
+      },
+      "pickupHub": {
+        "id": "af58d909-15a4-4d10-8a3d-e43ae8dd45b7",
+        "name": "North Collection Hub",
+        "lat": 6.968,
+        "lng": 79.868
+      },
+      "buyer": {
+        "id": "e8eb5076-1665-4932-84f2-51e804dbb5e3",
+        "name": "Simulation Buyer 16",
+        "email": "sim-buyer-016@freshroute.com"
+      },
+      "supplierSelections": [
+        {
+          "orderItemId": "2c962f1f-370c-4eb7-939f-5d1c9f747d68",
+          "productId": "e48c6e9d-ca1e-4533-bd9a-cc61aa0036fb",
+          "productName": "Demo Product 1",
+          "quantity": 1,
+          "unitPrice": 2.5,
+          "seller": {
+            "sellerId": "4a11a058-102a-4a0c-9253-5a66934a95bf",
+            "businessName": "North Valley Farms",
+            "contactName": "North Valley Farms"
+          }
+        }
+      ]
+    },
+    {
+      "orderId": "2cbdc30d-26e1-4529-b2e0-7559fb28fdaa",
+      "orderNumber": "SIM-ORD-017",
+      "status": "PENDING",
+      "isCancelled": false,
+      "storageType": "NORMAL",
+      "totalWeight": 44,
+      "totalVolume": 3.6,
+      "totalAmount": 86.75,
+      "deliveryDate": "2026-05-08T06:00:00.000Z",
+      "placedAt": "2026-05-07T22:30:00.000Z",
+      "delivery": {
+        "address": "Simulation Address 17, Zone CMB_CENTRAL",
+        "lat": 6.929491,
+        "lng": 79.902632,
+        "zone": {
+          "id": "38b29a14-3f21-4647-a7b1-132a87a20620",
+          "code": "CMB_CENTRAL",
+          "name": "Colombo Central"
+        }
+      },
+      "pickupHub": {
+        "id": "2358b37a-bae2-415c-ae9d-a1e5f3f7debf",
+        "name": "South Collection Hub",
+        "lat": 6.858,
+        "lng": 79.864
+      },
+      "buyer": {
+        "id": "0eaae06a-c6a4-4746-985f-3c0800af33b1",
+        "name": "Simulation Buyer 17",
+        "email": "sim-buyer-017@freshroute.com"
+      },
+      "supplierSelections": [
+        {
+          "orderItemId": "48cd5207-2c51-41c8-8c4b-1330104b9832",
+          "productId": "8e07cdee-04d9-48fe-bc37-d3d4d572873f",
+          "productName": "Demo Product 2",
+          "quantity": 2,
+          "unitPrice": 3.5,
+          "seller": {
+            "sellerId": "3a1a5b12-c3dc-4ffb-8154-decb21a3ad3b",
+            "businessName": "Southern Greens Cooperative",
+            "contactName": "Southern Greens Cooperative"
+          }
+        }
+      ]
+    },
+    {
+      "orderId": "3c255199-b988-4284-a6dd-9e0e626d9bf6",
+      "orderNumber": "SIM-ORD-018",
+      "status": "PAID",
+      "isCancelled": false,
+      "storageType": "NORMAL",
+      "totalWeight": 8,
+      "totalVolume": 4.4,
+      "totalAmount": 89.5,
+      "deliveryDate": "2026-05-08T03:30:00.000Z",
+      "placedAt": "2026-05-07T21:30:00.000Z",
+      "delivery": {
+        "address": "Simulation Address 18, Zone CMB_SOUTH",
+        "lat": 6.886878,
+        "lng": 79.906316,
+        "zone": {
+          "id": "cf1e5801-1d4c-4e8c-9f1b-92993168d1fc",
+          "code": "CMB_SOUTH",
+          "name": "Colombo South"
+        }
+      },
+      "pickupHub": {
+        "id": "ea2ba564-846f-476f-a4c2-3b04777d2407",
+        "name": "Central Aggregation Hub",
+        "lat": 6.914,
+        "lng": 79.872
+      },
+      "buyer": {
+        "id": "38849529-8db1-4bd4-a188-8cd468b7bc9e",
+        "name": "Simulation Buyer 18",
+        "email": "sim-buyer-018@freshroute.com"
+      },
+      "supplierSelections": [
+        {
+          "orderItemId": "e4bb7288-9ce6-4ab8-9f11-ce4a9d3be9ab",
+          "productId": "ce3e7222-d5af-4be0-a9c5-3037b99ffca5",
+          "productName": "Demo Product 3",
+          "quantity": 3,
+          "unitPrice": 4.5,
+          "seller": {
+            "sellerId": "99e7e9b3-c591-46d2-a23d-2f65d9fc4154",
+            "businessName": "Central Harvest Hub",
+            "contactName": "Central Harvest Hub"
+          }
+        }
+      ]
+    },
+    {
+      "orderId": "06071e2d-8a48-4978-aa55-c11924a50275",
+      "orderNumber": "SIM-ORD-019",
+      "status": "PAID",
+      "isCancelled": true,
+      "storageType": "NORMAL",
+      "totalWeight": 12.5,
+      "totalVolume": 5.2,
+      "totalAmount": 92.25,
+      "deliveryDate": "2026-05-08T04:00:00.000Z",
+      "placedAt": "2026-05-07T20:30:00.000Z",
+      "delivery": {
+        "address": "Simulation Address 19, Zone CMB_NORTH",
+        "lat": 7.006087,
+        "lng": 79.83,
+        "zone": {
+          "id": "dd9ef679-7904-4929-9319-7f77313cd9e0",
+          "code": "CMB_NORTH",
+          "name": "Colombo North"
+        }
+      },
+      "pickupHub": {
+        "id": "af58d909-15a4-4d10-8a3d-e43ae8dd45b7",
+        "name": "North Collection Hub",
+        "lat": 6.968,
+        "lng": 79.868
+      },
+      "buyer": {
+        "id": "6bd0db0c-973d-4ce9-ab56-b7e8a6d07ae5",
+        "name": "Simulation Buyer 19",
+        "email": "sim-buyer-019@freshroute.com"
+      },
+      "supplierSelections": [
+        {
+          "orderItemId": "b9007c76-1c6f-48eb-8419-96771d471c51",
+          "productId": "e48c6e9d-ca1e-4533-bd9a-cc61aa0036fb",
+          "productName": "Demo Product 1",
+          "quantity": 4,
+          "unitPrice": 2.5,
+          "seller": {
+            "sellerId": "4a11a058-102a-4a0c-9253-5a66934a95bf",
+            "businessName": "North Valley Farms",
+            "contactName": "North Valley Farms"
+          }
+        }
+      ]
+    },
+    {
+      "orderId": "df1f5969-c858-49c7-a173-82603e304398",
+      "orderNumber": "SIM-ORD-020",
+      "status": "PAID",
+      "isCancelled": false,
+      "storageType": "COLD",
+      "totalWeight": 17,
+      "totalVolume": 6,
+      "totalAmount": 95,
+      "deliveryDate": "2026-05-08T04:30:00.000Z",
+      "placedAt": "2026-05-07T19:30:00.000Z",
+      "delivery": {
+        "address": "Simulation Address 20, Zone CMB_CENTRAL",
+        "lat": 6.934696,
+        "lng": 79.843684,
+        "zone": {
+          "id": "38b29a14-3f21-4647-a7b1-132a87a20620",
+          "code": "CMB_CENTRAL",
+          "name": "Colombo Central"
+        }
+      },
+      "pickupHub": {
+        "id": "2358b37a-bae2-415c-ae9d-a1e5f3f7debf",
+        "name": "South Collection Hub",
+        "lat": 6.858,
+        "lng": 79.864
+      },
+      "buyer": {
+        "id": "5a226cf9-1041-43a4-8551-1bc43738a526",
+        "name": "Simulation Buyer 20",
+        "email": "sim-buyer-020@freshroute.com"
+      },
+      "supplierSelections": [
+        {
+          "orderItemId": "b8338d53-4ad4-49ad-85ff-8ff1ab001452",
+          "productId": "8e07cdee-04d9-48fe-bc37-d3d4d572873f",
+          "productName": "Demo Product 2",
+          "quantity": 1,
+          "unitPrice": 3.5,
+          "seller": {
+            "sellerId": "3a1a5b12-c3dc-4ffb-8154-decb21a3ad3b",
+            "businessName": "Southern Greens Cooperative",
+            "contactName": "Southern Greens Cooperative"
+          }
+        }
+      ]
+    },
+    {
+      "orderId": "b45600ed-4200-4970-b906-e875dc842717",
+      "orderNumber": "SIM-ORD-021",
+      "status": "PAID",
+      "isCancelled": false,
+      "storageType": "NORMAL",
+      "totalWeight": 21.5,
+      "totalVolume": 1.2,
+      "totalAmount": 97.75,
+      "deliveryDate": "2026-05-08T05:00:00.000Z",
+      "placedAt": "2026-05-07T18:30:00.000Z",
+      "delivery": {
+        "address": "Simulation Address 21, Zone CMB_SOUTH",
+        "lat": 6.894691,
+        "lng": 79.847368,
+        "zone": {
+          "id": "cf1e5801-1d4c-4e8c-9f1b-92993168d1fc",
+          "code": "CMB_SOUTH",
+          "name": "Colombo South"
+        }
+      },
+      "pickupHub": {
+        "id": "ea2ba564-846f-476f-a4c2-3b04777d2407",
+        "name": "Central Aggregation Hub",
+        "lat": 6.914,
+        "lng": 79.872
+      },
+      "buyer": {
+        "id": "0cf71050-ae3a-435a-9fa9-64982649c0e7",
+        "name": "Simulation Buyer 21",
+        "email": "sim-buyer-021@freshroute.com"
+      },
+      "supplierSelections": [
+        {
+          "orderItemId": "d6cba983-d8b8-412a-a0e9-d5dd9a843cf5",
+          "productId": "ce3e7222-d5af-4be0-a9c5-3037b99ffca5",
+          "productName": "Demo Product 3",
+          "quantity": 2,
+          "unitPrice": 4.5,
+          "seller": {
+            "sellerId": "99e7e9b3-c591-46d2-a23d-2f65d9fc4154",
+            "businessName": "Central Harvest Hub",
+            "contactName": "Central Harvest Hub"
+          }
+        }
+      ]
+    },
+    {
+      "orderId": "b2312ffe-779d-43b2-92f7-210efd8e8645",
+      "orderNumber": "SIM-ORD-022",
+      "status": "PAID",
+      "isCancelled": false,
+      "storageType": "NORMAL",
+      "totalWeight": 26,
+      "totalVolume": 2,
+      "totalAmount": 100.5,
+      "deliveryDate": "2026-05-08T05:30:00.000Z",
+      "placedAt": "2026-05-07T17:30:00.000Z",
+      "delivery": {
+        "address": "Simulation Address 22, Zone CMB_NORTH",
+        "lat": 7.016522,
+        "lng": 79.842632,
+        "zone": {
+          "id": "dd9ef679-7904-4929-9319-7f77313cd9e0",
+          "code": "CMB_NORTH",
+          "name": "Colombo North"
+        }
+      },
+      "pickupHub": {
+        "id": "af58d909-15a4-4d10-8a3d-e43ae8dd45b7",
+        "name": "North Collection Hub",
+        "lat": 6.968,
+        "lng": 79.868
+      },
+      "buyer": {
+        "id": "8f544d8a-87ed-4194-a264-c8370d9613ca",
+        "name": "Simulation Buyer 22",
+        "email": "sim-buyer-022@freshroute.com"
+      },
+      "supplierSelections": [
+        {
+          "orderItemId": "43c721af-72c6-4ea6-a82d-c9f3212dc308",
+          "productId": "e48c6e9d-ca1e-4533-bd9a-cc61aa0036fb",
+          "productName": "Demo Product 1",
+          "quantity": 3,
+          "unitPrice": 2.5,
+          "seller": {
+            "sellerId": "4a11a058-102a-4a0c-9253-5a66934a95bf",
+            "businessName": "North Valley Farms",
+            "contactName": "North Valley Farms"
+          }
+        }
+      ]
+    },
+    {
+      "orderId": "cae1dcd5-5472-4db7-99c4-ff9c43dcdf85",
+      "orderNumber": "SIM-ORD-023",
+      "status": "PAID",
+      "isCancelled": false,
+      "storageType": "NORMAL",
+      "totalWeight": null,
+      "totalVolume": null,
+      "totalAmount": 103.25,
+      "deliveryDate": "2026-05-08T06:00:00.000Z",
+      "placedAt": "2026-05-07T16:30:00.000Z",
+      "delivery": {
+        "address": "Simulation Address 23, Zone CMB_CENTRAL",
+        "lat": 6.9,
+        "lng": 79.854737,
+        "zone": {
+          "id": "38b29a14-3f21-4647-a7b1-132a87a20620",
+          "code": "CMB_CENTRAL",
+          "name": "Colombo Central"
+        }
+      },
+      "pickupHub": {
+        "id": "2358b37a-bae2-415c-ae9d-a1e5f3f7debf",
+        "name": "South Collection Hub",
+        "lat": 6.858,
+        "lng": 79.864
+      },
+      "buyer": {
+        "id": "1dfab565-1c5d-49fc-ab79-3fc77fcc050e",
+        "name": "Simulation Buyer 23",
+        "email": "sim-buyer-023@freshroute.com"
+      },
+      "supplierSelections": [
+        {
+          "orderItemId": "8b9aa407-8e22-4261-9f62-c574113e9f03",
+          "productId": "8e07cdee-04d9-48fe-bc37-d3d4d572873f",
+          "productName": "Demo Product 2",
+          "quantity": 4,
+          "unitPrice": 3.5,
+          "seller": {
+            "sellerId": "3a1a5b12-c3dc-4ffb-8154-decb21a3ad3b",
+            "businessName": "Southern Greens Cooperative",
+            "contactName": "Southern Greens Cooperative"
+          }
+        }
+      ]
+    },
+    {
+      "orderId": "1f11856b-13ee-4c4a-817d-06ae7e170d2f",
+      "orderNumber": "SIM-ORD-024",
+      "status": "PAID",
+      "isCancelled": false,
+      "storageType": "NORMAL",
+      "totalWeight": 35,
+      "totalVolume": 3.6,
+      "totalAmount": 106,
+      "deliveryDate": "2026-05-08T03:30:00.000Z",
+      "placedAt": "2026-05-08T03:30:00.000Z",
+      "delivery": {
+        "address": "Simulation Address 24, Zone CMB_SOUTH",
+        "lat": 6.842604,
+        "lng": 79.858421,
+        "zone": {
+          "id": "cf1e5801-1d4c-4e8c-9f1b-92993168d1fc",
+          "code": "CMB_SOUTH",
+          "name": "Colombo South"
+        }
+      },
+      "pickupHub": {
+        "id": "ea2ba564-846f-476f-a4c2-3b04777d2407",
+        "name": "Central Aggregation Hub",
+        "lat": 6.914,
+        "lng": 79.872
+      },
+      "buyer": {
+        "id": "e3decc3d-c7e2-467b-8944-62b33b88fc4b",
+        "name": "Simulation Buyer 24",
+        "email": "sim-buyer-024@freshroute.com"
+      },
+      "supplierSelections": [
+        {
+          "orderItemId": "77705126-e472-4e41-82dc-8a767869f19f",
+          "productId": "ce3e7222-d5af-4be0-a9c5-3037b99ffca5",
+          "productName": "Demo Product 3",
+          "quantity": 1,
+          "unitPrice": 4.5,
+          "seller": {
+            "sellerId": "99e7e9b3-c591-46d2-a23d-2f65d9fc4154",
+            "businessName": "Central Harvest Hub",
+            "contactName": "Central Harvest Hub"
+          }
+        }
+      ]
+    },
+    {
+      "orderId": "dbd8d1e7-5b4d-4777-be6b-ace58c264b37",
+      "orderNumber": "SIM-ORD-025",
+      "status": "PAID",
+      "isCancelled": false,
+      "storageType": "COLD",
+      "totalWeight": 39.5,
+      "totalVolume": 4.4,
+      "totalAmount": 108.75,
+      "deliveryDate": "2026-05-08T04:00:00.000Z",
+      "placedAt": "2026-05-08T02:30:00.000Z",
+      "delivery": {
+        "address": "Simulation Address 25, Zone CMB_NORTH",
+        "lat": 6.946957,
+        "lng": 79.855263,
+        "zone": {
+          "id": "dd9ef679-7904-4929-9319-7f77313cd9e0",
+          "code": "CMB_NORTH",
+          "name": "Colombo North"
+        }
+      },
+      "pickupHub": {
+        "id": "af58d909-15a4-4d10-8a3d-e43ae8dd45b7",
+        "name": "North Collection Hub",
+        "lat": 6.968,
+        "lng": 79.868
+      },
+      "buyer": {
+        "id": "17d44ca5-18fd-432d-a490-21b36c8ffe73",
+        "name": "Simulation Buyer 25",
+        "email": "sim-buyer-025@freshroute.com"
+      },
+      "supplierSelections": [
+        {
+          "orderItemId": "01f95799-bb75-449d-b072-693f091136cc",
+          "productId": "e48c6e9d-ca1e-4533-bd9a-cc61aa0036fb",
+          "productName": "Demo Product 1",
+          "quantity": 2,
+          "unitPrice": 2.5,
+          "seller": {
+            "sellerId": "4a11a058-102a-4a0c-9253-5a66934a95bf",
+            "businessName": "North Valley Farms",
+            "contactName": "North Valley Farms"
+          }
+        }
+      ]
+    },
+    {
+      "orderId": "0745c244-68b1-4300-b9db-4c6cc49975a0",
+      "orderNumber": "SIM-ORD-026",
+      "status": "PAID",
+      "isCancelled": false,
+      "storageType": "NORMAL",
+      "totalWeight": 44,
+      "totalVolume": 5.2,
+      "totalAmount": 111.5,
+      "deliveryDate": "2026-05-08T04:30:00.000Z",
+      "placedAt": "2026-05-08T01:30:00.000Z",
+      "delivery": {
+        "address": "Simulation Address 26, Zone CMB_CENTRAL",
+        "lat": 6.905204,
+        "lng": 79.865789,
+        "zone": {
+          "id": "38b29a14-3f21-4647-a7b1-132a87a20620",
+          "code": "CMB_CENTRAL",
+          "name": "Colombo Central"
+        }
+      },
+      "pickupHub": {
+        "id": "2358b37a-bae2-415c-ae9d-a1e5f3f7debf",
+        "name": "South Collection Hub",
+        "lat": 6.858,
+        "lng": 79.864
+      },
+      "buyer": {
+        "id": "ef4dd43a-925f-4ae0-ac88-255854940fe3",
+        "name": "Simulation Buyer 26",
+        "email": "sim-buyer-026@freshroute.com"
+      },
+      "supplierSelections": [
+        {
+          "orderItemId": "332a9422-0af0-4ec3-b8bd-209f8a8085b9",
+          "productId": "8e07cdee-04d9-48fe-bc37-d3d4d572873f",
+          "productName": "Demo Product 2",
+          "quantity": 3,
+          "unitPrice": 3.5,
+          "seller": {
+            "sellerId": "3a1a5b12-c3dc-4ffb-8154-decb21a3ad3b",
+            "businessName": "Southern Greens Cooperative",
+            "contactName": "Southern Greens Cooperative"
+          }
+        }
+      ]
+    },
+    {
+      "orderId": "66c129a5-52e3-41f5-bf96-10e8d89331e5",
+      "orderNumber": "SIM-ORD-027",
+      "status": "PAID",
+      "isCancelled": false,
+      "storageType": "NORMAL",
+      "totalWeight": 8,
+      "totalVolume": 6,
+      "totalAmount": 114.25,
+      "deliveryDate": "2026-05-08T05:00:00.000Z",
+      "placedAt": "2026-05-08T00:30:00.000Z",
+      "delivery": {
+        "address": "Simulation Address 27, Zone CMB_SOUTH",
+        "lat": 6.850417,
+        "lng": 79.869474,
+        "zone": {
+          "id": "cf1e5801-1d4c-4e8c-9f1b-92993168d1fc",
+          "code": "CMB_SOUTH",
+          "name": "Colombo South"
+        }
+      },
+      "pickupHub": {
+        "id": "ea2ba564-846f-476f-a4c2-3b04777d2407",
+        "name": "Central Aggregation Hub",
+        "lat": 6.914,
+        "lng": 79.872
+      },
+      "buyer": {
+        "id": "ea75f4d8-81fb-4f04-a4ae-c811ba556f4e",
+        "name": "Simulation Buyer 27",
+        "email": "sim-buyer-027@freshroute.com"
+      },
+      "supplierSelections": [
+        {
+          "orderItemId": "5690b62a-65a5-437a-9697-5040e78d27f7",
+          "productId": "ce3e7222-d5af-4be0-a9c5-3037b99ffca5",
+          "productName": "Demo Product 3",
+          "quantity": 4,
+          "unitPrice": 4.5,
+          "seller": {
+            "sellerId": "99e7e9b3-c591-46d2-a23d-2f65d9fc4154",
+            "businessName": "Central Harvest Hub",
+            "contactName": "Central Harvest Hub"
+          }
+        }
+      ]
+    },
+    {
+      "orderId": "161c67e4-f983-4291-a4e5-f348f6e76c68",
+      "orderNumber": "SIM-ORD-028",
+      "status": "PAID",
+      "isCancelled": false,
+      "storageType": "NORMAL",
+      "totalWeight": 12.5,
+      "totalVolume": 1.2,
+      "totalAmount": 117,
+      "deliveryDate": "2026-05-08T05:30:00.000Z",
+      "placedAt": "2026-05-07T23:30:00.000Z",
+      "delivery": {
+        "address": "Simulation Address 28, Zone CMB_NORTH",
+        "lat": 6.957391,
+        "lng": 79.867895,
+        "zone": {
+          "id": "dd9ef679-7904-4929-9319-7f77313cd9e0",
+          "code": "CMB_NORTH",
+          "name": "Colombo North"
+        }
+      },
+      "pickupHub": {
+        "id": "af58d909-15a4-4d10-8a3d-e43ae8dd45b7",
+        "name": "North Collection Hub",
+        "lat": 6.968,
+        "lng": 79.868
+      },
+      "buyer": {
+        "id": "5cbb50d6-413e-411f-8f89-84b1550ae2c9",
+        "name": "Simulation Buyer 28",
+        "email": "sim-buyer-028@freshroute.com"
+      },
+      "supplierSelections": [
+        {
+          "orderItemId": "6a4399ca-b79b-450f-99f3-226aff0cd3f7",
+          "productId": "e48c6e9d-ca1e-4533-bd9a-cc61aa0036fb",
+          "productName": "Demo Product 1",
+          "quantity": 1,
+          "unitPrice": 2.5,
+          "seller": {
+            "sellerId": "4a11a058-102a-4a0c-9253-5a66934a95bf",
+            "businessName": "North Valley Farms",
+            "contactName": "North Valley Farms"
+          }
+        }
+      ]
+    },
+    {
+      "orderId": "cf5bf3f7-010c-4b99-87a1-e1b24016b00d",
+      "orderNumber": "SIM-ORD-029",
+      "status": "PAID",
+      "isCancelled": false,
+      "storageType": "NORMAL",
+      "totalWeight": 17,
+      "totalVolume": 2,
+      "totalAmount": 119.75,
+      "deliveryDate": "2026-05-08T06:00:00.000Z",
+      "placedAt": "2026-05-07T22:30:00.000Z",
+      "delivery": {
+        "address": "Simulation Address 29, Zone CMB_CENTRAL",
+        "lat": 6.910409,
+        "lng": 79.876842,
+        "zone": {
+          "id": "38b29a14-3f21-4647-a7b1-132a87a20620",
+          "code": "CMB_CENTRAL",
+          "name": "Colombo Central"
+        }
+      },
+      "pickupHub": {
+        "id": "2358b37a-bae2-415c-ae9d-a1e5f3f7debf",
+        "name": "South Collection Hub",
+        "lat": 6.858,
+        "lng": 79.864
+      },
+      "buyer": {
+        "id": "f70f5619-0e47-44e3-b084-da994b5c217a",
+        "name": "Simulation Buyer 29",
+        "email": "sim-buyer-029@freshroute.com"
+      },
+      "supplierSelections": [
+        {
+          "orderItemId": "473c303f-9e3d-43bd-bfbd-c8b3f99b57b5",
+          "productId": "8e07cdee-04d9-48fe-bc37-d3d4d572873f",
+          "productName": "Demo Product 2",
+          "quantity": 2,
+          "unitPrice": 3.5,
+          "seller": {
+            "sellerId": "3a1a5b12-c3dc-4ffb-8154-decb21a3ad3b",
+            "businessName": "Southern Greens Cooperative",
+            "contactName": "Southern Greens Cooperative"
+          }
+        }
+      ]
+    },
+    {
+      "orderId": "151f9eb2-6de0-4099-b607-a0699892c1da",
+      "orderNumber": "SIM-ORD-030",
+      "status": "PAID",
+      "isCancelled": false,
+      "storageType": "COLD",
+      "totalWeight": 21.5,
+      "totalVolume": 2.8,
+      "totalAmount": 122.5,
+      "deliveryDate": "2026-05-08T03:30:00.000Z",
+      "placedAt": "2026-05-07T21:30:00.000Z",
+      "delivery": {
+        "address": "Simulation Address 30, Zone CMB_SOUTH",
+        "lat": 6.85823,
+        "lng": 79.880526,
+        "zone": {
+          "id": "cf1e5801-1d4c-4e8c-9f1b-92993168d1fc",
+          "code": "CMB_SOUTH",
+          "name": "Colombo South"
+        }
+      },
+      "pickupHub": {
+        "id": "ea2ba564-846f-476f-a4c2-3b04777d2407",
+        "name": "Central Aggregation Hub",
+        "lat": 6.914,
+        "lng": 79.872
+      },
+      "buyer": {
+        "id": "5104486b-1688-498c-9095-8be9b13f4a20",
+        "name": "Simulation Buyer 30",
+        "email": "sim-buyer-030@freshroute.com"
+      },
+      "supplierSelections": [
+        {
+          "orderItemId": "baf24d12-9cc6-4cb3-8292-fcd45a28c69e",
+          "productId": "ce3e7222-d5af-4be0-a9c5-3037b99ffca5",
+          "productName": "Demo Product 3",
+          "quantity": 3,
+          "unitPrice": 4.5,
+          "seller": {
+            "sellerId": "99e7e9b3-c591-46d2-a23d-2f65d9fc4154",
+            "businessName": "Central Harvest Hub",
+            "contactName": "Central Harvest Hub"
+          }
+        }
+      ]
+    },
+    {
+      "orderId": "ea250fb1-1fa6-48fb-b6ab-3b9e17bb3f20",
+      "orderNumber": "SIM-ORD-031",
+      "status": "PAID",
+      "isCancelled": false,
+      "storageType": "NORMAL",
+      "totalWeight": 26,
+      "totalVolume": 3.6,
+      "totalAmount": 125.25,
+      "deliveryDate": "2026-05-08T04:00:00.000Z",
+      "placedAt": "2026-05-07T20:30:00.000Z",
+      "delivery": {
+        "address": "Simulation Address 31, Zone CMB_NORTH",
+        "lat": 6.967826,
+        "lng": 79.880526,
+        "zone": {
+          "id": "dd9ef679-7904-4929-9319-7f77313cd9e0",
+          "code": "CMB_NORTH",
+          "name": "Colombo North"
+        }
+      },
+      "pickupHub": {
+        "id": "af58d909-15a4-4d10-8a3d-e43ae8dd45b7",
+        "name": "North Collection Hub",
+        "lat": 6.968,
+        "lng": 79.868
+      },
+      "buyer": {
+        "id": "3662589e-fe61-4200-9679-5f734ad73682",
+        "name": "Simulation Buyer 31",
+        "email": "sim-buyer-031@freshroute.com"
+      },
+      "supplierSelections": [
+        {
+          "orderItemId": "9c693c9e-7059-4b9b-9e1d-2c4b3dfc85e7",
+          "productId": "e48c6e9d-ca1e-4533-bd9a-cc61aa0036fb",
+          "productName": "Demo Product 1",
+          "quantity": 4,
+          "unitPrice": 2.5,
+          "seller": {
+            "sellerId": "4a11a058-102a-4a0c-9253-5a66934a95bf",
+            "businessName": "North Valley Farms",
+            "contactName": "North Valley Farms"
+          }
+        }
+      ]
+    },
+    {
+      "orderId": "f260d2ad-7d69-41fd-b319-921940f4d3d1",
+      "orderNumber": "SIM-ORD-032",
+      "status": "PAID",
+      "isCancelled": false,
+      "storageType": "NORMAL",
+      "totalWeight": 30.5,
+      "totalVolume": 4.4,
+      "totalAmount": 128,
+      "deliveryDate": "2026-05-08T04:30:00.000Z",
+      "placedAt": "2026-05-07T19:30:00.000Z",
+      "delivery": {
+        "address": "Simulation Address 32, Zone CMB_CENTRAL",
+        "lat": 6.915613,
+        "lng": 79.887895,
+        "zone": {
+          "id": "38b29a14-3f21-4647-a7b1-132a87a20620",
+          "code": "CMB_CENTRAL",
+          "name": "Colombo Central"
+        }
+      },
+      "pickupHub": {
+        "id": "2358b37a-bae2-415c-ae9d-a1e5f3f7debf",
+        "name": "South Collection Hub",
+        "lat": 6.858,
+        "lng": 79.864
+      },
+      "buyer": {
+        "id": "70791f7a-e356-40f3-b6af-788a43f0747a",
+        "name": "Simulation Buyer 32",
+        "email": "sim-buyer-032@freshroute.com"
+      },
+      "supplierSelections": [
+        {
+          "orderItemId": "2bd21a04-881e-42ab-803a-38a756ef06c1",
+          "productId": "8e07cdee-04d9-48fe-bc37-d3d4d572873f",
+          "productName": "Demo Product 2",
+          "quantity": 1,
+          "unitPrice": 3.5,
+          "seller": {
+            "sellerId": "3a1a5b12-c3dc-4ffb-8154-decb21a3ad3b",
+            "businessName": "Southern Greens Cooperative",
+            "contactName": "Southern Greens Cooperative"
+          }
+        }
+      ]
+    },
+    {
+      "orderId": "6f00dee5-028b-42a7-b162-52967d1450d7",
+      "orderNumber": "SIM-ORD-033",
+      "status": "PAID",
+      "isCancelled": false,
+      "storageType": "NORMAL",
+      "totalWeight": 35,
+      "totalVolume": 5.2,
+      "totalAmount": 130.75,
+      "deliveryDate": "2026-05-08T05:00:00.000Z",
+      "placedAt": "2026-05-07T18:30:00.000Z",
+      "delivery": {
+        "address": "Simulation Address 33, Zone CMB_SOUTH",
+        "lat": 6.866043,
+        "lng": 79.891579,
+        "zone": {
+          "id": "cf1e5801-1d4c-4e8c-9f1b-92993168d1fc",
+          "code": "CMB_SOUTH",
+          "name": "Colombo South"
+        }
+      },
+      "pickupHub": {
+        "id": "ea2ba564-846f-476f-a4c2-3b04777d2407",
+        "name": "Central Aggregation Hub",
+        "lat": 6.914,
+        "lng": 79.872
+      },
+      "buyer": {
+        "id": "f67aee4f-becb-46c7-a7ef-71e1d35395d2",
+        "name": "Simulation Buyer 33",
+        "email": "sim-buyer-033@freshroute.com"
+      },
+      "supplierSelections": [
+        {
+          "orderItemId": "03ea6902-5d97-4f4c-bf27-4ac807614e88",
+          "productId": "ce3e7222-d5af-4be0-a9c5-3037b99ffca5",
+          "productName": "Demo Product 3",
+          "quantity": 2,
+          "unitPrice": 4.5,
+          "seller": {
+            "sellerId": "99e7e9b3-c591-46d2-a23d-2f65d9fc4154",
+            "businessName": "Central Harvest Hub",
+            "contactName": "Central Harvest Hub"
+          }
+        }
+      ]
+    },
+    {
+      "orderId": "ca6afbdb-f0f4-4f8d-89e1-0d0608653493",
+      "orderNumber": "SIM-ORD-034",
+      "status": "PENDING",
+      "isCancelled": false,
+      "storageType": "NORMAL",
+      "totalWeight": 39.5,
+      "totalVolume": 6,
+      "totalAmount": 133.5,
+      "deliveryDate": "2026-05-08T05:30:00.000Z",
+      "placedAt": "2026-05-07T17:30:00.000Z",
+      "delivery": {
+        "address": "Simulation Address 34, Zone CMB_NORTH",
+        "lat": 6.978261,
+        "lng": 79.893158,
+        "zone": {
+          "id": "dd9ef679-7904-4929-9319-7f77313cd9e0",
+          "code": "CMB_NORTH",
+          "name": "Colombo North"
+        }
+      },
+      "pickupHub": {
+        "id": "af58d909-15a4-4d10-8a3d-e43ae8dd45b7",
+        "name": "North Collection Hub",
+        "lat": 6.968,
+        "lng": 79.868
+      },
+      "buyer": {
+        "id": "1911e02b-0429-47e4-9fb0-a94aaba9fdaf",
+        "name": "Simulation Buyer 34",
+        "email": "sim-buyer-034@freshroute.com"
+      },
+      "supplierSelections": [
+        {
+          "orderItemId": "0b137a3c-93da-40c2-9586-f1d20a8f2329",
+          "productId": "e48c6e9d-ca1e-4533-bd9a-cc61aa0036fb",
+          "productName": "Demo Product 1",
+          "quantity": 3,
+          "unitPrice": 2.5,
+          "seller": {
+            "sellerId": "4a11a058-102a-4a0c-9253-5a66934a95bf",
+            "businessName": "North Valley Farms",
+            "contactName": "North Valley Farms"
+          }
+        }
+      ]
+    },
+    {
+      "orderId": "fb3201d7-1916-4f57-9d07-0383445a26aa",
+      "orderNumber": "SIM-ORD-035",
+      "status": "PAID",
+      "isCancelled": false,
+      "storageType": "COLD",
+      "totalWeight": 44,
+      "totalVolume": 1.2,
+      "totalAmount": 136.25,
+      "deliveryDate": "2026-05-08T06:00:00.000Z",
+      "placedAt": "2026-05-07T16:30:00.000Z",
+      "delivery": {
+        "address": "Simulation Address 35, Zone CMB_CENTRAL",
+        "lat": 6.920817,
+        "lng": 79.898947,
+        "zone": {
+          "id": "38b29a14-3f21-4647-a7b1-132a87a20620",
+          "code": "CMB_CENTRAL",
+          "name": "Colombo Central"
+        }
+      },
+      "pickupHub": {
+        "id": "2358b37a-bae2-415c-ae9d-a1e5f3f7debf",
+        "name": "South Collection Hub",
+        "lat": 6.858,
+        "lng": 79.864
+      },
+      "buyer": {
+        "id": "296dcd36-3e07-4ca3-b14d-0acdc1c2ac69",
+        "name": "Simulation Buyer 35",
+        "email": "sim-buyer-035@freshroute.com"
+      },
+      "supplierSelections": [
+        {
+          "orderItemId": "88da304e-2d9d-41eb-8a13-c771b055686d",
+          "productId": "8e07cdee-04d9-48fe-bc37-d3d4d572873f",
+          "productName": "Demo Product 2",
+          "quantity": 4,
+          "unitPrice": 3.5,
+          "seller": {
+            "sellerId": "3a1a5b12-c3dc-4ffb-8154-decb21a3ad3b",
+            "businessName": "Southern Greens Cooperative",
+            "contactName": "Southern Greens Cooperative"
+          }
+        }
+      ]
+    },
+    {
+      "orderId": "e86b90df-ae44-4c68-8418-21a6fe4076a2",
+      "orderNumber": "SIM-ORD-036",
+      "status": "PAID",
+      "isCancelled": false,
+      "storageType": "NORMAL",
+      "totalWeight": 8,
+      "totalVolume": 2,
+      "totalAmount": 139,
+      "deliveryDate": "2026-05-08T03:30:00.000Z",
+      "placedAt": "2026-05-08T03:30:00.000Z",
+      "delivery": {
+        "address": "Simulation Address 36, Zone CMB_SOUTH",
+        "lat": 6.873857,
+        "lng": 79.902632,
+        "zone": {
+          "id": "cf1e5801-1d4c-4e8c-9f1b-92993168d1fc",
+          "code": "CMB_SOUTH",
+          "name": "Colombo South"
+        }
+      },
+      "pickupHub": {
+        "id": "ea2ba564-846f-476f-a4c2-3b04777d2407",
+        "name": "Central Aggregation Hub",
+        "lat": 6.914,
+        "lng": 79.872
+      },
+      "buyer": {
+        "id": "a2b68ae5-f43d-4c5d-bb29-17da3fde01f3",
+        "name": "Simulation Buyer 36",
+        "email": "sim-buyer-036@freshroute.com"
+      },
+      "supplierSelections": [
+        {
+          "orderItemId": "ec3f15a7-e831-4748-b4db-0a3ec4e88192",
+          "productId": "ce3e7222-d5af-4be0-a9c5-3037b99ffca5",
+          "productName": "Demo Product 3",
+          "quantity": 1,
+          "unitPrice": 4.5,
+          "seller": {
+            "sellerId": "99e7e9b3-c591-46d2-a23d-2f65d9fc4154",
+            "businessName": "Central Harvest Hub",
+            "contactName": "Central Harvest Hub"
+          }
+        }
+      ]
+    },
+    {
+      "orderId": "5364d486-b07a-48b5-a380-673b9597967c",
+      "orderNumber": "SIM-ORD-037",
+      "status": "PAID",
+      "isCancelled": false,
+      "storageType": "NORMAL",
+      "totalWeight": 12.5,
+      "totalVolume": 2.8,
+      "totalAmount": 141.75,
+      "deliveryDate": "2026-05-08T04:00:00.000Z",
+      "placedAt": "2026-05-08T02:30:00.000Z",
+      "delivery": {
+        "address": "Simulation Address 37, Zone CMB_NORTH",
+        "lat": 6.988696,
+        "lng": 79.905789,
+        "zone": {
+          "id": "dd9ef679-7904-4929-9319-7f77313cd9e0",
+          "code": "CMB_NORTH",
+          "name": "Colombo North"
+        }
+      },
+      "pickupHub": {
+        "id": "af58d909-15a4-4d10-8a3d-e43ae8dd45b7",
+        "name": "North Collection Hub",
+        "lat": 6.968,
+        "lng": 79.868
+      },
+      "buyer": {
+        "id": "bd3ef94f-587a-441b-b27a-ee72108e7b5f",
+        "name": "Simulation Buyer 37",
+        "email": "sim-buyer-037@freshroute.com"
+      },
+      "supplierSelections": [
+        {
+          "orderItemId": "12c4a4b0-0092-49ff-bc69-d47a5bb58af0",
+          "productId": "e48c6e9d-ca1e-4533-bd9a-cc61aa0036fb",
+          "productName": "Demo Product 1",
+          "quantity": 2,
+          "unitPrice": 2.5,
+          "seller": {
+            "sellerId": "4a11a058-102a-4a0c-9253-5a66934a95bf",
+            "businessName": "North Valley Farms",
+            "contactName": "North Valley Farms"
+          }
+        }
+      ]
+    },
+    {
+      "orderId": "53125e42-26a0-4c16-bbc6-bcf4c4a6319b",
+      "orderNumber": "SIM-ORD-038",
+      "status": "PAID",
+      "isCancelled": true,
+      "storageType": "NORMAL",
+      "totalWeight": 17,
+      "totalVolume": 3.6,
+      "totalAmount": 144.5,
+      "deliveryDate": "2026-05-08T04:30:00.000Z",
+      "placedAt": "2026-05-08T01:30:00.000Z",
+      "delivery": {
+        "address": "Simulation Address 38, Zone CMB_CENTRAL",
+        "lat": 6.926022,
+        "lng": 79.84,
+        "zone": {
+          "id": "38b29a14-3f21-4647-a7b1-132a87a20620",
+          "code": "CMB_CENTRAL",
+          "name": "Colombo Central"
+        }
+      },
+      "pickupHub": {
+        "id": "2358b37a-bae2-415c-ae9d-a1e5f3f7debf",
+        "name": "South Collection Hub",
+        "lat": 6.858,
+        "lng": 79.864
+      },
+      "buyer": {
+        "id": "93e010a9-f31e-4a04-aac7-44fc9704d306",
+        "name": "Simulation Buyer 38",
+        "email": "sim-buyer-038@freshroute.com"
+      },
+      "supplierSelections": [
+        {
+          "orderItemId": "1107f135-71c1-4e9a-a377-d5afa171798a",
+          "productId": "8e07cdee-04d9-48fe-bc37-d3d4d572873f",
+          "productName": "Demo Product 2",
+          "quantity": 3,
+          "unitPrice": 3.5,
+          "seller": {
+            "sellerId": "3a1a5b12-c3dc-4ffb-8154-decb21a3ad3b",
+            "businessName": "Southern Greens Cooperative",
+            "contactName": "Southern Greens Cooperative"
+          }
+        }
+      ]
+    },
+    {
+      "orderId": "0bdedf8f-789b-40e2-9cf1-d276e519c082",
+      "orderNumber": "SIM-ORD-039",
+      "status": "PAID",
+      "isCancelled": false,
+      "storageType": "NORMAL",
+      "totalWeight": 21.5,
+      "totalVolume": 4.4,
+      "totalAmount": 147.25,
+      "deliveryDate": "2026-05-08T05:00:00.000Z",
+      "placedAt": "2026-05-08T00:30:00.000Z",
+      "delivery": {
+        "address": "Simulation Address 39, Zone CMB_SOUTH",
+        "lat": 6.88167,
+        "lng": 79.843684,
+        "zone": {
+          "id": "cf1e5801-1d4c-4e8c-9f1b-92993168d1fc",
+          "code": "CMB_SOUTH",
+          "name": "Colombo South"
+        }
+      },
+      "pickupHub": {
+        "id": "ea2ba564-846f-476f-a4c2-3b04777d2407",
+        "name": "Central Aggregation Hub",
+        "lat": 6.914,
+        "lng": 79.872
+      },
+      "buyer": {
+        "id": "dc1d3b31-5320-4892-96e9-f28f788058a7",
+        "name": "Simulation Buyer 39",
+        "email": "sim-buyer-039@freshroute.com"
+      },
+      "supplierSelections": [
+        {
+          "orderItemId": "0ad48337-4e5f-49ed-93fb-aee4a00d38ef",
+          "productId": "ce3e7222-d5af-4be0-a9c5-3037b99ffca5",
+          "productName": "Demo Product 3",
+          "quantity": 4,
+          "unitPrice": 4.5,
+          "seller": {
+            "sellerId": "99e7e9b3-c591-46d2-a23d-2f65d9fc4154",
+            "businessName": "Central Harvest Hub",
+            "contactName": "Central Harvest Hub"
+          }
+        }
+      ]
+    },
+    {
+      "orderId": "ffab12d3-25fd-4578-8287-e4670a180ad7",
+      "orderNumber": "SIM-ORD-040",
+      "status": "PAID",
+      "isCancelled": false,
+      "storageType": "COLD",
+      "totalWeight": 26,
+      "totalVolume": 5.2,
+      "totalAmount": 150,
+      "deliveryDate": "2026-05-08T05:30:00.000Z",
+      "placedAt": "2026-05-07T23:30:00.000Z",
+      "delivery": {
+        "address": "Simulation Address 40, Zone CMB_NORTH",
+        "lat": 6.99913,
+        "lng": 79.838421,
+        "zone": {
+          "id": "dd9ef679-7904-4929-9319-7f77313cd9e0",
+          "code": "CMB_NORTH",
+          "name": "Colombo North"
+        }
+      },
+      "pickupHub": {
+        "id": "af58d909-15a4-4d10-8a3d-e43ae8dd45b7",
+        "name": "North Collection Hub",
+        "lat": 6.968,
+        "lng": 79.868
+      },
+      "buyer": {
+        "id": "4c2764ed-336c-427d-95fd-212e3e2020c1",
+        "name": "Simulation Buyer 40",
+        "email": "sim-buyer-040@freshroute.com"
+      },
+      "supplierSelections": [
+        {
+          "orderItemId": "f828fc80-7894-4c22-9683-0cb848409a24",
+          "productId": "e48c6e9d-ca1e-4533-bd9a-cc61aa0036fb",
+          "productName": "Demo Product 1",
+          "quantity": 1,
+          "unitPrice": 2.5,
+          "seller": {
+            "sellerId": "4a11a058-102a-4a0c-9253-5a66934a95bf",
+            "businessName": "North Valley Farms",
+            "contactName": "North Valley Farms"
+          }
+        }
+      ]
+    },
+    {
+      "orderId": "4def10cb-fb90-4f40-a36e-9d6f062b3db8",
+      "orderNumber": "SIM-ORD-041",
+      "status": "PAID",
+      "isCancelled": false,
+      "storageType": "NORMAL",
+      "totalWeight": 30.5,
+      "totalVolume": 6,
+      "totalAmount": 152.75,
+      "deliveryDate": "2026-05-08T06:00:00.000Z",
+      "placedAt": "2026-05-07T22:30:00.000Z",
+      "delivery": {
+        "address": "Simulation Address 41, Zone CMB_CENTRAL",
+        "lat": 6.931226,
+        "lng": 79.851053,
+        "zone": {
+          "id": "38b29a14-3f21-4647-a7b1-132a87a20620",
+          "code": "CMB_CENTRAL",
+          "name": "Colombo Central"
+        }
+      },
+      "pickupHub": {
+        "id": "2358b37a-bae2-415c-ae9d-a1e5f3f7debf",
+        "name": "South Collection Hub",
+        "lat": 6.858,
+        "lng": 79.864
+      },
+      "buyer": {
+        "id": "3ebc4e45-d3bd-4aaa-8406-c32af72eac6c",
+        "name": "Simulation Buyer 41",
+        "email": "sim-buyer-041@freshroute.com"
+      },
+      "supplierSelections": [
+        {
+          "orderItemId": "5bccf1a7-553b-45f9-9a8d-5dac1e1279b3",
+          "productId": "8e07cdee-04d9-48fe-bc37-d3d4d572873f",
+          "productName": "Demo Product 2",
+          "quantity": 2,
+          "unitPrice": 3.5,
+          "seller": {
+            "sellerId": "3a1a5b12-c3dc-4ffb-8154-decb21a3ad3b",
+            "businessName": "Southern Greens Cooperative",
+            "contactName": "Southern Greens Cooperative"
+          }
+        }
+      ]
+    },
+    {
+      "orderId": "1dbfcd85-14fa-4e4c-98cb-bf598a4ad60a",
+      "orderNumber": "SIM-ORD-042",
+      "status": "PAID",
+      "isCancelled": false,
+      "storageType": "NORMAL",
+      "totalWeight": 35,
+      "totalVolume": 1.2,
+      "totalAmount": 155.5,
+      "deliveryDate": "2026-05-08T03:30:00.000Z",
+      "placedAt": "2026-05-07T21:30:00.000Z",
+      "delivery": {
+        "address": "Simulation Address 42, Zone CMB_SOUTH",
+        "lat": 6.889483,
+        "lng": 79.854737,
+        "zone": {
+          "id": "cf1e5801-1d4c-4e8c-9f1b-92993168d1fc",
+          "code": "CMB_SOUTH",
+          "name": "Colombo South"
+        }
+      },
+      "pickupHub": {
+        "id": "ea2ba564-846f-476f-a4c2-3b04777d2407",
+        "name": "Central Aggregation Hub",
+        "lat": 6.914,
+        "lng": 79.872
+      },
+      "buyer": {
+        "id": "3e9c6684-3bc6-4d58-af36-c06d8d2c9aac",
+        "name": "Simulation Buyer 42",
+        "email": "sim-buyer-042@freshroute.com"
+      },
+      "supplierSelections": [
+        {
+          "orderItemId": "cbe5e34e-1b06-49b7-8e27-a65eee9f9a8d",
+          "productId": "ce3e7222-d5af-4be0-a9c5-3037b99ffca5",
+          "productName": "Demo Product 3",
+          "quantity": 3,
+          "unitPrice": 4.5,
+          "seller": {
+            "sellerId": "99e7e9b3-c591-46d2-a23d-2f65d9fc4154",
+            "businessName": "Central Harvest Hub",
+            "contactName": "Central Harvest Hub"
+          }
+        }
+      ]
+    },
+    {
+      "orderId": "719d1d27-0c6d-4bbd-8ed4-2eb00aa6bfd4",
+      "orderNumber": "SIM-ORD-043",
+      "status": "PAID",
+      "isCancelled": false,
+      "storageType": "NORMAL",
+      "totalWeight": 39.5,
+      "totalVolume": 2,
+      "totalAmount": 158.25,
+      "deliveryDate": "2026-05-08T04:00:00.000Z",
+      "placedAt": "2026-05-07T20:30:00.000Z",
+      "delivery": {
+        "address": "Simulation Address 43, Zone CMB_NORTH",
+        "lat": 7.009565,
+        "lng": 79.851053,
+        "zone": {
+          "id": "dd9ef679-7904-4929-9319-7f77313cd9e0",
+          "code": "CMB_NORTH",
+          "name": "Colombo North"
+        }
+      },
+      "pickupHub": {
+        "id": "af58d909-15a4-4d10-8a3d-e43ae8dd45b7",
+        "name": "North Collection Hub",
+        "lat": 6.968,
+        "lng": 79.868
+      },
+      "buyer": {
+        "id": "ae9e2381-a71a-4a8b-be21-3aa4b4dbf02f",
+        "name": "Simulation Buyer 43",
+        "email": "sim-buyer-043@freshroute.com"
+      },
+      "supplierSelections": [
+        {
+          "orderItemId": "188055c4-76db-43e8-938a-3d677faa32bd",
+          "productId": "e48c6e9d-ca1e-4533-bd9a-cc61aa0036fb",
+          "productName": "Demo Product 1",
+          "quantity": 4,
+          "unitPrice": 2.5,
+          "seller": {
+            "sellerId": "4a11a058-102a-4a0c-9253-5a66934a95bf",
+            "businessName": "North Valley Farms",
+            "contactName": "North Valley Farms"
+          }
+        }
+      ]
+    },
+    {
+      "orderId": "22c1279b-9997-427f-9476-03cf33d12998",
+      "orderNumber": "SIM-ORD-044",
+      "status": "PAID",
+      "isCancelled": false,
+      "storageType": "NORMAL",
+      "totalWeight": 44,
+      "totalVolume": 2.8,
+      "totalAmount": 161,
+      "deliveryDate": "2026-05-08T04:30:00.000Z",
+      "placedAt": "2026-05-07T19:30:00.000Z",
+      "delivery": {
+        "address": "Simulation Address 44, Zone CMB_CENTRAL",
+        "lat": 6.93643,
+        "lng": 79.862105,
+        "zone": {
+          "id": "38b29a14-3f21-4647-a7b1-132a87a20620",
+          "code": "CMB_CENTRAL",
+          "name": "Colombo Central"
+        }
+      },
+      "pickupHub": {
+        "id": "2358b37a-bae2-415c-ae9d-a1e5f3f7debf",
+        "name": "South Collection Hub",
+        "lat": 6.858,
+        "lng": 79.864
+      },
+      "buyer": {
+        "id": "007e9c4f-bf1d-4c26-88e2-6217f8d1091a",
+        "name": "Simulation Buyer 44",
+        "email": "sim-buyer-044@freshroute.com"
+      },
+      "supplierSelections": [
+        {
+          "orderItemId": "6ca9a12e-1787-40d7-a34f-410b9f337866",
+          "productId": "8e07cdee-04d9-48fe-bc37-d3d4d572873f",
+          "productName": "Demo Product 2",
+          "quantity": 1,
+          "unitPrice": 3.5,
+          "seller": {
+            "sellerId": "3a1a5b12-c3dc-4ffb-8154-decb21a3ad3b",
+            "businessName": "Southern Greens Cooperative",
+            "contactName": "Southern Greens Cooperative"
+          }
+        }
+      ]
+    },
+    {
+      "orderId": "ace3dd43-9336-4511-8b66-11a6468db7ce",
+      "orderNumber": "SIM-ORD-045",
+      "status": "PAID",
+      "isCancelled": false,
+      "storageType": "COLD",
+      "totalWeight": 8,
+      "totalVolume": 3.6,
+      "totalAmount": 163.75,
+      "deliveryDate": "2026-05-08T05:00:00.000Z",
+      "placedAt": "2026-05-07T18:30:00.000Z",
+      "delivery": {
+        "address": "Simulation Address 45, Zone CMB_SOUTH",
+        "lat": 6.897296,
+        "lng": 79.865789,
+        "zone": {
+          "id": "cf1e5801-1d4c-4e8c-9f1b-92993168d1fc",
+          "code": "CMB_SOUTH",
+          "name": "Colombo South"
+        }
+      },
+      "pickupHub": {
+        "id": "ea2ba564-846f-476f-a4c2-3b04777d2407",
+        "name": "Central Aggregation Hub",
+        "lat": 6.914,
+        "lng": 79.872
+      },
+      "buyer": {
+        "id": "b1ff1e7e-2d51-410b-a79a-b1bf368b1452",
+        "name": "Simulation Buyer 45",
+        "email": "sim-buyer-045@freshroute.com"
+      },
+      "supplierSelections": [
+        {
+          "orderItemId": "232dffde-e3ea-4a3e-b416-03c60adf58a1",
+          "productId": "ce3e7222-d5af-4be0-a9c5-3037b99ffca5",
+          "productName": "Demo Product 3",
+          "quantity": 2,
+          "unitPrice": 4.5,
+          "seller": {
+            "sellerId": "99e7e9b3-c591-46d2-a23d-2f65d9fc4154",
+            "businessName": "Central Harvest Hub",
+            "contactName": "Central Harvest Hub"
+          }
+        }
+      ]
+    },
+    {
+      "orderId": "1a6e479f-4f1e-46fc-81ee-b393cd87c1eb",
+      "orderNumber": "SIM-ORD-046",
+      "status": "PAID",
+      "isCancelled": false,
+      "storageType": "NORMAL",
+      "totalWeight": null,
+      "totalVolume": null,
+      "totalAmount": 166.5,
+      "deliveryDate": "2026-05-08T05:30:00.000Z",
+      "placedAt": "2026-05-07T17:30:00.000Z",
+      "delivery": {
+        "address": "Simulation Address 46, Zone CMB_NORTH",
+        "lat": 6.94,
+        "lng": 79.863684,
+        "zone": {
+          "id": "dd9ef679-7904-4929-9319-7f77313cd9e0",
+          "code": "CMB_NORTH",
+          "name": "Colombo North"
+        }
+      },
+      "pickupHub": {
+        "id": "af58d909-15a4-4d10-8a3d-e43ae8dd45b7",
+        "name": "North Collection Hub",
+        "lat": 6.968,
+        "lng": 79.868
+      },
+      "buyer": {
+        "id": "ca06a4d1-70e2-4839-80e6-b1ac0c7f535d",
+        "name": "Simulation Buyer 46",
+        "email": "sim-buyer-046@freshroute.com"
+      },
+      "supplierSelections": [
+        {
+          "orderItemId": "79fe2728-6a7c-4bb2-a484-65446d19dc28",
+          "productId": "e48c6e9d-ca1e-4533-bd9a-cc61aa0036fb",
+          "productName": "Demo Product 1",
+          "quantity": 3,
+          "unitPrice": 2.5,
+          "seller": {
+            "sellerId": "4a11a058-102a-4a0c-9253-5a66934a95bf",
+            "businessName": "North Valley Farms",
+            "contactName": "North Valley Farms"
+          }
+        }
+      ]
+    },
+    {
+      "orderId": "ed09305c-1098-43f8-8c14-68abf1fc7b74",
+      "orderNumber": "SIM-ORD-047",
+      "status": "PAID",
+      "isCancelled": false,
+      "storageType": "NORMAL",
+      "totalWeight": 17,
+      "totalVolume": 5.2,
+      "totalAmount": 169.25,
+      "deliveryDate": "2026-05-08T06:00:00.000Z",
+      "placedAt": "2026-05-07T16:30:00.000Z",
+      "delivery": {
+        "address": "Simulation Address 47, Zone CMB_CENTRAL",
+        "lat": 6.901735,
+        "lng": 79.873158,
+        "zone": {
+          "id": "38b29a14-3f21-4647-a7b1-132a87a20620",
+          "code": "CMB_CENTRAL",
+          "name": "Colombo Central"
+        }
+      },
+      "pickupHub": {
+        "id": "2358b37a-bae2-415c-ae9d-a1e5f3f7debf",
+        "name": "South Collection Hub",
+        "lat": 6.858,
+        "lng": 79.864
+      },
+      "buyer": {
+        "id": "63142801-471b-42b3-920f-04cf7e52f92a",
+        "name": "Simulation Buyer 47",
+        "email": "sim-buyer-047@freshroute.com"
+      },
+      "supplierSelections": [
+        {
+          "orderItemId": "452e4568-a726-4029-a228-ffb24560d091",
+          "productId": "8e07cdee-04d9-48fe-bc37-d3d4d572873f",
+          "productName": "Demo Product 2",
+          "quantity": 4,
+          "unitPrice": 3.5,
+          "seller": {
+            "sellerId": "3a1a5b12-c3dc-4ffb-8154-decb21a3ad3b",
+            "businessName": "Southern Greens Cooperative",
+            "contactName": "Southern Greens Cooperative"
+          }
+        }
+      ]
+    },
+    {
+      "orderId": "580b891a-9ec3-49ec-9694-42a830f3d6e1",
+      "orderNumber": "SIM-ORD-048",
+      "status": "PAID",
+      "isCancelled": false,
+      "storageType": "NORMAL",
+      "totalWeight": 21.5,
+      "totalVolume": 6,
+      "totalAmount": 172,
+      "deliveryDate": "2026-05-08T03:30:00.000Z",
+      "placedAt": "2026-05-08T03:30:00.000Z",
+      "delivery": {
+        "address": "Simulation Address 48, Zone CMB_SOUTH",
+        "lat": 6.845209,
+        "lng": 79.876842,
+        "zone": {
+          "id": "cf1e5801-1d4c-4e8c-9f1b-92993168d1fc",
+          "code": "CMB_SOUTH",
+          "name": "Colombo South"
+        }
+      },
+      "pickupHub": {
+        "id": "ea2ba564-846f-476f-a4c2-3b04777d2407",
+        "name": "Central Aggregation Hub",
+        "lat": 6.914,
+        "lng": 79.872
+      },
+      "buyer": {
+        "id": "6f7262e2-1ad2-4e43-aac4-0b987e6b7988",
+        "name": "Simulation Buyer 48",
+        "email": "sim-buyer-048@freshroute.com"
+      },
+      "supplierSelections": [
+        {
+          "orderItemId": "29085780-102c-43a3-ac4e-a680084e023c",
+          "productId": "ce3e7222-d5af-4be0-a9c5-3037b99ffca5",
+          "productName": "Demo Product 3",
+          "quantity": 1,
+          "unitPrice": 4.5,
+          "seller": {
+            "sellerId": "99e7e9b3-c591-46d2-a23d-2f65d9fc4154",
+            "businessName": "Central Harvest Hub",
+            "contactName": "Central Harvest Hub"
+          }
+        }
+      ]
+    },
+    {
+      "orderId": "8c27ce82-d88a-4bf7-9722-88eec6f0b41f",
+      "orderNumber": "SIM-ORD-049",
+      "status": "PAID",
+      "isCancelled": false,
+      "storageType": "NORMAL",
+      "totalWeight": 26,
+      "totalVolume": 1.2,
+      "totalAmount": 174.75,
+      "deliveryDate": "2026-05-08T04:00:00.000Z",
+      "placedAt": "2026-05-08T02:30:00.000Z",
+      "delivery": {
+        "address": "Simulation Address 49, Zone CMB_NORTH",
+        "lat": 6.950435,
+        "lng": 79.876316,
+        "zone": {
+          "id": "dd9ef679-7904-4929-9319-7f77313cd9e0",
+          "code": "CMB_NORTH",
+          "name": "Colombo North"
+        }
+      },
+      "pickupHub": {
+        "id": "af58d909-15a4-4d10-8a3d-e43ae8dd45b7",
+        "name": "North Collection Hub",
+        "lat": 6.968,
+        "lng": 79.868
+      },
+      "buyer": {
+        "id": "10d1d988-5d8f-43cd-9ebd-548b0597f51f",
+        "name": "Simulation Buyer 49",
+        "email": "sim-buyer-049@freshroute.com"
+      },
+      "supplierSelections": [
+        {
+          "orderItemId": "8bce01bd-e4f0-4e6f-8c03-5d82768542d3",
+          "productId": "e48c6e9d-ca1e-4533-bd9a-cc61aa0036fb",
+          "productName": "Demo Product 1",
+          "quantity": 2,
+          "unitPrice": 2.5,
+          "seller": {
+            "sellerId": "4a11a058-102a-4a0c-9253-5a66934a95bf",
+            "businessName": "North Valley Farms",
+            "contactName": "North Valley Farms"
+          }
+        }
+      ]
+    },
+    {
+      "orderId": "71daaed2-ed8d-4042-a9f8-08ec31023371",
+      "orderNumber": "SIM-ORD-050",
+      "status": "PAID",
+      "isCancelled": false,
+      "storageType": "COLD",
+      "totalWeight": 30.5,
+      "totalVolume": 2,
+      "totalAmount": 177.5,
+      "deliveryDate": "2026-05-08T04:30:00.000Z",
+      "placedAt": "2026-05-08T01:30:00.000Z",
+      "delivery": {
+        "address": "Simulation Address 50, Zone CMB_CENTRAL",
+        "lat": 6.906939,
+        "lng": 79.884211,
+        "zone": {
+          "id": "38b29a14-3f21-4647-a7b1-132a87a20620",
+          "code": "CMB_CENTRAL",
+          "name": "Colombo Central"
+        }
+      },
+      "pickupHub": {
+        "id": "2358b37a-bae2-415c-ae9d-a1e5f3f7debf",
+        "name": "South Collection Hub",
+        "lat": 6.858,
+        "lng": 79.864
+      },
+      "buyer": {
+        "id": "9a25c918-7952-45a4-96b1-41c6220f2cdb",
+        "name": "Simulation Buyer 50",
+        "email": "sim-buyer-050@freshroute.com"
+      },
+      "supplierSelections": [
+        {
+          "orderItemId": "66408903-e306-42f1-9719-a94f84af1a5e",
+          "productId": "8e07cdee-04d9-48fe-bc37-d3d4d572873f",
+          "productName": "Demo Product 2",
+          "quantity": 3,
+          "unitPrice": 3.5,
+          "seller": {
+            "sellerId": "3a1a5b12-c3dc-4ffb-8154-decb21a3ad3b",
+            "businessName": "Southern Greens Cooperative",
+            "contactName": "Southern Greens Cooperative"
+          }
+        }
+      ]
+    },
+    {
+      "orderId": "897ce090-dfcf-4897-9801-6b41639a9c50",
+      "orderNumber": "SIM-ORD-051",
+      "status": "PENDING",
+      "isCancelled": false,
+      "storageType": "NORMAL",
+      "totalWeight": 35,
+      "totalVolume": 2.8,
+      "totalAmount": 180.25,
+      "deliveryDate": "2026-05-08T05:00:00.000Z",
+      "placedAt": "2026-05-08T00:30:00.000Z",
+      "delivery": {
+        "address": "Simulation Address 51, Zone CMB_SOUTH",
+        "lat": 6.853022,
+        "lng": 79.887895,
+        "zone": {
+          "id": "cf1e5801-1d4c-4e8c-9f1b-92993168d1fc",
+          "code": "CMB_SOUTH",
+          "name": "Colombo South"
+        }
+      },
+      "pickupHub": {
+        "id": "ea2ba564-846f-476f-a4c2-3b04777d2407",
+        "name": "Central Aggregation Hub",
+        "lat": 6.914,
+        "lng": 79.872
+      },
+      "buyer": {
+        "id": "7fc13d2e-6068-433e-b461-5fcac25a0ec4",
+        "name": "Simulation Buyer 51",
+        "email": "sim-buyer-051@freshroute.com"
+      },
+      "supplierSelections": [
+        {
+          "orderItemId": "129c331f-ad92-491c-97e1-bb8292613b2f",
+          "productId": "ce3e7222-d5af-4be0-a9c5-3037b99ffca5",
+          "productName": "Demo Product 3",
+          "quantity": 4,
+          "unitPrice": 4.5,
+          "seller": {
+            "sellerId": "99e7e9b3-c591-46d2-a23d-2f65d9fc4154",
+            "businessName": "Central Harvest Hub",
+            "contactName": "Central Harvest Hub"
+          }
+        }
+      ]
+    },
+    {
+      "orderId": "710ff64f-f568-400a-893e-76b0dfabe102",
+      "orderNumber": "SIM-ORD-052",
+      "status": "PAID",
+      "isCancelled": false,
+      "storageType": "NORMAL",
+      "totalWeight": 39.5,
+      "totalVolume": 3.6,
+      "totalAmount": 183,
+      "deliveryDate": "2026-05-08T05:30:00.000Z",
+      "placedAt": "2026-05-07T23:30:00.000Z",
+      "delivery": {
+        "address": "Simulation Address 52, Zone CMB_NORTH",
+        "lat": 6.96087,
+        "lng": 79.888947,
+        "zone": {
+          "id": "dd9ef679-7904-4929-9319-7f77313cd9e0",
+          "code": "CMB_NORTH",
+          "name": "Colombo North"
+        }
+      },
+      "pickupHub": {
+        "id": "af58d909-15a4-4d10-8a3d-e43ae8dd45b7",
+        "name": "North Collection Hub",
+        "lat": 6.968,
+        "lng": 79.868
+      },
+      "buyer": {
+        "id": "81743cac-1066-4f46-9a3c-792284b40360",
+        "name": "Simulation Buyer 52",
+        "email": "sim-buyer-052@freshroute.com"
+      },
+      "supplierSelections": [
+        {
+          "orderItemId": "3ecf1f16-5be9-488f-873b-cf69fe0b73c5",
+          "productId": "e48c6e9d-ca1e-4533-bd9a-cc61aa0036fb",
+          "productName": "Demo Product 1",
+          "quantity": 1,
+          "unitPrice": 2.5,
+          "seller": {
+            "sellerId": "4a11a058-102a-4a0c-9253-5a66934a95bf",
+            "businessName": "North Valley Farms",
+            "contactName": "North Valley Farms"
+          }
+        }
+      ]
+    },
+    {
+      "orderId": "93d64763-4fc5-45ca-bfa1-6a3df24cb7fb",
+      "orderNumber": "SIM-ORD-053",
+      "status": "PAID",
+      "isCancelled": false,
+      "storageType": "NORMAL",
+      "totalWeight": 44,
+      "totalVolume": 4.4,
+      "totalAmount": 185.75,
+      "deliveryDate": "2026-05-08T06:00:00.000Z",
+      "placedAt": "2026-05-07T22:30:00.000Z",
+      "delivery": {
+        "address": "Simulation Address 53, Zone CMB_CENTRAL",
+        "lat": 6.912143,
+        "lng": 79.895263,
+        "zone": {
+          "id": "38b29a14-3f21-4647-a7b1-132a87a20620",
+          "code": "CMB_CENTRAL",
+          "name": "Colombo Central"
+        }
+      },
+      "pickupHub": {
+        "id": "2358b37a-bae2-415c-ae9d-a1e5f3f7debf",
+        "name": "South Collection Hub",
+        "lat": 6.858,
+        "lng": 79.864
+      },
+      "buyer": {
+        "id": "5f6b16d6-5b15-4a46-abda-eb7217794d59",
+        "name": "Simulation Buyer 53",
+        "email": "sim-buyer-053@freshroute.com"
+      },
+      "supplierSelections": [
+        {
+          "orderItemId": "c5176f41-e9ae-4e45-b648-0fcf7e1c910d",
+          "productId": "8e07cdee-04d9-48fe-bc37-d3d4d572873f",
+          "productName": "Demo Product 2",
+          "quantity": 2,
+          "unitPrice": 3.5,
+          "seller": {
+            "sellerId": "3a1a5b12-c3dc-4ffb-8154-decb21a3ad3b",
+            "businessName": "Southern Greens Cooperative",
+            "contactName": "Southern Greens Cooperative"
+          }
+        }
+      ]
+    },
+    {
+      "orderId": "853a8a5e-2a39-4a5f-869e-e19eb103e0bd",
+      "orderNumber": "SIM-ORD-054",
+      "status": "PAID",
+      "isCancelled": false,
+      "storageType": "NORMAL",
+      "totalWeight": 8,
+      "totalVolume": 5.2,
+      "totalAmount": 188.5,
+      "deliveryDate": "2026-05-08T03:30:00.000Z",
+      "placedAt": "2026-05-07T21:30:00.000Z",
+      "delivery": {
+        "address": "Simulation Address 54, Zone CMB_SOUTH",
+        "lat": 6.860835,
+        "lng": 79.898947,
+        "zone": {
+          "id": "cf1e5801-1d4c-4e8c-9f1b-92993168d1fc",
+          "code": "CMB_SOUTH",
+          "name": "Colombo South"
+        }
+      },
+      "pickupHub": {
+        "id": "ea2ba564-846f-476f-a4c2-3b04777d2407",
+        "name": "Central Aggregation Hub",
+        "lat": 6.914,
+        "lng": 79.872
+      },
+      "buyer": {
+        "id": "f20094a3-e103-45cc-9ee9-0178e43459fb",
+        "name": "Simulation Buyer 54",
+        "email": "sim-buyer-054@freshroute.com"
+      },
+      "supplierSelections": [
+        {
+          "orderItemId": "e25ceaf8-6085-4099-85ed-aa04375fd1a1",
+          "productId": "ce3e7222-d5af-4be0-a9c5-3037b99ffca5",
+          "productName": "Demo Product 3",
+          "quantity": 3,
+          "unitPrice": 4.5,
+          "seller": {
+            "sellerId": "99e7e9b3-c591-46d2-a23d-2f65d9fc4154",
+            "businessName": "Central Harvest Hub",
+            "contactName": "Central Harvest Hub"
+          }
+        }
+      ]
+    },
+    {
+      "orderId": "4d4e6f4d-5df5-417b-be20-dc8079d1d262",
+      "orderNumber": "SIM-ORD-055",
+      "status": "PAID",
+      "isCancelled": false,
+      "storageType": "COLD",
+      "totalWeight": 12.5,
+      "totalVolume": 6,
+      "totalAmount": 191.25,
+      "deliveryDate": "2026-05-08T04:00:00.000Z",
+      "placedAt": "2026-05-07T20:30:00.000Z",
+      "delivery": {
+        "address": "Simulation Address 55, Zone CMB_NORTH",
+        "lat": 6.971304,
+        "lng": 79.901579,
+        "zone": {
+          "id": "dd9ef679-7904-4929-9319-7f77313cd9e0",
+          "code": "CMB_NORTH",
+          "name": "Colombo North"
+        }
+      },
+      "pickupHub": {
+        "id": "af58d909-15a4-4d10-8a3d-e43ae8dd45b7",
+        "name": "North Collection Hub",
+        "lat": 6.968,
+        "lng": 79.868
+      },
+      "buyer": {
+        "id": "c438d418-0384-4ccd-a7e5-28b91f65000d",
+        "name": "Simulation Buyer 55",
+        "email": "sim-buyer-055@freshroute.com"
+      },
+      "supplierSelections": [
+        {
+          "orderItemId": "0a39ddd8-41a3-4968-aee9-0b82834322d3",
+          "productId": "e48c6e9d-ca1e-4533-bd9a-cc61aa0036fb",
+          "productName": "Demo Product 1",
+          "quantity": 4,
+          "unitPrice": 2.5,
+          "seller": {
+            "sellerId": "4a11a058-102a-4a0c-9253-5a66934a95bf",
+            "businessName": "North Valley Farms",
+            "contactName": "North Valley Farms"
+          }
+        }
+      ]
+    },
+    {
+      "orderId": "10e6118e-1b0c-426e-a0e8-f4fdcc71651e",
+      "orderNumber": "SIM-ORD-056",
+      "status": "PAID",
+      "isCancelled": false,
+      "storageType": "NORMAL",
+      "totalWeight": 17,
+      "totalVolume": 1.2,
+      "totalAmount": 194,
+      "deliveryDate": "2026-05-08T04:30:00.000Z",
+      "placedAt": "2026-05-07T19:30:00.000Z",
+      "delivery": {
+        "address": "Simulation Address 56, Zone CMB_CENTRAL",
+        "lat": 6.917348,
+        "lng": 79.906316,
+        "zone": {
+          "id": "38b29a14-3f21-4647-a7b1-132a87a20620",
+          "code": "CMB_CENTRAL",
+          "name": "Colombo Central"
+        }
+      },
+      "pickupHub": {
+        "id": "2358b37a-bae2-415c-ae9d-a1e5f3f7debf",
+        "name": "South Collection Hub",
+        "lat": 6.858,
+        "lng": 79.864
+      },
+      "buyer": {
+        "id": "6f07fde5-7fed-48de-8464-d04c148bb02a",
+        "name": "Simulation Buyer 56",
+        "email": "sim-buyer-056@freshroute.com"
+      },
+      "supplierSelections": [
+        {
+          "orderItemId": "b563f699-b7a2-4ca9-a2ae-8394513be1eb",
+          "productId": "8e07cdee-04d9-48fe-bc37-d3d4d572873f",
+          "productName": "Demo Product 2",
+          "quantity": 1,
+          "unitPrice": 3.5,
+          "seller": {
+            "sellerId": "3a1a5b12-c3dc-4ffb-8154-decb21a3ad3b",
+            "businessName": "Southern Greens Cooperative",
+            "contactName": "Southern Greens Cooperative"
+          }
+        }
+      ]
+    },
+    {
+      "orderId": "e4ea3e52-4bc2-428a-963b-544628e905d0",
+      "orderNumber": "SIM-ORD-057",
+      "status": "PAID",
+      "isCancelled": true,
+      "storageType": "NORMAL",
+      "totalWeight": 21.5,
+      "totalVolume": 2,
+      "totalAmount": 196.75,
+      "deliveryDate": "2026-05-08T05:00:00.000Z",
+      "placedAt": "2026-05-07T18:30:00.000Z",
+      "delivery": {
+        "address": "Simulation Address 57, Zone CMB_SOUTH",
+        "lat": 6.868648,
+        "lng": 79.84,
+        "zone": {
+          "id": "cf1e5801-1d4c-4e8c-9f1b-92993168d1fc",
+          "code": "CMB_SOUTH",
+          "name": "Colombo South"
+        }
+      },
+      "pickupHub": {
+        "id": "ea2ba564-846f-476f-a4c2-3b04777d2407",
+        "name": "Central Aggregation Hub",
+        "lat": 6.914,
+        "lng": 79.872
+      },
+      "buyer": {
+        "id": "52022542-a7d9-4cc5-ad97-33eceb455b22",
+        "name": "Simulation Buyer 57",
+        "email": "sim-buyer-057@freshroute.com"
+      },
+      "supplierSelections": [
+        {
+          "orderItemId": "eb09f3b3-f4a8-49fd-8b6f-8ef82c8ffbdd",
+          "productId": "ce3e7222-d5af-4be0-a9c5-3037b99ffca5",
+          "productName": "Demo Product 3",
+          "quantity": 2,
+          "unitPrice": 4.5,
+          "seller": {
+            "sellerId": "99e7e9b3-c591-46d2-a23d-2f65d9fc4154",
+            "businessName": "Central Harvest Hub",
+            "contactName": "Central Harvest Hub"
+          }
+        }
+      ]
+    },
+    {
+      "orderId": "5d897ddd-fd98-41e2-9acd-9139e321df77",
+      "orderNumber": "SIM-ORD-058",
+      "status": "PAID",
+      "isCancelled": false,
+      "storageType": "NORMAL",
+      "totalWeight": 26,
+      "totalVolume": 2.8,
+      "totalAmount": 199.5,
+      "deliveryDate": "2026-05-08T05:30:00.000Z",
+      "placedAt": "2026-05-07T17:30:00.000Z",
+      "delivery": {
+        "address": "Simulation Address 58, Zone CMB_NORTH",
+        "lat": 6.981739,
+        "lng": 79.834211,
+        "zone": {
+          "id": "dd9ef679-7904-4929-9319-7f77313cd9e0",
+          "code": "CMB_NORTH",
+          "name": "Colombo North"
+        }
+      },
+      "pickupHub": {
+        "id": "af58d909-15a4-4d10-8a3d-e43ae8dd45b7",
+        "name": "North Collection Hub",
+        "lat": 6.968,
+        "lng": 79.868
+      },
+      "buyer": {
+        "id": "ab6c68f9-92d0-4e40-9973-43da098f7b22",
+        "name": "Simulation Buyer 58",
+        "email": "sim-buyer-058@freshroute.com"
+      },
+      "supplierSelections": [
+        {
+          "orderItemId": "ad340883-4102-4e14-89e4-dc505bcc0231",
+          "productId": "e48c6e9d-ca1e-4533-bd9a-cc61aa0036fb",
+          "productName": "Demo Product 1",
+          "quantity": 3,
+          "unitPrice": 2.5,
+          "seller": {
+            "sellerId": "4a11a058-102a-4a0c-9253-5a66934a95bf",
+            "businessName": "North Valley Farms",
+            "contactName": "North Valley Farms"
+          }
+        }
+      ]
+    },
+    {
+      "orderId": "3a22011a-20d0-48c8-a9b1-6fb0c4280fb8",
+      "orderNumber": "SIM-ORD-059",
+      "status": "PAID",
+      "isCancelled": false,
+      "storageType": "NORMAL",
+      "totalWeight": 30.5,
+      "totalVolume": 3.6,
+      "totalAmount": 202.25,
+      "deliveryDate": "2026-05-08T06:00:00.000Z",
+      "placedAt": "2026-05-07T16:30:00.000Z",
+      "delivery": {
+        "address": "Simulation Address 59, Zone CMB_CENTRAL",
+        "lat": 6.922552,
+        "lng": 79.847368,
+        "zone": {
+          "id": "38b29a14-3f21-4647-a7b1-132a87a20620",
+          "code": "CMB_CENTRAL",
+          "name": "Colombo Central"
+        }
+      },
+      "pickupHub": {
+        "id": "2358b37a-bae2-415c-ae9d-a1e5f3f7debf",
+        "name": "South Collection Hub",
+        "lat": 6.858,
+        "lng": 79.864
+      },
+      "buyer": {
+        "id": "a6238217-9b58-44bd-bf83-413a7b4106f2",
+        "name": "Simulation Buyer 59",
+        "email": "sim-buyer-059@freshroute.com"
+      },
+      "supplierSelections": [
+        {
+          "orderItemId": "b38a81f4-ebc2-4b22-b40a-4ebaf781ced1",
+          "productId": "8e07cdee-04d9-48fe-bc37-d3d4d572873f",
+          "productName": "Demo Product 2",
+          "quantity": 4,
+          "unitPrice": 3.5,
+          "seller": {
+            "sellerId": "3a1a5b12-c3dc-4ffb-8154-decb21a3ad3b",
+            "businessName": "Southern Greens Cooperative",
+            "contactName": "Southern Greens Cooperative"
+          }
+        }
+      ]
+    },
+    {
+      "orderId": "67f7e940-830f-4f62-b3d3-a0f2b9414cf9",
+      "orderNumber": "SIM-ORD-060",
+      "status": "PAID",
+      "isCancelled": false,
+      "storageType": "COLD",
+      "totalWeight": 35,
+      "totalVolume": 4.4,
+      "totalAmount": 205,
+      "deliveryDate": "2026-05-08T03:30:00.000Z",
+      "placedAt": "2026-05-08T03:30:00.000Z",
+      "delivery": {
+        "address": "Simulation Address 60, Zone CMB_SOUTH",
+        "lat": 6.876461,
+        "lng": 79.851053,
+        "zone": {
+          "id": "cf1e5801-1d4c-4e8c-9f1b-92993168d1fc",
+          "code": "CMB_SOUTH",
+          "name": "Colombo South"
+        }
+      },
+      "pickupHub": {
+        "id": "ea2ba564-846f-476f-a4c2-3b04777d2407",
+        "name": "Central Aggregation Hub",
+        "lat": 6.914,
+        "lng": 79.872
+      },
+      "buyer": {
+        "id": "adba0bb2-565c-417b-a569-e125d2da6e8d",
+        "name": "Simulation Buyer 60",
+        "email": "sim-buyer-060@freshroute.com"
+      },
+      "supplierSelections": [
+        {
+          "orderItemId": "2508cb88-d6cd-4bcc-99c5-4d68dce154a8",
+          "productId": "ce3e7222-d5af-4be0-a9c5-3037b99ffca5",
+          "productName": "Demo Product 3",
+          "quantity": 1,
+          "unitPrice": 4.5,
+          "seller": {
+            "sellerId": "99e7e9b3-c591-46d2-a23d-2f65d9fc4154",
+            "businessName": "Central Harvest Hub",
+            "contactName": "Central Harvest Hub"
+          }
+        }
+      ]
+    },
+    {
+      "orderId": "6fb2d679-8178-4ffa-b85c-274d8d75ca7d",
+      "orderNumber": "SIM-ORD-061",
+      "status": "PAID",
+      "isCancelled": false,
+      "storageType": "NORMAL",
+      "totalWeight": 39.5,
+      "totalVolume": 5.2,
+      "totalAmount": 207.75,
+      "deliveryDate": "2026-05-08T04:00:00.000Z",
+      "placedAt": "2026-05-08T02:30:00.000Z",
+      "delivery": {
+        "address": "Simulation Address 61, Zone CMB_NORTH",
+        "lat": 6.992174,
+        "lng": 79.846842,
+        "zone": {
+          "id": "dd9ef679-7904-4929-9319-7f77313cd9e0",
+          "code": "CMB_NORTH",
+          "name": "Colombo North"
+        }
+      },
+      "pickupHub": {
+        "id": "af58d909-15a4-4d10-8a3d-e43ae8dd45b7",
+        "name": "North Collection Hub",
+        "lat": 6.968,
+        "lng": 79.868
+      },
+      "buyer": {
+        "id": "61e56fe6-a714-44f2-88b2-a63fd39e7372",
+        "name": "Simulation Buyer 61",
+        "email": "sim-buyer-061@freshroute.com"
+      },
+      "supplierSelections": [
+        {
+          "orderItemId": "b875fdfd-b937-456c-84e2-8099ceacccf2",
+          "productId": "e48c6e9d-ca1e-4533-bd9a-cc61aa0036fb",
+          "productName": "Demo Product 1",
+          "quantity": 2,
+          "unitPrice": 2.5,
+          "seller": {
+            "sellerId": "4a11a058-102a-4a0c-9253-5a66934a95bf",
+            "businessName": "North Valley Farms",
+            "contactName": "North Valley Farms"
+          }
+        }
+      ]
+    },
+    {
+      "orderId": "31776a15-66fd-4279-a83c-721b59d1dabd",
+      "orderNumber": "SIM-ORD-062",
+      "status": "PAID",
+      "isCancelled": false,
+      "storageType": "NORMAL",
+      "totalWeight": 44,
+      "totalVolume": 6,
+      "totalAmount": 210.5,
+      "deliveryDate": "2026-05-08T04:30:00.000Z",
+      "placedAt": "2026-05-08T01:30:00.000Z",
+      "delivery": {
+        "address": "Simulation Address 62, Zone CMB_CENTRAL",
+        "lat": 6.927757,
+        "lng": 79.858421,
+        "zone": {
+          "id": "38b29a14-3f21-4647-a7b1-132a87a20620",
+          "code": "CMB_CENTRAL",
+          "name": "Colombo Central"
+        }
+      },
+      "pickupHub": {
+        "id": "2358b37a-bae2-415c-ae9d-a1e5f3f7debf",
+        "name": "South Collection Hub",
+        "lat": 6.858,
+        "lng": 79.864
+      },
+      "buyer": {
+        "id": "205d96d7-066e-41f1-89d2-6c57a9fd5cd2",
+        "name": "Simulation Buyer 62",
+        "email": "sim-buyer-062@freshroute.com"
+      },
+      "supplierSelections": [
+        {
+          "orderItemId": "ce0decde-3830-4b5a-9d04-d4361f0af22a",
+          "productId": "8e07cdee-04d9-48fe-bc37-d3d4d572873f",
+          "productName": "Demo Product 2",
+          "quantity": 3,
+          "unitPrice": 3.5,
+          "seller": {
+            "sellerId": "3a1a5b12-c3dc-4ffb-8154-decb21a3ad3b",
+            "businessName": "Southern Greens Cooperative",
+            "contactName": "Southern Greens Cooperative"
+          }
+        }
+      ]
+    },
+    {
+      "orderId": "5d0fb928-024e-452e-91b1-7ff5a0fdc741",
+      "orderNumber": "SIM-ORD-063",
+      "status": "PAID",
+      "isCancelled": false,
+      "storageType": "NORMAL",
+      "totalWeight": 8,
+      "totalVolume": 1.2,
+      "totalAmount": 213.25,
+      "deliveryDate": "2026-05-08T05:00:00.000Z",
+      "placedAt": "2026-05-08T00:30:00.000Z",
+      "delivery": {
+        "address": "Simulation Address 63, Zone CMB_SOUTH",
+        "lat": 6.884274,
+        "lng": 79.862105,
+        "zone": {
+          "id": "cf1e5801-1d4c-4e8c-9f1b-92993168d1fc",
+          "code": "CMB_SOUTH",
+          "name": "Colombo South"
+        }
+      },
+      "pickupHub": {
+        "id": "ea2ba564-846f-476f-a4c2-3b04777d2407",
+        "name": "Central Aggregation Hub",
+        "lat": 6.914,
+        "lng": 79.872
+      },
+      "buyer": {
+        "id": "729e3f57-76ff-4584-85c7-2c139191c5fd",
+        "name": "Simulation Buyer 63",
+        "email": "sim-buyer-063@freshroute.com"
+      },
+      "supplierSelections": [
+        {
+          "orderItemId": "fa9001ad-0e4d-4b7c-b941-02e12e42b3f9",
+          "productId": "ce3e7222-d5af-4be0-a9c5-3037b99ffca5",
+          "productName": "Demo Product 3",
+          "quantity": 4,
+          "unitPrice": 4.5,
+          "seller": {
+            "sellerId": "99e7e9b3-c591-46d2-a23d-2f65d9fc4154",
+            "businessName": "Central Harvest Hub",
+            "contactName": "Central Harvest Hub"
+          }
+        }
+      ]
+    },
+    {
+      "orderId": "95476de3-f793-4c72-8020-c057e3d5c519",
+      "orderNumber": "SIM-ORD-064",
+      "status": "PAID",
+      "isCancelled": false,
+      "storageType": "NORMAL",
+      "totalWeight": 12.5,
+      "totalVolume": 2,
+      "totalAmount": 216,
+      "deliveryDate": "2026-05-08T05:30:00.000Z",
+      "placedAt": "2026-05-07T23:30:00.000Z",
+      "delivery": {
+        "address": "Simulation Address 64, Zone CMB_NORTH",
+        "lat": 7.002609,
+        "lng": 79.859474,
+        "zone": {
+          "id": "dd9ef679-7904-4929-9319-7f77313cd9e0",
+          "code": "CMB_NORTH",
+          "name": "Colombo North"
+        }
+      },
+      "pickupHub": {
+        "id": "af58d909-15a4-4d10-8a3d-e43ae8dd45b7",
+        "name": "North Collection Hub",
+        "lat": 6.968,
+        "lng": 79.868
+      },
+      "buyer": {
+        "id": "fa572787-c198-4c11-b02f-7468e1d86e65",
+        "name": "Simulation Buyer 64",
+        "email": "sim-buyer-064@freshroute.com"
+      },
+      "supplierSelections": [
+        {
+          "orderItemId": "1b2f4cb8-4d7c-430d-b379-750134c80c6f",
+          "productId": "e48c6e9d-ca1e-4533-bd9a-cc61aa0036fb",
+          "productName": "Demo Product 1",
+          "quantity": 1,
+          "unitPrice": 2.5,
+          "seller": {
+            "sellerId": "4a11a058-102a-4a0c-9253-5a66934a95bf",
+            "businessName": "North Valley Farms",
+            "contactName": "North Valley Farms"
+          }
+        }
+      ]
+    },
+    {
+      "orderId": "0e86b868-5320-4171-8898-5cb788b28d59",
+      "orderNumber": "SIM-ORD-065",
+      "status": "PAID",
+      "isCancelled": false,
+      "storageType": "COLD",
+      "totalWeight": 17,
+      "totalVolume": 2.8,
+      "totalAmount": 218.75,
+      "deliveryDate": "2026-05-08T06:00:00.000Z",
+      "placedAt": "2026-05-07T22:30:00.000Z",
+      "delivery": {
+        "address": "Simulation Address 65, Zone CMB_CENTRAL",
+        "lat": 6.932961,
+        "lng": 79.869474,
+        "zone": {
+          "id": "38b29a14-3f21-4647-a7b1-132a87a20620",
+          "code": "CMB_CENTRAL",
+          "name": "Colombo Central"
+        }
+      },
+      "pickupHub": {
+        "id": "2358b37a-bae2-415c-ae9d-a1e5f3f7debf",
+        "name": "South Collection Hub",
+        "lat": 6.858,
+        "lng": 79.864
+      },
+      "buyer": {
+        "id": "1d024fa7-7a57-45b8-8eb9-6afa2e56057b",
+        "name": "Simulation Buyer 65",
+        "email": "sim-buyer-065@freshroute.com"
+      },
+      "supplierSelections": [
+        {
+          "orderItemId": "d40b651f-4af9-4b57-b2f2-29d5d3fdb1fd",
+          "productId": "8e07cdee-04d9-48fe-bc37-d3d4d572873f",
+          "productName": "Demo Product 2",
+          "quantity": 2,
+          "unitPrice": 3.5,
+          "seller": {
+            "sellerId": "3a1a5b12-c3dc-4ffb-8154-decb21a3ad3b",
+            "businessName": "Southern Greens Cooperative",
+            "contactName": "Southern Greens Cooperative"
+          }
+        }
+      ]
+    },
+    {
+      "orderId": "5ced7bc3-2930-4617-a930-c4ecb064736b",
+      "orderNumber": "SIM-ORD-066",
+      "status": "PAID",
+      "isCancelled": false,
+      "storageType": "NORMAL",
+      "totalWeight": 21.5,
+      "totalVolume": 3.6,
+      "totalAmount": 221.5,
+      "deliveryDate": "2026-05-08T03:30:00.000Z",
+      "placedAt": "2026-05-07T21:30:00.000Z",
+      "delivery": {
+        "address": "Simulation Address 66, Zone CMB_SOUTH",
+        "lat": 6.892087,
+        "lng": 79.873158,
+        "zone": {
+          "id": "cf1e5801-1d4c-4e8c-9f1b-92993168d1fc",
+          "code": "CMB_SOUTH",
+          "name": "Colombo South"
+        }
+      },
+      "pickupHub": {
+        "id": "ea2ba564-846f-476f-a4c2-3b04777d2407",
+        "name": "Central Aggregation Hub",
+        "lat": 6.914,
+        "lng": 79.872
+      },
+      "buyer": {
+        "id": "3d1e5f9c-b86d-4408-a20e-c149e9e48bba",
+        "name": "Simulation Buyer 66",
+        "email": "sim-buyer-066@freshroute.com"
+      },
+      "supplierSelections": [
+        {
+          "orderItemId": "7a3187b7-2884-44d6-b192-229482502cb1",
+          "productId": "ce3e7222-d5af-4be0-a9c5-3037b99ffca5",
+          "productName": "Demo Product 3",
+          "quantity": 3,
+          "unitPrice": 4.5,
+          "seller": {
+            "sellerId": "99e7e9b3-c591-46d2-a23d-2f65d9fc4154",
+            "businessName": "Central Harvest Hub",
+            "contactName": "Central Harvest Hub"
+          }
+        }
+      ]
+    },
+    {
+      "orderId": "fd143f6d-0a5b-4977-a6bc-8ace7141166a",
+      "orderNumber": "SIM-ORD-067",
+      "status": "PAID",
+      "isCancelled": false,
+      "storageType": "NORMAL",
+      "totalWeight": 26,
+      "totalVolume": 4.4,
+      "totalAmount": 224.25,
+      "deliveryDate": "2026-05-08T04:00:00.000Z",
+      "placedAt": "2026-05-07T20:30:00.000Z",
+      "delivery": {
+        "address": "Simulation Address 67, Zone CMB_NORTH",
+        "lat": 7.013043,
+        "lng": 79.872105,
+        "zone": {
+          "id": "dd9ef679-7904-4929-9319-7f77313cd9e0",
+          "code": "CMB_NORTH",
+          "name": "Colombo North"
+        }
+      },
+      "pickupHub": {
+        "id": "af58d909-15a4-4d10-8a3d-e43ae8dd45b7",
+        "name": "North Collection Hub",
+        "lat": 6.968,
+        "lng": 79.868
+      },
+      "buyer": {
+        "id": "a01e6a7a-7433-49c5-b9fa-5902800ca5a7",
+        "name": "Simulation Buyer 67",
+        "email": "sim-buyer-067@freshroute.com"
+      },
+      "supplierSelections": [
+        {
+          "orderItemId": "016ee2d7-1fea-4abe-b0ee-0427905d5f1b",
+          "productId": "e48c6e9d-ca1e-4533-bd9a-cc61aa0036fb",
+          "productName": "Demo Product 1",
+          "quantity": 4,
+          "unitPrice": 2.5,
+          "seller": {
+            "sellerId": "4a11a058-102a-4a0c-9253-5a66934a95bf",
+            "businessName": "North Valley Farms",
+            "contactName": "North Valley Farms"
+          }
+        }
+      ]
+    },
+    {
+      "orderId": "38abbdc4-829e-4ba9-955b-569a7ed977cf",
+      "orderNumber": "SIM-ORD-068",
+      "status": "PENDING",
+      "isCancelled": false,
+      "storageType": "NORMAL",
+      "totalWeight": 30.5,
+      "totalVolume": 5.2,
+      "totalAmount": 227,
+      "deliveryDate": "2026-05-08T04:30:00.000Z",
+      "placedAt": "2026-05-07T19:30:00.000Z",
+      "delivery": {
+        "address": "Simulation Address 68, Zone CMB_CENTRAL",
+        "lat": 6.938165,
+        "lng": 79.880526,
+        "zone": {
+          "id": "38b29a14-3f21-4647-a7b1-132a87a20620",
+          "code": "CMB_CENTRAL",
+          "name": "Colombo Central"
+        }
+      },
+      "pickupHub": {
+        "id": "2358b37a-bae2-415c-ae9d-a1e5f3f7debf",
+        "name": "South Collection Hub",
+        "lat": 6.858,
+        "lng": 79.864
+      },
+      "buyer": {
+        "id": "1d3eb883-5dd0-4af3-9f1e-8bcc9bcbd610",
+        "name": "Simulation Buyer 68",
+        "email": "sim-buyer-068@freshroute.com"
+      },
+      "supplierSelections": [
+        {
+          "orderItemId": "418b7446-1b49-4efd-846e-eb4bdd283032",
+          "productId": "8e07cdee-04d9-48fe-bc37-d3d4d572873f",
+          "productName": "Demo Product 2",
+          "quantity": 1,
+          "unitPrice": 3.5,
+          "seller": {
+            "sellerId": "3a1a5b12-c3dc-4ffb-8154-decb21a3ad3b",
+            "businessName": "Southern Greens Cooperative",
+            "contactName": "Southern Greens Cooperative"
+          }
+        }
+      ]
+    }
+  ]
+}

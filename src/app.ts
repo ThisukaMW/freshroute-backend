@@ -3,9 +3,10 @@ import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
-dotenv.config({ override: true });
 import authRoutes from "./modules/auth/auth.routes.js";
 import driverRoutes from "./modules/driver/driver.routes.js";
+import fieldAdminRoutes from "./modules/field_admin/fieldadmin.routes.js";
+import aggregatorRoutes from "./modules/Order_Aggregator/aggregator.routes.js";
 import productRoutes from "./modules/product/product.routes.js";
 import cartRoutes from "./modules/cart/cart.routes.js";
 import paymentRoutes from "./modules/payment/payment.route.js";
@@ -21,6 +22,8 @@ import inventoryRoutes from "./modules/inventory/inventory.routes.js";
 import dashboardRoutes from "./modules/dashboard/dashboard.routes.js";
 import analyticsRouter from "./modules/analytics/analytics.routes.js";
 
+dotenv.config({ override: true });
+
 const app = express();
 
 app.use(cors());
@@ -29,6 +32,7 @@ app.get("/", (req, res) => {
   res.send("Server is running 🚀");
 });
 
+// Health check
 app.get("/api/v1/health", (_req, res) => {
   res.json({ status: "FreshRoute backend running 🚀" });
 });
@@ -41,6 +45,8 @@ app.use((req, res, next) => {
 
 app.use("/api/v1/auth", authRoutes);
 app.use("/api/v1/driver", driverRoutes);
+app.use("/api/v1/fieldadmin", fieldAdminRoutes);
+app.use("/api/v1/aggregator", aggregatorRoutes);
 app.use("/api/v1/products", productRoutes);
 app.use("/api/v1/cart", cartRoutes);
 app.use("/api/v1/inventory", inventoryRoutes);

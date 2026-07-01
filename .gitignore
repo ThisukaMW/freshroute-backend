@@ -34,3 +34,6 @@ tmpclaude-*
 test-socket.html
 
 firebase-service-account.json
+
+# Markdown notes/summaries
+*.md

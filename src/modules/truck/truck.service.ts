@@ -15,14 +15,26 @@ export const PER_PALLET_WEIGHT = 1800;
 export type CreateTruckInput = {
   id: string;
   operator: string;
+  vehicleNumber?: string;
+  vehicleType?: string;
   type: string;
+  vehicleCapacity?: number;
+  maxWeight?: number;
+  maxVolume?: number;
+  maxStops?: number;
+  storageSupport?: string;
   capacityLbs: number;
   loadedLbs?: number;
+  currentLoadWeight?: number;
+  currentLoadVolume?: number;
+  currentLoadStops?: number;
   palletsLoaded?: number;
   palletsCap?: number;
   cratesLoaded?: number;
   boxesLoaded?: number;
   temperature?: string;
+  isActive?: boolean;
+  isAvailable?: boolean;
   loadBalance?: { left: number; right: number };
   tiltRisk?: string;
 };
@@ -32,14 +44,26 @@ export type UpdateTruckInput = Partial<Omit<CreateTruckInput, "id">>;
 const truckSelect = {
   id: true,
   operator: true,
+  vehicleNumber: true,
+  vehicleType: true,
   type: true,
+  vehicleCapacity: true,
+  maxWeight: true,
+  maxVolume: true,
+  maxStops: true,
+  storageSupport: true,
   capacityLbs: true,
   loadedLbs: true,
+  currentLoadWeight: true,
+  currentLoadVolume: true,
+  currentLoadStops: true,
   palletsLoaded: true,
   palletsCap: true,
   cratesLoaded: true,
   boxesLoaded: true,
   temperature: true,
+  isActive: true,
+  isAvailable: true,
   loadBalanceLeft: true,
   loadBalanceRight: true,
   tiltRisk: true,
@@ -81,10 +105,26 @@ export const createTruck = async (data: CreateTruckInput, db: any = prisma) => {
   const existing = await db.truck.findUnique({ where: { id: data.id } });
   if (existing) throw new Error(`Truck with ID "${data.id}" already exists`);
 
-  const { loadBalance, ...rest } = data;
+  const { loadBalance, vehicleNumber, vehicleType, ...rest } = data;
   const truck = await db.truck.create({
     data: {
       ...rest,
+      vehicleNumber: vehicleNumber ?? data.id,
+      vehicleType: vehicleType ?? data.type,
+      maxWeight: data.maxWeight ?? data.capacityLbs,
+      maxVolume: data.maxVolume ?? 0,
+      maxStops: data.maxStops ?? 0,
+      storageSupport: data.storageSupport ?? "NORMAL",
+      loadedLbs: data.loadedLbs ?? 0,
+      currentLoadWeight: data.currentLoadWeight ?? 0,
+      currentLoadVolume: data.currentLoadVolume ?? 0,
+      currentLoadStops: data.currentLoadStops ?? 0,
+      palletsLoaded: data.palletsLoaded ?? 0,
+      cratesLoaded: data.cratesLoaded ?? 0,
+      boxesLoaded: data.boxesLoaded ?? 0,
+      temperature: data.temperature ?? "Ambient",
+      isActive: data.isActive ?? true,
+      isAvailable: data.isAvailable ?? true,
       loadBalanceLeft: loadBalance?.left ?? 50,
       loadBalanceRight: loadBalance?.right ?? 50,
     },
