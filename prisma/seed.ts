@@ -1,4 +1,4 @@
-import { PrismaClient } from "../src/generated/prisma/client.js";
+import { PrismaClient, TruckStorageSupport } from "../src/generated/prisma/client.js";
 import { PrismaPg } from "@prisma/adapter-pg";
 import bcrypt from "bcrypt";
 import dotenv from "dotenv";
@@ -462,6 +462,58 @@ async function main() {
       },
     });
   }
+
+  // ─── Demo trucks for manual aggregation override and auto-assignment ───
+  await Promise.all(
+    [
+      {
+        operator: "Sunshine Holdings",
+        vehicleNumber: "TRUCK-001",
+        vehicleType: "Van",
+        storageSupport: TruckStorageSupport.BOTH,
+      },
+      {
+        operator: "Green Valley Transport",
+        vehicleNumber: "TRUCK-002",
+        vehicleType: "Van",
+        storageSupport: TruckStorageSupport.NORMAL,
+      },
+      {
+        operator: "Summerwille Logistics",
+        vehicleNumber: "TRUCK-003",
+        vehicleType: "Van",
+        storageSupport: TruckStorageSupport.NORMAL,
+      },
+      {
+        operator: "Silver Creek Freight",
+        vehicleNumber: "TRUCK-004",
+        vehicleType: "Van",
+        storageSupport: TruckStorageSupport.BOTH,
+      },
+    ].map((truck) =>
+      prisma.truck.create({
+        data: {
+          ...truck,
+          vehicleCapacity: 500,
+          maxWeight: 600,
+          maxVolume: 120,
+          maxStops: 15,
+          capacityLbs: 5400,
+          loadedLbs: 0,
+          palletsCap: 3,
+          palletsLoaded: 0,
+          cratesLoaded: 0,
+          boxesLoaded: 0,
+          temperature: "Ambient",
+          loadBalanceLeft: 50,
+          loadBalanceRight: 50,
+          tiltRisk: "Low",
+          isActive: true,
+          isAvailable: true,
+        },
+      })
+    )
+  );
 
   // ─── Fixed Pickup Hubs (Phase 1 Aggregator) ───────────────────────────────
   const hubs = await Promise.all([

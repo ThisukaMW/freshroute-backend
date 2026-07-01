@@ -5,6 +5,7 @@ import {
 } from "./fieldadmin.rules.js";
 
 const ACTIVE_LOAD_STATUSES: Array<"BATCHED" | "ASSIGNED" | "IN_TRANSIT"> = ["BATCHED", "ASSIGNED", "IN_TRANSIT"];
+const ACTIVE_ROUTE_STATUSES: Array<"ASSIGNED" | "STARTED" | "IN_PROGRESS"> = ["ASSIGNED", "STARTED", "IN_PROGRESS"];
 
 //recalculate the live load of a truck.
 const recalculateTruckLiveLoad = async (
@@ -213,7 +214,13 @@ const toFieldAdminOrderContract = (
 export const getAllOrders = async (fieldAdminId: string) => {
   await ensureFieldAdminExists(fieldAdminId);
   const orders = await prisma.order.findMany({
-    where: { batch: { routes: { some: { fieldAdminId } } } },
+    where: {
+      batch: { routes: { some: { fieldAdminId } } },
+      OR: [
+        { status: { notIn: ["BATCHED", "ASSIGNED", "IN_TRANSIT"] } },
+        { batch: { routes: { some: { fieldAdminId, status: { in: ACTIVE_ROUTE_STATUSES } } } } },
+      ],
+    },
     select: orderSelect,
     orderBy: { placedAt: "desc" },
   });
@@ -228,10 +235,19 @@ export const getOrdersByStatus = async (
   >
 ) => {
   await ensureFieldAdminExists(fieldAdminId);
+  const requiresActiveRoute = statuses.some((status) => ["BATCHED", "ASSIGNED", "IN_TRANSIT"].includes(status));
   const orders = await prisma.order.findMany({
     where: {
       status: { in: statuses },
       batch: { routes: { some: { fieldAdminId } } },
+      ...(requiresActiveRoute
+        ? {
+            OR: [
+              { status: { notIn: ["BATCHED", "ASSIGNED", "IN_TRANSIT"] } },
+              { batch: { routes: { some: { fieldAdminId, status: { in: ACTIVE_ROUTE_STATUSES } } } } },
+            ],
+          }
+        : {}),
     },
     select: orderSelect,
     orderBy: { placedAt: "desc" },
@@ -709,11 +725,89 @@ export const getRefundEligibleOrders = async (fieldAdminId: string) => {
         },
       },
     },
-    select: orderSelect,
+    select: {
+      id: true,
+      orderNumber: true,
+      status: true,
+      totalAmount: true,
+      placedAt: true,
+      buyer: { select: { user: { select: { name: true, email: true } } } },
+      items: {
+        select: {
+          id: true,
+          quantity: true,
+          unitPrice: true,
+          product: { select: { id: true, name: true, unit: true } },
+          inspections: {
+            where: { fieldAdminId, result: { in: ["PARTIAL", "REJECTED"] } },
+            orderBy: { createdAt: "desc" },
+            take: 1,
+            select: {
+              id: true,
+              approvedQuantity: true,
+              rejectedQuantity: true,
+              totalQuantity: true,
+              result: true,
+            },
+          },
+        },
+      },
+    },
     orderBy: { placedAt: "desc" },
   });
 
-  return toFieldAdminOrderContract(orders);
+  const orderItemIds = orders.flatMap((order) => order.items.map((item) => item.id));
+  const existingRefundedByItem = orderItemIds.length
+    ? await prisma.refundItem.groupBy({
+        by: ["orderItemId"],
+        where: { orderItemId: { in: orderItemIds } },
+        _sum: { rejectedQuantity: true, lineAmount: true },
+      })
+    : [];
+
+  const refundedQtyMap = new Map(
+    existingRefundedByItem.map((row) => [row.orderItemId, row._sum.rejectedQuantity ?? 0])
+  );
+
+  return orders
+    .map((order) => {
+      const items = order.items
+        .map((item) => {
+          const inspection = item.inspections?.[0];
+          if (!inspection) return null;
+          const rejectedQuantity =
+            inspection.rejectedQuantity ?? Math.max(0, (inspection.totalQuantity ?? item.quantity) - (inspection.approvedQuantity ?? 0));
+          const alreadyRefundedQuantity = refundedQtyMap.get(item.id) ?? 0;
+          const refundableQuantity = Math.max(0, rejectedQuantity - alreadyRefundedQuantity);
+          if (refundableQuantity <= 0) return null;
+          const refundableAmount = Number((refundableQuantity * item.unitPrice).toFixed(2));
+          return {
+            id: item.id,
+            name: item.product.name,
+            unit: item.product.unit,
+            quantity: item.quantity,
+            unitPrice: item.unitPrice,
+            rejectedQuantity,
+            refundedQuantity: alreadyRefundedQuantity,
+            refundableQuantity,
+            refundableAmount,
+          };
+        })
+        .filter((line): line is NonNullable<typeof line> => Boolean(line));
+
+      if (items.length === 0) return null;
+
+      return {
+        id: order.id,
+        orderNumber: order.orderNumber,
+        status: order.status,
+        totalAmount: order.totalAmount,
+        customer: order.buyer?.user?.name ?? 'Customer',
+        refundableAmount: Number(items.reduce((sum, item) => sum + item.refundableAmount, 0).toFixed(2)),
+        items,
+      };
+    })
+    .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry));
 };
 
 //initiate a refund for a field admin.
@@ -917,7 +1011,16 @@ export const getDashboardOverview = async (fieldAdminId: string) => {
   await ensureFieldAdminExists(fieldAdminId);
 
   const [assignedOrders, assessments, pendingQuality, routesToday] = await Promise.all([
-    prisma.order.count({ where: { batch: { routes: { some: { fieldAdminId } } } } }),
+    prisma.order.count({
+      where: {
+        status: { in: ["BATCHED", "ASSIGNED", "IN_TRANSIT"] },
+        batch: {
+          routes: {
+            some: { fieldAdminId, status: { in: ACTIVE_ROUTE_STATUSES } },
+          },
+        },
+      },
+    }),
     prisma.assessment.count({ where: { fieldAdminId } }),
     prisma.stop.count({
       where: {
