@@ -29,13 +29,25 @@ export const updatePersonalInfo = async (
 // Save an updated delivery address and city for a buyer, then notify them
 export const updateDeliveryAddress = async (
   userId: string,
-  data: { address?: string; city?: string }
+  data: { address?: string; city?: string; latitude?: number; longitude?: number }
 ) => {
   const user = await prisma.user.update({
     where: { id: userId },
     data: { address: data.address, city: data.city },
     select: { id: true, name: true, email: true, phone: true, city: true, address: true },
   });
+
+  // Keep the Buyer profile (deliveryAddress + coordinates) in sync too
+  if (data.address || data.latitude !== undefined || data.longitude !== undefined) {
+    await prisma.buyer.updateMany({
+      where: { userId },
+      data: {
+        deliveryAddress: data.address,
+        latitude:  data.latitude,
+        longitude: data.longitude,
+      },
+    });
+  }
 
   await createNotification({
     userId,
@@ -50,18 +62,21 @@ export const updateDeliveryAddress = async (
 // Update the seller's business name and address; also updates city on the user record if given
 export const updateBusinessInfo = async (
   userId: string,
-  data: { businessName?: string; businessAddress?: string; city?: string }
+  data: { businessName?: string; businessAddress?: string; city?: string; latitude?: number; longitude?: number }
 ) => {
-  // Make sure the seller profile exists before trying to update it
   const seller = await prisma.seller.findUnique({ where: { userId } });
   if (!seller) throw new Error("Seller profile not found");
 
   await prisma.seller.update({
     where: { userId },
-    data: { businessName: data.businessName, businessAddress: data.businessAddress },
+    data: {
+      businessName:    data.businessName,
+      businessAddress: data.businessAddress,
+      latitude:        data.latitude,
+      longitude:       data.longitude,
+    },
   });
 
-  // Update city on the main user record only if a new city was given
   if (data.city) {
     await prisma.user.update({ where: { id: userId }, data: { city: data.city } });
   }

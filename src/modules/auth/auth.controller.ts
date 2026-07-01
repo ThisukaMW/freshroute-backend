@@ -32,11 +32,7 @@ const validatePersonName = (name: string): string | null => {
   return null;
 };
 
-/**
- * Sri Lankan phone validation.
- * Accepts: +94XXXXXXXXX  |  94XXXXXXXXX  |  9-digit local part
- * Phone is always optional — returns null (valid) when the value is empty/undefined.
- */
+
 const validatePhone = (phone: string | undefined): string | null => {
   if (!phone || !phone.trim()) return null;  // optional field
   const n = phone.replace(/\s/g, "");
@@ -78,7 +74,7 @@ export const loginUserController = async (req: Request, res: Response) => {
 /** Register a new buyer account. Deletes old INACTIVE account with same email to allow re-register. */
 export const registerCustomer = async (req: Request, res: Response) => {
   try {
-    const { name, email, password, phone, city, address } = req.body;
+    const { name, email, password, phone, city, address, latitude, longitude } = req.body;
 
     // Required fields
     if (!name || !email || !password || !address) {
@@ -113,6 +109,8 @@ export const registerCustomer = async (req: Request, res: Response) => {
       phone:   normalizePhone(phone),
       city,
       address,
+      latitude:  latitude  !== undefined ? Number(latitude)  : undefined,
+      longitude: longitude !== undefined ? Number(longitude) : undefined,
     });
 
     // Buyers auto-login — no admin approval needed

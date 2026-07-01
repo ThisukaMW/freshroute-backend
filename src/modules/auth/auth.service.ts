@@ -150,6 +150,8 @@ export const createCustomer = async (data: {
   phone?: string;
   city?: string;
   address: string;
+  latitude?: number;
+  longitude?: number;
 }) => {
   const user = await prisma.user.create({
     data: {
@@ -169,8 +171,8 @@ export const createCustomer = async (data: {
     data: {
       userId: user.id,
       deliveryAddress: data.address || "To be updated",
-      latitude: 6.9271,
-      longitude: 79.8612,
+      latitude: data.latitude ?? 6.9271,
+      longitude: data.longitude ?? 79.8612,
     },
   });
 

@@ -80,13 +80,18 @@ export const updateDeliveryAddressController = async (req: AuthRequest, res: Res
     const userId = req.userId;
     if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
-    const { address, city } = req.body;
+    const { address, city, latitude, longitude } = req.body;
 
     if (!address || !address.trim()) {
       return res.status(400).json({ message: "Address is required" });
     }
 
-    const user = await updateDeliveryAddress(userId, { address, city });
+    const user = await updateDeliveryAddress(userId, {
+      address,
+      city,
+      latitude:  latitude  !== undefined ? Number(latitude)  : undefined,
+      longitude: longitude !== undefined ? Number(longitude) : undefined,
+    });
     res.json({ message: "Delivery address updated", user });
   } catch (err: any) {
     res.status(500).json({ message: err.message ?? "Failed to update address" });
@@ -99,7 +104,7 @@ export const updateBusinessInfoController = async (req: AuthRequest, res: Respon
     const userId = req.userId;
     if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
-    const { businessName, businessAddress, city } = req.body;
+    const { businessName, businessAddress, city, latitude, longitude } = req.body;
 
     if (!businessName || !businessName.trim()) {
       return res.status(400).json({ message: "Business name is required" });
@@ -108,7 +113,13 @@ export const updateBusinessInfoController = async (req: AuthRequest, res: Respon
       return res.status(400).json({ message: "Business address is required" });
     }
 
-    await updateBusinessInfo(userId, { businessName, businessAddress, city });
+    await updateBusinessInfo(userId, {
+      businessName,
+      businessAddress,
+      city,
+      latitude:  latitude  !== undefined ? Number(latitude)  : undefined,
+      longitude: longitude !== undefined ? Number(longitude) : undefined,
+    });
     res.json({ message: "Business info updated" });
   } catch (err: any) {
     res.status(500).json({ message: err.message ?? "Failed to update business info" });
