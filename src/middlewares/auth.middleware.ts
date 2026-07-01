@@ -9,6 +9,7 @@ import prisma from "../config/database.js";
 export interface AuthRequest extends Request {
   userId?: string;
   driverId?: string;
+  fieldAdminId?: string;
   role?: string;
 }
 
@@ -61,7 +62,27 @@ export const protect: RequestHandler = async (
     // Save the user's id, driver id, and role on the request so other functions can use it
     req.userId = decoded.userId || decoded.id || decoded.user?.id;
     req.driverId = decoded.driverId;
-    req.role = decoded.role;
+    req.role = typeof decoded.role === "string"
+      ? decoded.role.toUpperCase()
+      : typeof decoded.user?.role === "string"
+      ? decoded.user.role.toUpperCase()
+      : undefined;
+    req.fieldAdminId = decoded.fieldAdminId;
+
+    // Resolve the field admin profile id for protected field admin routes
+    if (
+      !req.fieldAdminId &&
+      req.userId &&
+      req.role &&
+      ["FIELD_ADMIN", "field_admin", "fieldadmin"].includes(req.role)
+    ) {
+      const fieldAdmin = await prisma.fieldAdmin.findUnique({
+        where: { userId: req.userId },
+      });
+      if (fieldAdmin) {
+        req.fieldAdminId = fieldAdmin.id;
+      }
+    }
 
     // If we still couldn't find a user id, something is wrong with the token
     if (!req.userId) {
@@ -75,6 +96,17 @@ export const protect: RequestHandler = async (
   }
 };
 
+// Restrict a route to one or more roles (use after protect)
+export const authorize =
+  (...roles: string[]): RequestHandler =>
+  (req: AuthRequest, res: Response, next: NextFunction) => {
+    if (!req.role || !roles.includes(req.role)) {
+      res.status(403).json({ message: "Access denied. Insufficient permissions." });
+      return;
+    }
+    next();
+  };
+
 // Block anyone who is not an admin or field admin from going further
 export const requireAdmin: RequestHandler = (
   req: AuthRequest,
@@ -82,7 +114,7 @@ export const requireAdmin: RequestHandler = (
   next: NextFunction
 ) => {
   const authReq = req as AuthRequest;
-  if (authReq.role !== "admin" && authReq.role !== "field_admin") {
+  if (authReq.role !== "ADMIN" && authReq.role !== "FIELD_ADMIN") {
     res.status(403).json({ message: "Access denied. Admins only." });
     return;
   }

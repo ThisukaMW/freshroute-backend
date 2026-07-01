@@ -53,6 +53,42 @@ export const notifySellerNewOrder = async (
 };
 
 // ─────────────────────────────────────────────
+// 👑 ADMIN: Notifies all admins when a new buyer registers and needs approval
+// ─────────────────────────────────────────────
+export const notifyAdminsBuyerRegistered = async (
+  buyerName: string,
+  buyerEmail: string,
+  buyerId: string
+) => {
+  try {
+    const admins = await prisma.user.findMany({
+      where: { role: "ADMIN" },
+      select: { id: true },
+    });
+
+    if (admins.length === 0) {
+      console.warn("[notifyAdminsBuyerRegistered] no admin users found in DB");
+      return;
+    }
+
+    console.log(`[notifyAdminsBuyerRegistered] notifying ${admins.length} admin(s)`);
+
+    await Promise.allSettled(
+      admins.map((admin) =>
+        createNotification({
+          userId: admin.id,
+          title: "🆕 New Buyer Registration",
+          body: `${buyerName} (${buyerEmail}) has registered and is awaiting approval.`,
+          data: { type: "BUYER_REGISTRATION", buyerId, buyerName, buyerEmail },
+        })
+      )
+    );
+  } catch (err) {
+    console.error("[notifyAdminsBuyerRegistered] failed:", err);
+  }
+};
+
+// ─────────────────────────────────────────────
 // 👑 ADMIN: Notifies all admins when a new seller registers and needs approval
 // ─────────────────────────────────────────────
 export const notifyAdminsSellerRegistered = async (

@@ -34,7 +34,7 @@ export const loginAdmin = async (req: Request, res: Response) => {
 
     // Create a 7-day token with the admin's id, role, and token version inside it
     const token = jwt.sign(
-      { userId: admin.id, role: 'admin', tokenVersion: admin.tokenVersion },
+      { userId: admin.id, role: 'ADMIN', tokenVersion: admin.tokenVersion },
       process.env.JWT_SECRET!,
       { expiresIn: '7d' }
     );

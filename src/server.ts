@@ -31,11 +31,19 @@ httpServer.listen(PORT, async () => {
 
   // Run once immediately on boot to catch any carts that
   // expired while the server was down
-  clearExpiredCarts();
+  try {
+    await clearExpiredCarts();
+  } catch (error) {
+    console.error("Cart expiry cleanup failed on startup:", error);
+  }
 
   // Then repeat every 30 minutes
   setInterval(async () => {
-    const clearExpiredCarts = await loadClearExpiredCarts();
-    await clearExpiredCarts();
+    try {
+      const clearExpiredCarts = await loadClearExpiredCarts();
+      await clearExpiredCarts();
+    } catch (error) {
+      console.error("Cart expiry cleanup failed:", error);
+    }
   }, 30 * 60 * 1000);
 });

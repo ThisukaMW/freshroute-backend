@@ -5,13 +5,12 @@
 import type { Request, Response } from "express";
 import { loginUser } from "./auth.service.js";
 import bcrypt from "bcrypt";
-import jwt from "jsonwebtoken";
 import { findCustomerByEmail, createCustomer } from "./auth.service.js";
 import { createVendor, findVendorByEmail } from "./auth.service.js";
 import { forgotPassword, resetPassword, secureAccount } from "./auth.service.js";
 import { sendPasswordChangedEmail } from "../../utils/mailer.js";
 import { loginSeller, loginBuyer } from "./auth.service.js";
-import { notifyAdminsSellerRegistered } from "../notifications/notification.events.js";
+import { notifyAdminsSellerRegistered, notifyAdminsBuyerRegistered } from "../notifications/notification.events.js";
 import prisma from "../../config/database.js";
 
 // ─── Validation helpers ────────────────────────────────────────────
@@ -115,25 +114,11 @@ export const registerCustomer = async (req: Request, res: Response) => {
       address,
     });
 
-    // Buyers auto-login — no admin approval needed
-    const token = jwt.sign(
-      {
-        userId:       customer.id,
-        name:         customer.name,
-        email:        customer.email,
-        role:         "BUYER",
-        status:       "ACTIVE",
-        tokenVersion: 0,
-      },
-      process.env.JWT_SECRET!,
-      { expiresIn: "7d" }
-    );
+    await notifyAdminsBuyerRegistered(customer.name, customer.email, customer.id);
 
     return res.status(201).json({
-      message:    "Registration successful.",
-      token,
-      user:       { id: customer.id, name: customer.name, email: customer.email, role: "buyer", status: "ACTIVE" },
-      redirectTo: "/buyer/products",
+      message: "Registration successful. Your account is pending admin approval.",
+      user:    { id: customer.id, name: customer.name, email: customer.email, role: "buyer", status: "INACTIVE" },
     });
   } catch (err: any) {
     console.error("[registerCustomer] error:", err);

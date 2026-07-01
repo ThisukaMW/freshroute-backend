@@ -14,7 +14,11 @@ const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 export const loginUser = async (email: string, password: string) => {
   const user = await prisma.user.findUnique({
     where: { email },
-    include: { sellerProfile: true, driverProfile: true },
+    include: {
+      sellerProfile: true,
+      driverProfile: true,
+      fieldAdminProfile: true,
+    },
   });
 
   // Block if user doesn't exist
@@ -33,7 +37,7 @@ export const loginUser = async (email: string, password: string) => {
   }
 
   // Block if account is pending admin approval
-  if (user.status === "INACTIVE" && user.role !== "BUYER") {
+  if (user.status === "INACTIVE") {
     const err: any = new Error(
       "Your account is pending admin approval. You'll be notified once approved.",
     );
@@ -82,20 +86,23 @@ export const loginUser = async (email: string, password: string) => {
   };
 
   // Create a JWT token with user info and token version (for session invalidation)
-  const token = jwt.sign(
-    {
-      userId: safeUser.id,
-      name: safeUser.name,
-      email: safeUser.email,
-      role: user.role,
-      status: safeUser.status,
-      tokenVersion: user.tokenVersion,
-    },
-    process.env.JWT_SECRET!,
-    { expiresIn: "7d" },
-  );
+  const tokenPayload: Record<string, any> = {
+    userId: safeUser.id,
+    name: safeUser.name,
+    email: safeUser.email,
+    role: user.role,
+    status: user.status,
+    tokenVersion: user.tokenVersion,
+  };
+  if (user.role === "FIELD_ADMIN" && user.fieldAdminProfile) {
+    tokenPayload.fieldAdminId = user.fieldAdminProfile.id;
+  }
 
-  // Attach seller or driver profile if applicable
+  const token = jwt.sign(tokenPayload, process.env.JWT_SECRET!, {
+    expiresIn: "7d",
+  });
+
+  // Attach seller, driver, or field admin profile if applicable
   let profile: any = null;
   if (role === "seller") {
     profile = user.sellerProfile ?? null;
@@ -105,6 +112,15 @@ export const loginUser = async (email: string, password: string) => {
           id: user.driverProfile.id,
           vehicleNumber: user.driverProfile.vehicleNumber,
           vehicleType: user.driverProfile.vehicleType,
+        }
+      : null;
+  } else if (role === "field_admin") {
+    profile = user.fieldAdminProfile
+      ? {
+          id: user.fieldAdminProfile.id,
+          vehicleNumber: user.fieldAdminProfile.vehicleNumber,
+          vehicleType: user.fieldAdminProfile.vehicleType,
+          isActive: user.fieldAdminProfile.isActive,
         }
       : null;
   }
@@ -160,7 +176,7 @@ export const createCustomer = async (data: {
       phone: data.phone || null,
       city: data.city ?? undefined,
       address: data.address ?? undefined,
-      status: "ACTIVE", 
+      status: "INACTIVE",
     },
   });
 

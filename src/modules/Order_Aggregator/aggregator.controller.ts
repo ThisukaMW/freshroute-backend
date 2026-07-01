@@ -46,13 +46,6 @@ export const runAggregation = async (req: AuthRequest, res: Response) => {
       windowEnd,
       triggerMode,
       dryRun,
-      clusterRadiusKm: req.body?.clusterRadiusKm,
-      minPoints: req.body?.minPoints,
-      maxStopsPerBatch: req.body?.maxStopsPerBatch,
-      maxWeightPerBatch: req.body?.maxWeightPerBatch,
-      maxVolumePerBatch: req.body?.maxVolumePerBatch,
-      autoAssignRoutes:
-        typeof req.body?.autoAssignRoutes === "boolean" ? req.body.autoAssignRoutes : undefined,
     });
 
     res.json(data);
@@ -75,16 +68,11 @@ export const previewAggregation = async (req: AuthRequest, res: Response) => {
       windowStart,
       windowEnd,
       dryRun: true,
-      clusterRadiusKm: req.query.clusterRadiusKm ? Number(req.query.clusterRadiusKm) : undefined,
-      minPoints: req.query.minPoints ? Number(req.query.minPoints) : undefined,
-      maxStopsPerBatch: req.query.maxStopsPerBatch ? Number(req.query.maxStopsPerBatch) : undefined,
-      maxWeightPerBatch: req.query.maxWeightPerBatch ? Number(req.query.maxWeightPerBatch) : undefined,
-      maxVolumePerBatch: req.query.maxVolumePerBatch ? Number(req.query.maxVolumePerBatch) : undefined,
     });
 
     res.json(data);
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : "Aggregation preview failed";
+    const message = error instanceof Error ? error.message : "Aggregation failed";
     res.status(400).json({ message });
   }
 };

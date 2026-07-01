@@ -1,12 +1,9 @@
 // FreshRoute Fleet Management System - Prisma Schema
 // Database: PostgreSQL with PostGIS extension
-// FreshRoute Fleet Management System - Prisma Schema
-// Database: PostgreSQL with PostGIS extension
 
 generator client {
   provider = "prisma-client-js"
   output   = "../src/generated/prisma"
-  
 }
 
 datasource db {
@@ -116,6 +113,61 @@ enum ReservationStatus {
   EXPIRED      // Auto-released after timeout
 }
 
+enum HubType {
+  FARM
+  MARKET
+  AGGREGATION_CENTER
+}
+
+enum StorageType {
+  NORMAL
+  COLD
+}
+
+enum TruckStorageSupport {
+  NORMAL
+  COLD
+  BOTH
+}
+
+enum AggregationRunStatus {
+  COMPLETED
+  COMPLETED_WITH_REJECTIONS
+  FAILED
+}
+
+enum InspectionResult {
+  APPROVED
+  REJECTED
+  PARTIAL
+}
+
+enum AssessmentTarget {
+  DRIVER
+  BUYER
+  SELLER
+}
+
+enum TruckType {
+  REFRIGERATED_VAN
+  DRY_CARGO
+  REEFER
+}
+
+enum TiltRisk {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum StockChangeType {
+  INITIAL       // Product creation
+  PURCHASE      // Buyer purchases (decreases)
+  RESTOCK       // Seller adds stock (increases)
+  ADJUSTMENT    // Manual correction
+  RETURN        // Customer return (increases)
+}
+
 // ============= USER MANAGEMENT =============
 
 model User {
@@ -125,7 +177,7 @@ model User {
   name          String
   role          UserRole
   status        UserStatus  @default(ACTIVE)
-  city          String?    
+  city          String?
   address       String?
   passwordHash  String
   prevPasswordHash  String?   // stores old hash before a reset, cleared after secure-account
@@ -139,13 +191,13 @@ model User {
   updatedAt     DateTime    @updatedAt
 
   // Relationships
-  driverProfile Driver?
-  sellerProfile Seller?
-  buyerProfile  Buyer?
-  notifications Notification[]
+  driverProfile     Driver?
+  sellerProfile     Seller?
+  buyerProfile      Buyer?
+  fieldAdminProfile FieldAdmin?
+  notifications     Notification[]
 
   tokenVersion Int @default(0)
-
 
   @@index([email])
   @@index([role, status])
@@ -195,7 +247,7 @@ model Seller {
   businessAddress String
   latitude        Float?
   longitude       Float?
-  verificationDocUrl String? 
+  verificationDocUrl String?
   isApproved      Boolean     @default(false)
 
   createdAt       DateTime    @default(now())
@@ -236,8 +288,68 @@ model Buyer {
   reservations    StockReservation[]
 
   cart            Cart?
+
   @@index([userId])
-  
+}
+
+// ============= FIELD ADMIN PROFILE & TASKS =============
+
+model FieldAdmin {
+  id          String          @id @default(uuid())
+  userId      String          @unique
+  user        User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  vehicleNumber String?
+  vehicleType   String?
+  isActive      Boolean      @default(true)
+
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  // relationships to tasks
+  routes                Route[]
+  inspections           ProductInspection[]
+  deliveryVerifications DeliveryVerification[]
+  damageReports         DamageReport[]
+  assessments           Assessment[]
+  refunds               Refund[]
+  reassessments         RouteModification[] @relation("ReassessedBy")
+
+  @@index([userId])
+}
+
+model Hub {
+  id        String    @id @default(uuid())
+  name      String
+  latitude  Float
+  longitude Float
+  type      HubType
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  orders    Order[]
+  batches   Batch[]
+
+  @@index([type])
+  @@index([latitude, longitude])
+}
+
+model DeliveryZone {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  code        String   @unique
+  minLat      Float
+  maxLat      Float
+  minLng      Float
+  maxLng      Float
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  orders      Order[]
+
+  @@index([isActive])
 }
 
 // ============= PRODUCTS & ORDERS =============
@@ -297,14 +409,25 @@ model Order {
 
   orderNumber     String          @unique
   status          OrderStatus     @default(PENDING)
+  isCancelled     Boolean         @default(false)
   totalAmount     Float
+  storageType     StorageType     @default(NORMAL)
+  totalWeight     Float?
+  totalVolume     Float?
 
   deliveryAddress String
   deliveryLat     Float
   deliveryLng     Float
   deliveryNotes   String?
   deliveryTimeSlot DeliveryTimeSlot?
+  deliveryDate    DateTime?
   specialInstructions String?
+
+  pickupHubId     String?
+  pickupHub       Hub?            @relation(fields: [pickupHubId], references: [id], onDelete: SetNull)
+
+  deliveryZoneId  String?
+  deliveryZone    DeliveryZone?   @relation(fields: [deliveryZoneId], references: [id], onDelete: SetNull)
 
   batchId         String?
   batch           Batch?          @relation(fields: [batchId], references: [id], onDelete: SetNull)
@@ -322,13 +445,17 @@ model Order {
   // Relationships
   items           OrderItem[]
   payment         Payment?
-  ratings         Rating[]  // ← replace with this (plural, no ?)
+  ratings         Rating[]
   reservations    StockReservation[]
+  refunds         Refund[]
 
   @@index([buyerId, status])
   @@index([batchId])
   @@index([status, placedAt])
   @@index([orderNumber])
+  @@index([status, isCancelled, batchId, deliveryDate])
+  @@index([pickupHubId, storageType])
+  @@index([deliveryZoneId])
 }
 
 model OrderItem {
@@ -345,13 +472,16 @@ model OrderItem {
 
   sellerId    String      // Denormalized for easier querying
 
+  inspections ProductInspection[]
+  refundItems RefundItem[]
+
   createdAt   DateTime    @default(now())
 
   @@index([orderId])
   @@index([productId])
   @@index([sellerId])
 }
-// Cart and CartItems
+
 model Cart {
   id        String      @id @default(uuid())
   buyerId   String      @unique
@@ -388,36 +518,36 @@ model CartItem {
   @@unique([cartId, productId, sellerId])
   @@index([cartId])
   @@index([productId, sellerId])
-  
+
   // Link to stock reservation
   reservation StockReservation?
 }
 
 model StockReservation {
   id             String   @id @default(uuid())
-  
+
   productId      String
   product        Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
-  
+
   sellerId       String
   seller         Seller   @relation(fields: [sellerId], references: [id], onDelete: Cascade)
-  
+
   buyerId        String
   buyer          Buyer    @relation(fields: [buyerId], references: [id], onDelete: Cascade)
-  
+
   quantity       Float    // How much is reserved
   status         ReservationStatus @default(ACTIVE) // ACTIVE, CONFIRMED, CANCELLED, EXPIRED
-  
+
   cartItemId     String?  @unique // Link to cart
   cartItem       CartItem? @relation(fields: [cartItemId], references: [id], onDelete: Cascade)
-  
+
   orderId        String?  // Link when order created
   order          Order?   @relation(fields: [orderId], references: [id], onDelete: SetNull)
-  
+
   expiresAt      DateTime // When reservation auto-expires
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
-  
+
   @@index([buyerId, status])
   @@index([expiresAt]) // For cleanup job
 }
@@ -428,663 +558,7 @@ model PromoCode {
   discount  Float
   active    Boolean  @default(true)
 
-  carts     Cart[] 
-}
-
-// ============= PAYMENT SYSTEM =============
-
-model Payment {
-  id               String         @id @default(uuid())
-  orderId          String         @unique
-  order            Order          @relation(fields: [orderId], references: [id])
-
-  amount           Float
-  currency         String         @default("USD")
-  status           PaymentStatus  @default(PENDING)
-
-  gatewayPaymentId String?        @unique  // Stripe/Razorpay payment ID
-  gatewayResponse  Json?
-
-  completedAt      DateTime?
-  refundedAt       DateTime?
-
-  createdAt        DateTime       @default(now())
-  updatedAt        DateTime       @updatedAt
-
-  @@index([orderId])
-  @@index([gatewayPaymentId])
-  @@index([status])
-}
-
-// ============= BATCHING SYSTEM =============
-
-model Batch {
-  id              String          @id @default(uuid())
-  batchNumber     String          @unique
-
-  status          BatchStatus     @default(OPEN)
-  trigger         BatchTrigger?
-
-  scheduledDate   DateTime        // Target delivery date
-  timeWindowStart DateTime        // e.g., 10:00 AM
-  timeWindowEnd   DateTime        // e.g., 2:00 PM
-
-  orderCount      Int             @default(0)
-  totalVolume     Float           @default(0) // Total weight/volume
-
-  openedAt        DateTime        @default(now())
-  closedAt        DateTime?
-  completedAt     DateTime?
-
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
-
-  // Relationships
-  orders          Order[]
-  routes          Route[]
-
-  @@index([status, scheduledDate])
-  @@index([scheduledDate, timeWindowStart])
-}
-
-// ============= ROUTING SYSTEM =============
-
-model Route {
-  id                  String          @id @default(uuid())
-  routeNumber         String          @unique
-
-  batchId             String
-  batch               Batch           @relation(fields: [batchId], references: [id], onDelete: Cascade)
-
-  driverId            String?
-  driver              Driver?         @relation(fields: [driverId], references: [id], onDelete: SetNull)
-
-  fieldAdminId        String?         // Field admin accompanying driver
-
-  status              RouteStatus     @default(PLANNED)
-
-  // Route metrics
-  totalDistance       Float?          // in km
-  estimatedDuration   Int?            // in minutes
-  actualDuration      Int?
-
-  optimizedWaypoints  Json?           // Google Maps waypoints
-  googleMapsRouteData Json?           // Full response from Google Maps API
-
-  // Timing
-  scheduledStart      DateTime
-  scheduledEnd        DateTime
-  actualStart         DateTime?
-  actualEnd           DateTime?
-
-  createdAt           DateTime        @default(now())
-  updatedAt           DateTime        @updatedAt
-
-  // Relationships
-  stops               Stop[]
-  modifications       RouteModification[]
-
-  @@index([batchId])
-  @@index([driverId, status])
-  @@index([status, scheduledStart])
-}
-
-model Stop {
-  id              String          @id @default(uuid())
-  routeId         String
-  route           Route           @relation(fields: [routeId], references: [id], onDelete: Cascade)
-
-  type            StopType
-  sequenceOrder   Int             // Order in the route (1, 2, 3...)
-
-  // Location
-  address         String
-  latitude        Float
-  longitude       Float
-
-  // For PICKUP stops
-  sellerId        String?
-  seller          Seller?         @relation("SellerPickups", fields: [sellerId], references: [id], onDelete: SetNull)
-
-  // For DELIVERY stops
-  buyerId         String?
-  buyer           Buyer?          @relation("BuyerDeliveries", fields: [buyerId], references: [id], onDelete: SetNull)
-
-  orderId         String?         @unique
-  order           Order?
-
-  status          StopStatus      @default(PENDING)
-
-  // Timing
-  estimatedArrival DateTime?
-  actualArrival   DateTime?
-  completedAt     DateTime?
-
-  // Details
-  notes           String?
-  itemsSummary    Json?           // Products to pickup/deliver at this stop
-
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
-
-  @@index([routeId, sequenceOrder])
-  @@index([sellerId])
-  @@index([buyerId])
-  @@index([status])
-}
-
-model RouteModification {
-  id              String            @id @default(uuid())
-  routeId         String
-  route           Route             @relation(fields: [routeId], references: [id], onDelete: Cascade)
-
-  type            ModificationType
-  reason          String?
-
-  approvedBy      String?           // Field admin user ID
-
-  oldData         Json?             // Previous state
-  newData         Json?             // New state
-
-  createdAt       DateTime          @default(now())
-
-  @@index([routeId, createdAt])
-}
-
-// ============= REAL-TIME TRACKING =============
-
-model DriverLocation {
-  id              String      @id @default(uuid())
-  driverId        String
-  driver          Driver      @relation(fields: [driverId], references: [id], onDelete: Cascade)
-
-  sessionId       String?
-  session         DriverSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
-
-  latitude        Float
-  longitude       Float
-  accuracy        Float?      // GPS accuracy in meters
-  heading         Float?      // Direction in degrees
-  speed           Float?      // Speed in km/h
-
-  timestamp       DateTime    @default(now())
-
-  // Additional context
-  currentRouteId  String?
-  currentStopId   String?
-
-  @@index([driverId, timestamp(sort: Desc)])
-  @@index([sessionId])
-  @@index([timestamp])
-}
-
-model DriverSession {
-  id              String            @id @default(uuid())
-  driverId        String
-  driver          Driver            @relation(fields: [driverId], references: [id], onDelete: Cascade)
-
-  routeId         String?
-
-  startedAt       DateTime          @default(now())
-  endedAt         DateTime?
-
-  // Relationships
-  locations       DriverLocation[]
-
-  @@index([driverId, startedAt])
-}
-
-// ============= RATING SYSTEM =============
-
-model Rating {
-  id String @id @default(uuid())
-
-  orderId   String
-  order     Order   @relation(fields: [orderId], references: [id])
-
-  productId String
-  product   Product @relation(fields: [productId], references: [id])
-
-  sellerId String
-  seller   Seller @relation(fields: [sellerId], references: [id])
-
-  driverId String
-  driver   Driver @relation(fields: [driverId], references: [id])
-
-  buyerId String
-  buyer   Buyer  @relation(fields: [buyerId], references: [id])
-
-  rating                Int      // Overall rating (1-5)
-  deliveryRating        Int?     // Delivery speed/accuracy
-  productQualityRating  Int?     // Product condition on arrival
-  packagingRating       Int?
-  comment               String?
-  isVerifiedPurchase    Boolean  @default(false)
-  isFlagged             Boolean  @default(false)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@unique([orderId, productId])
-
-  @@index([sellerId])
-  @@index([productId])
-  @@index([driverId])
-  @@index([orderId])
-  @@index([buyerId])
-}
-
-// ============= NOTIFICATION SYSTEM =============
-
-model Notification {
-  id        String   @id @default(uuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  title     String
-  body      String
-  data      Json?
-
-  read      Boolean  @default(false)
-  readAt    DateTime?
-
-  createdAt DateTime @default(now())
-
-  @@index([userId, read])
-  @@index([createdAt(sort: Desc)])
-
-}
-
-
-
-// ============= TRUCK / FLEET MANAGEMENT =============
-// Add this block to your existing schema.prisma
-
-enum TruckType {
-  REFRIGERATED_VAN
-  DRY_CARGO
-  REEFER
-}
-
-enum TiltRisk {
-  LOW
-  MEDIUM
-  HIGH
-}
-
-model Truck {
-  id             String    @id  // User-supplied plate / truck ID (e.g. "NP1234567")
-  operator       String
-  type           String    // Free-text to match frontend dropdown
-  capacityLbs    Float
-  loadedLbs      Float     @default(0)
-  palletsLoaded  Int       @default(0)
-  palletsCap     Int       @default(0)
-  cratesLoaded   Int       @default(0)
-  boxesLoaded    Int       @default(0)
-  temperature    String    @default("Ambient")
-  efficiency     Float     @default(0)
-  avgDelay       String    @default("")
-  loadBalanceLeft  Float   @default(50)
-  loadBalanceRight Float   @default(50)
-  tiltRisk       String    @default("Low")
-
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
-
-  @@index([operator])
-}
-
-// ============= INVENTORY SYSTEM =============
-
-enum StockChangeType {
-  INITIAL       // Product creation
-  PURCHASE      // Buyer purchases (decreases)
-  RESTOCK       // Seller adds stock (increases)
-  ADJUSTMENT    // Manual correction
-  RETURN        // Customer return (increases)
-}
-
-model StockHistory {
-  id              String            @id @default(uuid())
-  productId       String
-  product         Product           @relation(fields: [productId], references: [id], onDelete: Cascade)
-
-  type            StockChangeType   // What type of change
-  quantity        Float             // Amount changed (can be negative)
-  previousStock   Float             // Stock before this change
-  newStock        Float             // Stock after this change
-  
-  reason          String?           // Why changed (optional detail)
-  orderId         String?           // Related order ID if applicable
-  
-  performedBy     String?           // User ID who made change (seller or admin)
-
-  createdAt       DateTime          @default(now())
-
-  @@index([productId, createdAt(sort: Desc)])
-  @@index([type])
-  @@index([orderId])
-}
-
-// ============= ENUMS =============
-
-enum UserRole {
-  ADMIN
-  FIELD_ADMIN
-  DRIVER
-  SELLER
-  BUYER
-}
-
-enum UserStatus {
-  ACTIVE
-  INACTIVE
-  SUSPENDED
-}
-
-enum ProductStatus {
-  PENDING_APPROVAL
-  APPROVED
-  REJECTED
-  OUT_OF_STOCK
-}
-
-enum OrderStatus {
-  PENDING          // Created, awaiting payment
-  PAYMENT_PENDING  // Payment initiated
-  PAYMENT_FAILED   // Payment failed
-  PAID             // Payment completed, ready for batching
-  BATCHED          // Added to a batch
-  ASSIGNED         // Route assigned to driver
-  IN_TRANSIT       // Driver started route
-  DELIVERED        // Successfully delivered
-  FAILED           // Delivery failed
-  CANCELLED        // Order cancelled
-}
-
-enum BatchStatus {
-  OPEN            // Collecting orders
-  CLOSED          // No more orders, ready for routing
-  ROUTED          // Routes created
-  IN_PROGRESS     // Driver(s) executing routes
-  COMPLETED       // All routes completed
-  CANCELLED
-}
-
-enum BatchTrigger {
-  SCHEDULED       // Time-based trigger
-  THRESHOLD       // Order count/volume trigger
-  MANUAL          // Admin manually closed
-}
-
-enum RouteStatus {
-  PLANNED         // Created but not assigned yet
-  ASSIGNED        // Assigned to driver
-  STARTED         // Driver started journey
-  IN_PROGRESS     // Actively delivering
-  COMPLETED       // All stops completed
-  FAILED          // Route failed
-  CANCELLED
-}
-
-enum StopType {
-  PICKUP
-  DELIVERY
-}
-
-enum StopStatus {
-  PENDING
-  IN_PROGRESS
-  COMPLETED
-  FAILED
-  SKIPPED
-}
-
-enum ModificationType {
-  STOP_ADDED
-  STOP_REMOVED
-  STOP_REORDERED
-  ROUTE_CHANGED
-}
-
-enum PaymentStatus {
-  PENDING
-  PROCESSING
-  COMPLETED
-  FAILED
-  REFUNDED
-}
-
-enum HubType {
-  FARM
-  MARKET
-  AGGREGATION_CENTER
-}
-
-enum StorageType {
-  NORMAL
-  COLD
-}
-
-enum TruckStorageSupport {
-  NORMAL
-  COLD
-  BOTH
-}
-
-enum AggregationRunStatus {
-  COMPLETED
-  COMPLETED_WITH_REJECTIONS
-  FAILED
-}
-
-// ------ field-admin helper enums ------
-enum InspectionResult {
-  APPROVED
-  REJECTED
-  PARTIAL
-}
-
-enum AssessmentTarget {
-  DRIVER
-  BUYER
-  SELLER
-}
-
-// ============= USER MANAGEMENT =============
-
-model User {
-  id            String      @id @default(uuid())
-  email         String      @unique
-  phone         String?     @unique
-  name          String
-  role          UserRole
-  status        UserStatus  @default(ACTIVE)
-  passwordHash  String
-
-  // Firebase Cloud Messaging token for push notifications
-  fcmToken      String?
-
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
-
-  // Relationships
-  driverProfile Driver?
-  sellerProfile Seller?
-  buyerProfile  Buyer?
-  fieldAdminProfile FieldAdmin?
-  notifications Notification[]
-
-  @@index([email])
-  @@index([role, status])
-}
-
-// ============= ACTOR PROFILES =============
-
-model Driver {
-  id              String          @id @default(uuid())
-  userId          String          @unique
-  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  licenseNumber   String          @unique
-  vehicleNumber   String
-  vehicleType     String
-  vehicleCapacity Float           // in kg or cubic meters
-
-  isActive        Boolean         @default(true)
-  isAvailable     Boolean         @default(true)
-  currentLat      Float?
-  currentLng      Float?
-  lastLocationUpdate DateTime?
-
-  // Rating metrics
-  averageRating   Float?          @default(0)
-  totalRatings    Int             @default(0)
-
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
-
-  // Relationships
-  routes          Route[]
-  locations       DriverLocation[]
-  sessions        DriverSession[]
-  ratings         Rating[]
-
-  @@index([isActive, isAvailable])
-  @@index([userId])
-}
-
-model Seller {
-  id              String      @id @default(uuid())
-  userId          String      @unique
-  user            User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  businessName    String
-  businessAddress String
-  latitude        Float
-  longitude       Float
-
-  isApproved      Boolean     @default(false)
-
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
-
-  // Relationships
-  products        Product[]
-  pickupStops     Stop[]      @relation("SellerPickups")
-
-  @@index([isApproved])
-  @@index([userId])
-}
-
-model Buyer {
-  id              String      @id @default(uuid())
-  userId          String      @unique
-  user            User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  deliveryAddress String
-  latitude        Float
-  longitude       Float
-
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
-
-  // Relationships
-  orders          Order[]
-  deliveryStops   Stop[]      @relation("BuyerDeliveries")
-  ratings         Rating[]
-
-  @@index([userId])
-}
-
- model Truck{
-
-  id       String      @id @default(uuid())
-
-  vehicleNumber      String?
-  vehicleType        String?
-  vehicleCapacity    Float
-  maxWeight          Float          @default(0)
-  maxVolume          Float          @default(0)
-  maxStops           Int?
-  currentLoadWeight  Float          @default(0)
-  currentLoadVolume  Float          @default(0)
-  currentLoadStops   Int            @default(0)
-  storageSupport     TruckStorageSupport @default(NORMAL)
-  vehicleBrand       String
-  makeYear           DateTime
-  vehicleHeight      Float
-  VehicleWeight      Float
-  Refregeration      Boolean
-  Tempreture         Float
-
-  isActive      Boolean      @default(true)
-  isAvailable   Boolean      @default(true)
-
-  routes        Route[]
-
-  @@index([isActive, isAvailable, storageSupport])
- }
-
-// ============= FIELD ADMIN PROFILE & TASKS =============
-
-model FieldAdmin {
-  id          String          @id @default(uuid())
-  userId      String          @unique
-  user        User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  vehicleNumber String?
-  vehicleType   String?
-  isActive      Boolean      @default(true)
-
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
-
-  // relationships to tasks
-  routes               Route[]
-  inspections          ProductInspection[]
-  deliveryVerifications DeliveryVerification[]
-  damageReports        DamageReport[]
-  assessments          Assessment[]
-  refunds              Refund[]
-  reassessments        RouteModification[] @relation("ReassessedBy")
-
-  @@index([userId])
-}
-
-model Hub {
-  id        String    @id @default(uuid())
-  name      String
-  latitude  Float
-  longitude Float
-  type      HubType
-
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-
-  orders    Order[]
-  batches   Batch[]
-
-  @@index([type])
-  @@index([latitude, longitude])
-}
-
-model DeliveryZone {
-  id          String   @id @default(uuid())
-  name        String   @unique
-  code        String   @unique
-  minLat      Float
-  maxLat      Float
-  minLng      Float
-  maxLng      Float
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  orders      Order[]
-
-  @@index([isActive])
+  carts     Cart[]
 }
 
 model ProductInspection {
@@ -1197,112 +671,6 @@ model RefundItem {
   @@index([sellerId])
 }
 
-// ============= PRODUCTS & ORDERS =============
-
-model Product {
-  id          String          @id @default(uuid())
-  sellerId    String
-  seller      Seller          @relation(fields: [sellerId], references: [id], onDelete: Cascade)
-
-  name        String
-  description String?
-  category    String
-  price       Float
-  unit        String          // kg, piece, liter, etc.
-  stock       Float
-  imageUrl    String?
-
-  status      ProductStatus   @default(PENDING_APPROVAL)
-
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
-
-  // Relationships
-  orderItems  OrderItem[]
-
-  @@index([sellerId, status])
-  @@index([status])
-}
-
-model Order {
-  id              String          @id @default(uuid())
-  buyerId         String
-  buyer           Buyer           @relation(fields: [buyerId], references: [id], onDelete: Cascade)
-
-  orderNumber     String          @unique
-  // refunds initiated by field admins
-  refunds         Refund[]
-  status          OrderStatus     @default(PENDING)
-  isCancelled     Boolean         @default(false)
-  totalAmount     Float
-  storageType     StorageType     @default(NORMAL)
-  totalWeight     Float?
-  totalVolume     Float?
-
-  deliveryAddress String
-  deliveryLat     Float
-  deliveryLng     Float
-  deliveryNotes   String?
-  deliveryDate    DateTime?
-
-  pickupHubId     String?
-  pickupHub       Hub?            @relation(fields: [pickupHubId], references: [id], onDelete: SetNull)
-
-  deliveryZoneId  String?
-  deliveryZone    DeliveryZone?   @relation(fields: [deliveryZoneId], references: [id], onDelete: SetNull)
-
-  batchId         String?
-  batch           Batch?          @relation(fields: [batchId], references: [id], onDelete: SetNull)
-
-  stopId          String?         @unique
-  deliveryStop    Stop?           @relation(fields: [stopId], references: [id], onDelete: SetNull)
-
-  placedAt        DateTime        @default(now())
-  estimatedDelivery DateTime?
-  actualDelivery  DateTime?
-
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
-
-  // Relationships
-  items           OrderItem[]
-  payment         Payment?
-  rating          Rating?
-
-  @@index([buyerId, status])
-  @@index([batchId])
-  @@index([status, placedAt])
-  @@index([orderNumber])
-  @@index([status, isCancelled, batchId, deliveryDate])
-  @@index([pickupHubId, storageType])
-  @@index([deliveryZoneId])
-}
-
-model OrderItem {
-  id          String      @id @default(uuid())
-  orderId     String
-  order       Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
-
-  productId   String
-  product     Product     @relation(fields: [productId], references: [id], onDelete: Restrict)
-
-  quantity    Float
-  unitPrice   Float
-  totalPrice  Float
-
-  sellerId    String      // Denormalized for easier querying
-
-  // relations from field admin tasks
-  inspections ProductInspection[]
-  refundItems RefundItem[]
-
-  createdAt   DateTime    @default(now())
-
-  @@index([orderId])
-  @@index([productId])
-  @@index([sellerId])
-}
-
 // ============= PAYMENT SYSTEM =============
 
 model Payment {
@@ -1337,10 +705,10 @@ model Batch {
   status          BatchStatus     @default(OPEN)
   trigger         BatchTrigger?
   storageType     StorageType     @default(NORMAL)
-  dropClusterKey  String
+  dropClusterKey  String?
 
-  pickupHubId     String
-  pickupHub       Hub             @relation(fields: [pickupHubId], references: [id], onDelete: Restrict)
+  pickupHubId     String?
+  pickupHub       Hub?            @relation(fields: [pickupHubId], references: [id], onDelete: SetNull)
 
   scheduledDate   DateTime        // Target delivery date
   timeWindowStart DateTime        // e.g., 10:00 AM
@@ -1454,7 +822,6 @@ model Stop {
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
 
-  // field-admin relations
   deliveryVerifications DeliveryVerification[]
   damageReports          DamageReport[]
 
@@ -1565,23 +932,38 @@ model DriverSession {
 // ============= RATING SYSTEM =============
 
 model Rating {
-  id                    String   @id @default(uuid())
-  orderId               String   @unique
-  order                 Order    @relation(fields: [orderId], references: [id])
+  id String @id @default(uuid())
 
-  driverId              String
-  driver                Driver   @relation(fields: [driverId], references: [id])
+  orderId   String
+  order     Order   @relation(fields: [orderId], references: [id])
 
-  buyerId               String
-  buyer                 Buyer    @relation(fields: [buyerId], references: [id])
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
+
+  sellerId String
+  seller   Seller @relation(fields: [sellerId], references: [id])
+
+  driverId String
+  driver   Driver @relation(fields: [driverId], references: [id])
+
+  buyerId String
+  buyer   Buyer  @relation(fields: [buyerId], references: [id])
 
   rating                Int      // Overall rating (1-5)
   deliveryRating        Int?     // Delivery speed/accuracy
   productQualityRating  Int?     // Product condition on arrival
+  packagingRating       Int?
   comment               String?
+  isVerifiedPurchase    Boolean  @default(false)
+  isFlagged             Boolean  @default(false)
 
-  createdAt             DateTime @default(now())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
+  @@unique([orderId, productId])
+
+  @@index([sellerId])
+  @@index([productId])
   @@index([driverId])
   @@index([orderId])
   @@index([buyerId])
@@ -1592,7 +974,7 @@ model Rating {
 model Notification {
   id        String   @id @default(uuid())
   userId    String
-  user      User     @relation(fields: [userId], references: [id])
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   title     String
   body      String
@@ -1605,4 +987,79 @@ model Notification {
 
   @@index([userId, read])
   @@index([createdAt(sort: Desc)])
+}
+
+// ============= TRUCK / FLEET MANAGEMENT =============
+
+model Truck {
+  id             String    @id @default(uuid())
+
+  // Fleet capacity dashboard (truck module)
+  operator       String?
+  type           String?
+  capacityLbs    Float?
+  loadedLbs      Float     @default(0)
+  palletsLoaded  Int       @default(0)
+  palletsCap     Int       @default(0)
+  cratesLoaded   Int       @default(0)
+  boxesLoaded    Int       @default(0)
+  temperature    String    @default("Ambient")
+  efficiency     Float     @default(0)
+  avgDelay       String    @default("")
+  loadBalanceLeft  Float   @default(50)
+  loadBalanceRight Float   @default(50)
+  tiltRisk       String    @default("Low")
+
+  // Routing / aggregation fleet
+  vehicleNumber      String?
+  vehicleType        String?
+  vehicleCapacity    Float?
+  maxWeight          Float          @default(0)
+  maxVolume          Float          @default(0)
+  maxStops           Int?
+  currentLoadWeight  Float          @default(0)
+  currentLoadVolume  Float          @default(0)
+  currentLoadStops   Int            @default(0)
+  storageSupport     TruckStorageSupport @default(NORMAL)
+  vehicleBrand       String?
+  makeYear           DateTime?
+  vehicleHeight      Float?
+  VehicleWeight      Float?
+  Refregeration      Boolean        @default(false)
+  Tempreture         Float?
+
+  isActive      Boolean      @default(true)
+  isAvailable   Boolean      @default(true)
+
+  routes        Route[]
+
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([operator])
+  @@index([isActive, isAvailable, storageSupport])
+}
+
+// ============= INVENTORY SYSTEM =============
+
+model StockHistory {
+  id              String            @id @default(uuid())
+  productId       String
+  product         Product           @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  type            StockChangeType   // What type of change
+  quantity        Float             // Amount changed (can be negative)
+  previousStock   Float             // Stock before this change
+  newStock        Float             // Stock after this change
+
+  reason          String?           // Why changed (optional detail)
+  orderId         String?           // Related order ID if applicable
+
+  performedBy     String?           // User ID who made change (seller or admin)
+
+  createdAt       DateTime          @default(now())
+
+  @@index([productId, createdAt(sort: Desc)])
+  @@index([type])
+  @@index([orderId])
 }

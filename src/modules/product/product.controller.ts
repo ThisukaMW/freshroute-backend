@@ -143,7 +143,7 @@ export const getPendingProductsController = async (
   res: Response,
 ) => {
   try {
-    if (req.role !== "admin") {
+    if (req.role !== "ADMIN") {
       return res.status(403).json({
         message: "Only admins can view pending products",
       });
@@ -166,7 +166,7 @@ export const updateProductStatusController = async (
   res: Response,
 ) => {
   try {
-    if (req.role !== "admin") {
+    if (req.role !== "ADMIN") {
       return res.status(403).json({
         message: "Only admins can approve or reject products",
       });
