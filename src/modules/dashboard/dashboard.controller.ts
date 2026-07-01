@@ -7,6 +7,7 @@ import {
   getActiveProducts,
   getFulfillmentSLA,
   getRecentCatalogUpdates,
+  getCustomerDashboardSummary,
 } from "./dashboard.service.js";
 
 /**
@@ -139,5 +140,33 @@ export const getRecentProducts = async (
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Error fetching recent products";
     res.status(500).json({ message });
+  }
+};
+
+/**
+ * GET /api/v1/dashboard/customer/summary
+ * Get customer dashboard summary data
+ */
+export const getCustomerSummary = async (
+  req: AuthRequest,
+  res: Response
+): Promise<void> => {
+  try {
+    if (!req.userId) {
+      res.status(401).json({ message: "Unauthorized" });
+      return;
+    }
+
+    if (req.role !== "BUYER") {
+      res.status(403).json({ message: "Only buyers can access this endpoint" });
+      return;
+    }
+
+    const data = await getCustomerDashboardSummary(req.userId);
+    res.json(data);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Error fetching customer summary";
+    const statusCode = message.includes("Buyer") ? 404 : 500;
+    res.status(statusCode).json({ message });
   }
 };

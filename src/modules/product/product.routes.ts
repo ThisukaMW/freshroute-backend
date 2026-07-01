@@ -49,7 +49,7 @@ router.get("/:productId", getProductByIdController);
 // POST and PATCH must have protect middleware
 router.post("/add", protect, upload.array("images"), addProduct);
 router.patch("/:productId/status", protect, updateProductStatusController);
-router.patch("/:productId", protect, editProductController);
+router.patch("/:productId", protect, upload.array("images"), editProductController);
 
 // Protected GET routes
 router.get("/pending", protect, getPendingProductsController);

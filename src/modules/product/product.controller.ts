@@ -27,6 +27,7 @@ export const addProduct = async (req: AuthRequest, res: Response) => {
     }
 
     const { name, description, category, price, unit, stock } = req.body;
+    const imageUrl = typeof req.body.imageUrl === "string" ? req.body.imageUrl.trim() : undefined;
 
     // files (images)
     const files = (req as AuthRequest & { files?: Express.Multer.File[] }).files ?? [];
@@ -50,7 +51,7 @@ export const addProduct = async (req: AuthRequest, res: Response) => {
       price: Number(price),
       unit: unit.trim(),
       stock: Number(stock),
-      imageUrl: imageUrls?.[0] ?? null, // first image
+      imageUrl: imageUrls?.[0] ?? (imageUrl !== undefined ? imageUrl || null : null),
     };
 
     const product = await createProduct(req.userId!, productData);
@@ -92,10 +93,28 @@ export const editProductController = async (
 
     console.log("📝 Edit request - productId:", productId, "Data:", req.body);
 
+    const files = (req as AuthRequest & { files?: Express.Multer.File[] }).files ?? [];
+    const imageUrl = typeof req.body.imageUrl === "string" ? req.body.imageUrl.trim() : undefined;
+    const updateBody: Record<string, any> = {};
+
+    if (req.body.price !== undefined) {
+      updateBody.price = Number(req.body.price);
+    }
+
+    if (req.body.stock !== undefined) {
+      updateBody.stock = Number(req.body.stock);
+    }
+
+    if (files.length > 0) {
+      updateBody.imageUrl = files[0].path;
+    } else if (imageUrl !== undefined) {
+      updateBody.imageUrl = imageUrl || null;
+    }
+
     const updateResult = await updateProduct(
       req.userId!,
       productId,
-      req.body
+      updateBody
     );
 
     // Return in the same format as getSellerInventory for consistency

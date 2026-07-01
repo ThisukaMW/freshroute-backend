@@ -7,6 +7,7 @@ import {
   getActiveProductsMetric,
   getFulfillmentSLAMetric,
   getRecentProducts,
+  getCustomerSummary,
 } from "./dashboard.controller.js";
 
 const router = Router();
@@ -55,6 +56,14 @@ router.get("/seller/fulfillment-sla", getFulfillmentSLAMetric);
  * Get recent catalog updates
  * Returns: Array of recent products with name, price, stock, status
  */
+
+// ============= CUSTOMER DASHBOARD ROUTES =============
+
+/**
+ * GET /api/v1/dashboard/customer/summary
+ * Get customer dashboard summary in one request
+ */
+router.get("/customer/summary", getCustomerSummary);
 router.get("/seller/recent-products", getRecentProducts);
 
 export default router;
