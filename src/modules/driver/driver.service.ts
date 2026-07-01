@@ -115,12 +115,12 @@ export const getRouteWithStops = async (driverId: string) => {
         include: {
           buyer: {
             include: {
-              user: { select: { name: true } },
+              user: { select: { name: true, phone: true } },
             },
           },
           seller: {
             include: {
-              user: { select: { name: true } },
+              user: { select: { name: true, phone: true } },
             },
           },
           order: {
@@ -142,6 +142,11 @@ export const getRouteWithStops = async (driverId: string) => {
         ? (stop.buyer?.user.name ?? "Unknown Buyer")
         : (stop.seller?.user.name ?? "Unknown Seller");
 
+    const phone =
+      stop.type === "DELIVERY"
+        ? (stop.buyer?.user.phone ?? null)
+        : (stop.seller?.user.phone ?? null);
+
     const minutesAway = stop.estimatedArrival
       ? Math.max(
           0,
@@ -155,6 +160,7 @@ export const getRouteWithStops = async (driverId: string) => {
       type: stop.type,
       status: stop.status,
       name,
+      phone,
       address: stop.address,
       latitude: stop.latitude,
       longitude: stop.longitude,

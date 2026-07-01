@@ -69,6 +69,12 @@ export const protect: RequestHandler = async (
       : undefined;
     req.fieldAdminId = decoded.fieldAdminId;
 
+    // Resolve driverId from DB if not in token (handles tokens issued before the driverId fix)
+    if (!req.driverId && req.userId && req.role === "DRIVER") {
+      const driver = await prisma.driver.findUnique({ where: { userId: req.userId } });
+      if (driver) req.driverId = driver.id;
+    }
+
     // Resolve the field admin profile id for protected field admin routes
     if (
       !req.fieldAdminId &&

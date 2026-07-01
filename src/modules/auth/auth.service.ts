@@ -97,6 +97,9 @@ export const loginUser = async (email: string, password: string) => {
   if (user.role === "FIELD_ADMIN" && user.fieldAdminProfile) {
     tokenPayload.fieldAdminId = user.fieldAdminProfile.id;
   }
+  if (user.role === "DRIVER" && user.driverProfile) {
+    tokenPayload.driverId = user.driverProfile.id;
+  }
 
   const token = jwt.sign(tokenPayload, process.env.JWT_SECRET!, {
     expiresIn: "7d",
