@@ -26,6 +26,7 @@ export const splitByCapacity = (
         pickupHubId: cluster.pickupHubId,
         storageType: cluster.storageType,
         deliveryZoneCode: cluster.deliveryZoneCode,
+        deliveryTimeSlot: cluster.deliveryTimeSlot,
         clusterKey: cluster.clusterKey,
         orders: currentOrders,
         totalWeight: parseFloat(currentWeight.toFixed(2)),
@@ -39,7 +40,11 @@ export const splitByCapacity = (
     for (const order of sorted) {
       const nextWeight = currentWeight + (order.totalWeight ?? 0);
       const nextVolume = currentVolume + (order.totalVolume ?? 0);
-      const nextStops = currentOrders.length + 1;
+      const uniqueSellers = new Set([
+        ...currentOrders.flatMap((entry) => entry.sellerIds),
+        ...order.sellerIds,
+      ]);
+      const nextStops = uniqueSellers.size + 1 + currentOrders.length + 1;
 
       const exceeds =
         nextStops > limits.maxStopsPerBatch ||

@@ -1,4 +1,7 @@
-import { PrismaClient, TruckStorageSupport } from "../src/generated/prisma/client.js";
+import {
+  PrismaClient,
+  TruckStorageSupport,
+} from "../src/generated/prisma/index.js";
 import { PrismaPg } from "@prisma/adapter-pg";
 import bcrypt from "bcrypt";
 import dotenv from "dotenv";
@@ -13,9 +16,11 @@ dotenv.config();
 const placedAtOnPlacementDay = (
   placementDayStart: Date,
   placementDayEnd: Date,
-  offsetHoursFromStart: number
+  offsetHoursFromStart: number,
 ): Date => {
-  const t = new Date(placementDayStart.getTime() + offsetHoursFromStart * 60 * 60 * 1000);
+  const t = new Date(
+    placementDayStart.getTime() + offsetHoursFromStart * 60 * 60 * 1000,
+  );
   const endCap = placementDayEnd.getTime() - 60_000;
   if (t.getTime() > endCap) return new Date(endCap);
   return t;
@@ -164,8 +169,6 @@ const seedSimulationScenario = async () => {
     });
   }
 
-
-  
   const hubs = await Promise.all([
     prisma.hub.create({
       data: {
@@ -208,7 +211,7 @@ const seedSimulationScenario = async () => {
       data: {
         name: "Colombo Central",
         code: "CMB_CENTRAL",
-        minLat: 6.90,
+        minLat: 6.9,
         maxLat: 6.9399,
         minLng: 79.84,
         maxLng: 79.91,
@@ -243,7 +246,12 @@ const seedSimulationScenario = async () => {
     products.push(product);
   }
 
-  const buyers: Array<{ id: string; lat: number; lng: number; zoneIndex: number }> = [];
+  const buyers: Array<{
+    id: string;
+    lat: number;
+    lng: number;
+    zoneIndex: number;
+  }> = [];
   for (let index = 1; index <= 75; index += 1) {
     const zoneIndex = (index - 1) % zones.length;
     const zone = zones[zoneIndex]!;
@@ -268,13 +276,19 @@ const seedSimulationScenario = async () => {
         longitude: Number(lng.toFixed(6)),
       },
     });
-    buyers.push({ id: buyer.id, lat: Number(lat.toFixed(6)), lng: Number(lng.toFixed(6)), zoneIndex });
+    buyers.push({
+      id: buyer.id,
+      lat: Number(lat.toFixed(6)),
+      lng: Number(lng.toFixed(6)),
+      zoneIndex,
+    });
   }
 
   // Aggregator uses "placement day" = previous Colombo calendar day vs. "today" (delivery day).
   const seedNow = new Date();
   const { deliveryDayStart } = getDeliveryDayBoundsColombo(seedNow);
-  const { placementDayStart, placementDayEnd } = getOrderPlacementDayBoundsColombo(deliveryDayStart);
+  const { placementDayStart, placementDayEnd } =
+    getOrderPlacementDayBoundsColombo(deliveryDayStart);
 
   let paidOrders = 0;
 
@@ -297,7 +311,9 @@ const seedSimulationScenario = async () => {
         orderNumber: `SIM-ORD-${String(index).padStart(3, "0")}`,
         status: "PAID",
         isCancelled: false,
-        totalAmount: Number((product.price * quantity * (1 + ((index % 5) * 0.05))).toFixed(2)),
+        totalAmount: Number(
+          (product.price * quantity * (1 + (index % 5) * 0.05)).toFixed(2),
+        ),
         storageType,
         totalWeight: Number((baseWeight * quantity).toFixed(2)),
         totalVolume: Number((baseVolume * quantity).toFixed(2)),
@@ -305,9 +321,15 @@ const seedSimulationScenario = async () => {
         deliveryLat: buyer.lat,
         deliveryLng: buyer.lng,
         deliveryZoneId: zone.id,
-        deliveryDate: new Date(deliveryDayStart.getTime() + (index % 6) * 30 * 60 * 1000),
+        deliveryDate: new Date(
+          deliveryDayStart.getTime() + (index % 6) * 30 * 60 * 1000,
+        ),
         pickupHubId: assignedHub.id,
-        placedAt: placedAtOnPlacementDay(placementDayStart, placementDayEnd, 1 + (index % 14) * 0.75),
+        placedAt: placedAtOnPlacementDay(
+          placementDayStart,
+          placementDayEnd,
+          1 + (index % 14) * 0.75,
+        ),
       },
     });
 
@@ -325,9 +347,13 @@ const seedSimulationScenario = async () => {
 
   console.log("✅ Simulation seed complete");
   console.log(`PAID unbatched orders (placement day Colombo): ${paidOrders}`);
-  console.log(`Placement window (UTC): ${placementDayStart.toISOString()} … ${placementDayEnd.toISOString()}`);
+  console.log(
+    `Placement window (UTC): ${placementDayStart.toISOString()} … ${placementDayEnd.toISOString()}`,
+  );
   console.log(`Delivery day start (UTC): ${deliveryDayStart.toISOString()}`);
-  console.log(`Zones: ${zones.length}, Hubs: ${hubs.length}, FieldAdmins: ${fieldAdmins.length}`);
+  console.log(
+    `Zones: ${zones.length}, Hubs: ${hubs.length}, FieldAdmins: ${fieldAdmins.length}`,
+  );
 };
 
 async function main() {
@@ -340,8 +366,10 @@ async function main() {
   await clearDatabase();
 
   const seedNow = new Date();
-  const { deliveryDayStart, deliveryDayEnd } = getDeliveryDayBoundsColombo(seedNow);
-  const { placementDayStart, placementDayEnd } = getOrderPlacementDayBoundsColombo(deliveryDayStart);
+  const { deliveryDayStart, deliveryDayEnd } =
+    getDeliveryDayBoundsColombo(seedNow);
+  const { placementDayStart, placementDayEnd } =
+    getOrderPlacementDayBoundsColombo(deliveryDayStart);
 
   const passwordHash = await bcrypt.hash("driver123", 10);
 
@@ -511,8 +539,8 @@ async function main() {
           isActive: true,
           isAvailable: true,
         },
-      })
-    )
+      }),
+    ),
   );
 
   // ─── Fixed Pickup Hubs (Phase 1 Aggregator) ───────────────────────────────
@@ -555,7 +583,7 @@ async function main() {
         minLat: 6.92,
         maxLat: 6.99,
         minLng: 79.83,
-        maxLng: 79.90,
+        maxLng: 79.9,
         isActive: true,
       },
     }),
@@ -566,7 +594,7 @@ async function main() {
         minLat: 6.84,
         maxLat: 6.9199,
         minLng: 79.83,
-        maxLng: 79.90,
+        maxLng: 79.9,
         isActive: true,
       },
     }),
@@ -686,20 +714,90 @@ async function main() {
 
   await prisma.sellerProduct.createMany({
     data: [
-      { productId: products[0]!.id, sellerId: seller.id, price: products[0]!.price, stock: products[0]!.stock },
-      { productId: products[1]!.id, sellerId: seller.id, price: products[1]!.price, stock: products[1]!.stock },
-      { productId: products[2]!.id, sellerId: seller.id, price: products[2]!.price, stock: products[2]!.stock },
-      { productId: products[3]!.id, sellerId: seller.id, price: products[3]!.price, stock: products[3]!.stock },
-      { productId: products[0]!.id, sellerId: seller2.id, price: 3.2, stock: 75 },
-      { productId: products[1]!.id, sellerId: seller2.id, price: 1.8, stock: 90 },
-      { productId: products[3]!.id, sellerId: seller2.id, price: 3.8, stock: 40 },
-      { productId: products[0]!.id, sellerId: seller3.id, price: 3.7, stock: 50 },
-      { productId: products[2]!.id, sellerId: seller3.id, price: 1.4, stock: 30 },
-      { productId: products[3]!.id, sellerId: seller3.id, price: 4.2, stock: 25 },
-      { productId: products[0]!.id, sellerId: seller4.id, price: 4.0, stock: 60 },
-      { productId: products[1]!.id, sellerId: seller4.id, price: 2.2, stock: 70 },
-      { productId: products[2]!.id, sellerId: seller4.id, price: 1.6, stock: 55 },
-      { productId: products[3]!.id, sellerId: seller4.id, price: 4.5, stock: 35 },
+      {
+        productId: products[0]!.id,
+        sellerId: seller.id,
+        price: products[0]!.price,
+        stock: products[0]!.stock,
+      },
+      {
+        productId: products[1]!.id,
+        sellerId: seller.id,
+        price: products[1]!.price,
+        stock: products[1]!.stock,
+      },
+      {
+        productId: products[2]!.id,
+        sellerId: seller.id,
+        price: products[2]!.price,
+        stock: products[2]!.stock,
+      },
+      {
+        productId: products[3]!.id,
+        sellerId: seller.id,
+        price: products[3]!.price,
+        stock: products[3]!.stock,
+      },
+      {
+        productId: products[0]!.id,
+        sellerId: seller2.id,
+        price: 3.2,
+        stock: 75,
+      },
+      {
+        productId: products[1]!.id,
+        sellerId: seller2.id,
+        price: 1.8,
+        stock: 90,
+      },
+      {
+        productId: products[3]!.id,
+        sellerId: seller2.id,
+        price: 3.8,
+        stock: 40,
+      },
+      {
+        productId: products[0]!.id,
+        sellerId: seller3.id,
+        price: 3.7,
+        stock: 50,
+      },
+      {
+        productId: products[2]!.id,
+        sellerId: seller3.id,
+        price: 1.4,
+        stock: 30,
+      },
+      {
+        productId: products[3]!.id,
+        sellerId: seller3.id,
+        price: 4.2,
+        stock: 25,
+      },
+      {
+        productId: products[0]!.id,
+        sellerId: seller4.id,
+        price: 4.0,
+        stock: 60,
+      },
+      {
+        productId: products[1]!.id,
+        sellerId: seller4.id,
+        price: 2.2,
+        stock: 70,
+      },
+      {
+        productId: products[2]!.id,
+        sellerId: seller4.id,
+        price: 1.6,
+        stock: 55,
+      },
+      {
+        productId: products[3]!.id,
+        sellerId: seller4.id,
+        price: 4.5,
+        stock: 35,
+      },
     ],
   });
 
@@ -708,19 +806,103 @@ async function main() {
   // ─── Buyers (12 for today's stops) ───────────────────────────────────────────
   const buyerData = [
     // 8 completed buyers
-    { name: "Sam Wilson", address: "12 Oak Ave, Colombo 3", lat: 6.914, lng: 79.852, amount: 30.0, items: 3 },
-    { name: "Lisa Chen", address: "34 Palm St, Colombo 4", lat: 6.901, lng: 79.861, amount: 30.0, items: 2 },
-    { name: "David Park", address: "67 River Rd, Colombo 5", lat: 6.889, lng: 79.875, amount: 30.0, items: 4 },
-    { name: "Emma White", address: "89 Hill Lane, Colombo 6", lat: 6.876, lng: 79.888, amount: 30.0, items: 2 },
-    { name: "Chris Lee", address: "23 Beach Rd, Colombo 3", lat: 6.921, lng: 79.845, amount: 30.0, items: 3 },
-    { name: "Nadia Ali", address: "56 Temple St, Colombo 7", lat: 6.934, lng: 79.857, amount: 30.0, items: 2 },
-    { name: "Tom Brown", address: "78 Garden Ave, Colombo 8", lat: 6.945, lng: 79.862, amount: 30.0, items: 4 },
-    { name: "Sara Khan", address: "90 Market St, Colombo 2", lat: 6.956, lng: 79.848, amount: 30.0, items: 3 },
+    {
+      name: "Sam Wilson",
+      address: "12 Oak Ave, Colombo 3",
+      lat: 6.914,
+      lng: 79.852,
+      amount: 30.0,
+      items: 3,
+    },
+    {
+      name: "Lisa Chen",
+      address: "34 Palm St, Colombo 4",
+      lat: 6.901,
+      lng: 79.861,
+      amount: 30.0,
+      items: 2,
+    },
+    {
+      name: "David Park",
+      address: "67 River Rd, Colombo 5",
+      lat: 6.889,
+      lng: 79.875,
+      amount: 30.0,
+      items: 4,
+    },
+    {
+      name: "Emma White",
+      address: "89 Hill Lane, Colombo 6",
+      lat: 6.876,
+      lng: 79.888,
+      amount: 30.0,
+      items: 2,
+    },
+    {
+      name: "Chris Lee",
+      address: "23 Beach Rd, Colombo 3",
+      lat: 6.921,
+      lng: 79.845,
+      amount: 30.0,
+      items: 3,
+    },
+    {
+      name: "Nadia Ali",
+      address: "56 Temple St, Colombo 7",
+      lat: 6.934,
+      lng: 79.857,
+      amount: 30.0,
+      items: 2,
+    },
+    {
+      name: "Tom Brown",
+      address: "78 Garden Ave, Colombo 8",
+      lat: 6.945,
+      lng: 79.862,
+      amount: 30.0,
+      items: 4,
+    },
+    {
+      name: "Sara Khan",
+      address: "90 Market St, Colombo 2",
+      lat: 6.956,
+      lng: 79.848,
+      amount: 30.0,
+      items: 3,
+    },
     // 4 pending buyers (matching screenshots)
-    { name: "John Doe", address: "123 Main St, Downtown", lat: 6.9319, lng: 79.8478, amount: 18.97, items: 3 },
-    { name: "Jane Smith", address: "45 Lake View, Colombo 3", lat: 6.9045, lng: 79.8636, amount: 12.98, items: 2 },
-    { name: "Bob Johnson", address: "78 Hill Top, Colombo 5", lat: 6.8892, lng: 79.8821, amount: 24.96, items: 4 },
-    { name: "Alice Brown", address: "12 Sunset Blvd, Colombo 7", lat: 6.9472, lng: 79.8702, amount: 22.5, items: 2 },
+    {
+      name: "John Doe",
+      address: "123 Main St, Downtown",
+      lat: 6.9319,
+      lng: 79.8478,
+      amount: 18.97,
+      items: 3,
+    },
+    {
+      name: "Jane Smith",
+      address: "45 Lake View, Colombo 3",
+      lat: 6.9045,
+      lng: 79.8636,
+      amount: 12.98,
+      items: 2,
+    },
+    {
+      name: "Bob Johnson",
+      address: "78 Hill Top, Colombo 5",
+      lat: 6.8892,
+      lng: 79.8821,
+      amount: 24.96,
+      items: 4,
+    },
+    {
+      name: "Alice Brown",
+      address: "12 Sunset Blvd, Colombo 7",
+      lat: 6.9472,
+      lng: 79.8702,
+      amount: 22.5,
+      items: 2,
+    },
   ];
 
   const buyers: Array<{ id: string; userId: string }> = [];
@@ -747,7 +929,9 @@ async function main() {
   }
 
   // ─── Batch (scheduled on current Colombo "delivery day") ─────────────────────
-  const today = new Date(deliveryDayStart.getTime() + (6 * 60 + 45) * 60 * 1000);
+  const today = new Date(
+    deliveryDayStart.getTime() + (6 * 60 + 45) * 60 * 1000,
+  );
   const batchEnd = new Date(deliveryDayStart.getTime() + 14 * 60 * 60 * 1000);
 
   const batch = await prisma.batch.create({
@@ -762,6 +946,7 @@ async function main() {
       timeWindowStart: today,
       timeWindowEnd: batchEnd,
       orderCount: 12,
+      maxStopsApplied: 15,
       closedAt: today,
     },
   });
@@ -783,6 +968,51 @@ async function main() {
     },
   });
 
+  // Seller pickup stops → hub consolidation (matches aggregator route shape)
+  await prisma.stop.create({
+    data: {
+      routeId: route.id,
+      type: "PICKUP",
+      sequenceOrder: 1,
+      sellerId: seller.id,
+      address: "Farm Fresh Stall, Colombo",
+      latitude: 6.91,
+      longitude: 79.86,
+      status: "COMPLETED",
+      completedAt: today,
+      itemsSummary: [{ sellerId: seller.id, note: "Farm Fresh seller pickup" }],
+    },
+  });
+
+  await prisma.stop.create({
+    data: {
+      routeId: route.id,
+      type: "PICKUP",
+      sequenceOrder: 2,
+      sellerId: seller2.id,
+      address: "Green Valley Produce, Colombo",
+      latitude: 6.935,
+      longitude: 79.85,
+      status: "COMPLETED",
+      completedAt: today,
+      itemsSummary: [{ sellerId: seller2.id, note: "Green Valley seller pickup" }],
+    },
+  });
+
+  await prisma.stop.create({
+    data: {
+      routeId: route.id,
+      type: "PICKUP",
+      sequenceOrder: 3,
+      address: primaryHub.name,
+      latitude: primaryHub.latitude,
+      longitude: primaryHub.longitude,
+      status: "COMPLETED",
+      completedAt: today,
+      itemsSummary: [{ note: "Hub consolidation pickup" }],
+    },
+  });
+
   // ─── Create orders + stops ────────────────────────────────────────────────────
   const now = new Date();
 
@@ -801,14 +1031,16 @@ async function main() {
       data: {
         routeId: route.id,
         type: "DELIVERY",
-        sequenceOrder: i + 1,
+        sequenceOrder: i + 4,
         address: buyerInfo.address,
         latitude: buyerInfo.lat,
         longitude: buyerInfo.lng,
         buyerId: buyer.id,
         status: isCompleted ? "COMPLETED" : i === 8 ? "IN_PROGRESS" : "PENDING",
         estimatedArrival,
-        completedAt: isCompleted ? new Date(now.getTime() - (8 - i) * 13 * 60000) : null,
+        completedAt: isCompleted
+          ? new Date(now.getTime() - (8 - i) * 13 * 60000)
+          : null,
         notes: isCompleted ? null : i === 8 ? "Ring doorbell" : null,
       },
     });
@@ -827,13 +1059,20 @@ async function main() {
         deliveryAddress: buyerInfo.address,
         deliveryLat: buyerInfo.lat,
         deliveryLng: buyerInfo.lng,
-        deliveryZoneId: buyerInfo.lat >= 6.92 ? colomboNorthZone.id : colomboSouthZone.id,
+        deliveryZoneId:
+          buyerInfo.lat >= 6.92 ? colomboNorthZone.id : colomboSouthZone.id,
         deliveryDate: today,
         pickupHubId: primaryHub.id,
         batchId: batch.id,
         stopId: stop.id,
-        placedAt: placedAtOnPlacementDay(placementDayStart, placementDayEnd, 2 + i * 1.25),
-        actualDelivery: isCompleted ? new Date(now.getTime() - (8 - i) * 13 * 60000) : null,
+        placedAt: placedAtOnPlacementDay(
+          placementDayStart,
+          placementDayEnd,
+          2 + i * 1.25,
+        ),
+        actualDelivery: isCompleted
+          ? new Date(now.getTime() - (8 - i) * 13 * 60000)
+          : null,
       },
     });
 
@@ -872,7 +1111,9 @@ async function main() {
 
   // ─── additional field-admin tasks sample ─────────────────────────────────
   // verification of first stop
-  const firstStop = await prisma.stop.findFirst({ where: { routeId: route.id } });
+  const firstStop = await prisma.stop.findFirst({
+    where: { routeId: route.id },
+  });
   if (firstStop) {
     await prisma.deliveryVerification.create({
       data: {
@@ -883,7 +1124,11 @@ async function main() {
     });
 
     // damage report for third stop if exists
-    const stops = await prisma.stop.findMany({ where: { routeId: route.id }, take: 3, skip: 2 });
+    const stops = await prisma.stop.findMany({
+      where: { routeId: route.id },
+      take: 3,
+      skip: 2,
+    });
     if (stops.length > 0) {
       await prisma.damageReport.create({
         data: {
@@ -992,9 +1237,15 @@ async function main() {
         deliveryLat: 6.958 + (i % 4) * 0.0022,
         deliveryLng: 79.856 + (i % 3) * 0.0022,
         deliveryZoneId: colomboNorthZone.id,
-        deliveryDate: new Date(deliveryDayStart.getTime() + (1 + (i % 8)) * 30 * 60 * 1000),
+        deliveryDate: new Date(
+          deliveryDayStart.getTime() + (1 + (i % 8)) * 30 * 60 * 1000,
+        ),
         pickupHubId: colomboHub.id,
-        placedAt: placedAtOnPlacementDay(placementDayStart, placementDayEnd, 4 + i * 0.11),
+        placedAt: placedAtOnPlacementDay(
+          placementDayStart,
+          placementDayEnd,
+          4 + i * 0.11,
+        ),
       },
     });
     await prisma.orderItem.create({
@@ -1029,9 +1280,15 @@ async function main() {
         deliveryLat: 6.904 + (i % 5) * 0.0018,
         deliveryLng: 79.846 + (i % 4) * 0.0018,
         deliveryZoneId: colomboSouthZone.id,
-        deliveryDate: new Date(deliveryDayStart.getTime() + (2 + (i % 10)) * 25 * 60 * 1000),
+        deliveryDate: new Date(
+          deliveryDayStart.getTime() + (2 + (i % 10)) * 25 * 60 * 1000,
+        ),
         pickupHubId: colomboHub.id,
-        placedAt: placedAtOnPlacementDay(placementDayStart, placementDayEnd, 6 + i * 0.1),
+        placedAt: placedAtOnPlacementDay(
+          placementDayStart,
+          placementDayEnd,
+          6 + i * 0.1,
+        ),
       },
     });
     await prisma.orderItem.create({
@@ -1066,9 +1323,15 @@ async function main() {
         deliveryLat: 6.888 + (i % 4) * 0.0024,
         deliveryLng: 79.868 + (i % 3) * 0.0024,
         deliveryZoneId: colomboSouthZone.id,
-        deliveryDate: new Date(deliveryDayStart.getTime() + (3 + (i % 6)) * 28 * 60 * 1000),
+        deliveryDate: new Date(
+          deliveryDayStart.getTime() + (3 + (i % 6)) * 28 * 60 * 1000,
+        ),
         pickupHubId: colomboHub.id,
-        placedAt: placedAtOnPlacementDay(placementDayStart, placementDayEnd, 8 + i * 0.09),
+        placedAt: placedAtOnPlacementDay(
+          placementDayStart,
+          placementDayEnd,
+          8 + i * 0.09,
+        ),
       },
     });
     await prisma.orderItem.create({
@@ -1224,11 +1487,21 @@ async function main() {
   console.log("  Password: driver123");
   console.log("─────────────────────────────────");
   console.log("Aggregator demo (Asia/Colombo):");
-  console.log(`  Placement day (order placedAt window, UTC): ${placementDayStart.toISOString()} … ${placementDayEnd.toISOString()}`);
-  console.log(`  Delivery day for batching (UTC): ${deliveryDayStart.toISOString()} … ${deliveryDayEnd.toISOString()}`);
-  console.log("  POST /api/v1/aggregator/run with empty body uses today's Colombo window;");
-  console.log("  candidates = PAID, batchId null, placedAt on placement day above.");
-  console.log("  Bulk demo: ORD-BULK-N/S/C-* (+ ORD-AGG-001/002) → multiple batches/routes when autoAssignRoutes is true.");
+  console.log(
+    `  Placement day (order placedAt window, UTC): ${placementDayStart.toISOString()} … ${placementDayEnd.toISOString()}`,
+  );
+  console.log(
+    `  Delivery day for batching (UTC): ${deliveryDayStart.toISOString()} … ${deliveryDayEnd.toISOString()}`,
+  );
+  console.log(
+    "  POST /api/v1/aggregator/run with empty body uses today's Colombo window;",
+  );
+  console.log(
+    "  candidates = PAID, batchId null, placedAt on placement day above.",
+  );
+  console.log(
+    "  Bulk demo: ORD-BULK-N/S/C-* (+ ORD-AGG-001/002) → multiple batches/routes when autoAssignRoutes is true.",
+  );
   console.log("─────────────────────────────────");
   console.log("Route:  RT-2024-0218-042");
   console.log("Stops:  12 total (8 completed, 4 pending)");

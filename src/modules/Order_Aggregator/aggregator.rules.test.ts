@@ -15,6 +15,7 @@ const baseOrder: CandidateOrder = {
   isCancelled: false,
   batchId: null,
   deliveryDate: new Date(),
+  deliveryTimeSlot: "MORNING",
   deliveryAddress: "Colombo",
   deliveryLat: 6.9,
   deliveryLng: 79.8,
@@ -27,6 +28,7 @@ const baseOrder: CandidateOrder = {
   deliveryZoneCode: null,
   sellerLat: 6.8,
   sellerLng: 79.8,
+  sellerIds: ["seller-1"],
 };
 
 test("eligibility rejects non-paid order", () => {
@@ -35,6 +37,13 @@ test("eligibility rejects non-paid order", () => {
 
 test("eligibility allows valid paid order", () => {
   assert.equal(getEligibilityFailureReason(baseOrder), null);
+});
+
+test("eligibility rejects order without delivery time slot", () => {
+  assert.equal(
+    getEligibilityFailureReason({ ...baseOrder, deliveryTimeSlot: null }),
+    "Delivery time slot missing"
+  );
 });
 
 test("truck fit fails when storage incompatible", () => {

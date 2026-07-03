@@ -1,0 +1,352 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [4 0 R 6 0 R 8 0 R 10 0 R 12 0 R] /Count 5 >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+4 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R >> >> /Contents 5 0 R >>
+endobj
+5 0 obj
+<< /Length 1105 >>
+stream
+BT
+/F1 11 Tf
+50 792 Td
+(FreshRoute Code Review Prep) Tj
+T*
+() Tj
+T*
+(Purpose) Tj
+T*
+(This document is a short review guide for the two major real-time flows in this backend:) Tj
+T*
+(live tracking and route planning. It explains what the backend does, what the mobile app) Tj
+T*
+(must do, where data is stored, and the common failure modes you can mention in review.) Tj
+T*
+() Tj
+T*
+(Important files) Tj
+T*
+(- src/socket.ts) Tj
+T*
+(- src/modules/tracking/tracking.service.ts) Tj
+T*
+(- src/modules/driver/driver.service.ts) Tj
+T*
+(- src/modules/planner/planner.service.ts) Tj
+T*
+(- src/modules/planner/ortools.client.ts) Tj
+T*
+(- src/utils/mapbox.ts) Tj
+T*
+() Tj
+T*
+(High level architecture) Tj
+T*
+(1. Mobile app connects to Socket.IO with JWT auth.) Tj
+T*
+(2. Backend verifies the token and attaches driver identity to the socket.) Tj
+T*
+(3. Mobile app starts a session, then streams location updates while tracking is active.) Tj
+T*
+(4. Backend stores the session and location history in PostgreSQL via Prisma.) Tj
+T*
+(5. Planner converts batch orders into optimized routes using Mapbox + OR-Tools.) Tj
+ET
+endstream
+endobj
+6 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R >> >> /Contents 7 0 R >>
+endobj
+7 0 obj
+<< /Length 1464 >>
+stream
+BT
+/F1 11 Tf
+50 792 Td
+(Live Tracking Flow) Tj
+T*
+() Tj
+T*
+(1. Socket connection) Tj
+T*
+(The mobile app connects to the backend socket and sends a JWT in the handshake.) Tj
+T*
+(Backend auth middleware verifies the token and populates socket.data with userId, driverId,) Tj
+T*
+(and role.) Tj
+T*
+() Tj
+T*
+(2. Start tracking) Tj
+T*
+(Mobile emits driver:session:start.) Tj
+T*
+(Backend calls startSession\(driverId, routeId\) and creates a DriverSession row.) Tj
+T*
+(Backend replies with driver:session:started and a new sessionId.) Tj
+T*
+() Tj
+T*
+(3. Emit GPS updates) Tj
+T*
+(After session start the phone must start a GPS watcher or interval.) Tj
+T*
+(Every 1 to 5 seconds the app emits driver:location:update with the current sessionId and GPS) Tj
+T*
+(point.) Tj
+T*
+(Backend validates the payload, checks the session is still active, and writes the point.) Tj
+T*
+(A successful update creates a DriverLocation row and updates Driver.currentLat/currentLng.) Tj
+T*
+() Tj
+T*
+(4. Stop tracking) Tj
+T*
+(When tracking stops the client must clear the GPS watcher first and then emit) Tj
+T*
+(driver:session:end.) Tj
+T*
+(Backend marks the session ended and clears the driver throttle state.) Tj
+T*
+(After that, any old location update with the same sessionId is rejected as Session already) Tj
+T*
+(ended.) Tj
+T*
+() Tj
+T*
+(5. Disconnect handling) Tj
+T*
+(If the socket disconnects unexpectedly, the backend auto-closes any still-open sessions to) Tj
+T*
+(keep the DB clean.) Tj
+ET
+endstream
+endobj
+8 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R >> >> /Contents 9 0 R >>
+endobj
+9 0 obj
+<< /Length 1027 >>
+stream
+BT
+/F1 11 Tf
+50 792 Td
+(Where Data Is Stored) Tj
+T*
+() Tj
+T*
+(DriverSession) Tj
+T*
+(- Stores the tracking lifecycle.) Tj
+T*
+(- Fields: id, driverId, routeId, startedAt, endedAt.) Tj
+T*
+(- An active session has endedAt = null.) Tj
+T*
+() Tj
+T*
+(DriverLocation) Tj
+T*
+(- Stores every accepted GPS point.) Tj
+T*
+(- This is the immutable history table for live tracking.) Tj
+T*
+(- Fields include driverId, sessionId, latitude, longitude, accuracy, heading, speed,) Tj
+T*
+(  timestamp.) Tj
+T*
+() Tj
+T*
+(Driver) Tj
+T*
+(- Stores the latest live position.) Tj
+T*
+(- currentLat, currentLng, and lastLocationUpdate are updated on every accepted ping.) Tj
+T*
+() Tj
+T*
+(How one GPS point is handled) Tj
+T*
+(1. Client emits driver:location:update.) Tj
+T*
+(2. Backend validates the session and coordinates.) Tj
+T*
+(3. Prisma transaction inserts DriverLocation.) Tj
+T*
+(4. Prisma transaction updates Driver current position.) Tj
+T*
+(5. Backend emits driver:location:accepted and broadcasts driver:location:updated to) Tj
+T*
+(  watchers.) Tj
+ET
+endstream
+endobj
+10 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R >> >> /Contents 11 0 R >>
+endobj
+11 0 obj
+<< /Length 1481 >>
+stream
+BT
+/F1 11 Tf
+50 792 Td
+(Planner Flow: Mapbox + OR-Tools) Tj
+T*
+() Tj
+T*
+(1. Convert batch to planner nodes) Tj
+T*
+(planner.service.ts loads a batch and its orders from Prisma.) Tj
+T*
+(It converts each order into planner nodes:) Tj
+T*
+(- PICKUP nodes for seller locations) Tj
+T*
+(- DELIVERY nodes for buyer locations) Tj
+T*
+(Each node includes coordinates, load delta, pair information, and service time.) Tj
+T*
+() Tj
+T*
+(2. Resolve depot) Tj
+T*
+(The route start point is resolved from request input, env vars, or a fallback average of) Tj
+T*
+(nodes.) Tj
+T*
+() Tj
+T*
+(3. Build travel matrix with Mapbox) Tj
+T*
+(fetchMatrix\(\) calls the Mapbox Directions Matrix API to get road travel durations and) Tj
+T*
+(distances between all points.) Tj
+T*
+(If Mapbox fails, the planner falls back to haversine-based estimates so route planning still) Tj
+T*
+(works.) Tj
+T*
+() Tj
+T*
+(4. Optimize with OR-Tools) Tj
+T*
+(The planner sends the depot, nodes, capacity, current load, route start time, and travel) Tj
+T*
+(matrices to the OR-Tools service.) Tj
+T*
+(OR-Tools computes the best visit order under load and pickup/delivery constraints.) Tj
+T*
+() Tj
+T*
+(5. Persist result) Tj
+T*
+(The optimized route is stored as Route and Stop records in Prisma.) Tj
+T*
+(The route also stores optimized waypoints, estimated timing, and total distance.) Tj
+T*
+() Tj
+T*
+(6. Realtime events) Tj
+T*
+(The planner emits route planned, dispatched, and modified events so the UI can update) Tj
+T*
+(immediately.) Tj
+ET
+endstream
+endobj
+12 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R >> >> /Contents 13 0 R >>
+endobj
+13 0 obj
+<< /Length 1708 >>
+stream
+BT
+/F1 11 Tf
+50 792 Td
+(Rerouting Flow) Tj
+T*
+() Tj
+T*
+(rerouteActiveRoutesOnce\(\) checks active routes with driver locations.) Tj
+T*
+(For each active route it reads the latest DriverLocation, rebuilds the remaining nodes, and) Tj
+T*
+(re-runs OR-Tools from the driver current position.) Tj
+T*
+(If the new plan improves the remaining route by at least the configured threshold, it) Tj
+T*
+(updates the route and stop sequence.) Tj
+T*
+(If the gain is too small, it skips rerouting to avoid unnecessary disruption.) Tj
+T*
+() Tj
+T*
+(Important env values) Tj
+T*
+(- MAPBOX_TOKEN: required for live matrix calls.) Tj
+T*
+(- ORTOOLS_SERVICE_URL: URL of the Python solver service.) Tj
+T*
+(- PLANNER_DEPOT_LAT / PLANNER_DEPOT_LNG: optional depot override.) Tj
+T*
+(- PLANNER_SOLVER_TIME_LIMIT_SECONDS: OR-Tools solve timeout.) Tj
+T*
+(- PLANNER_REROUTE_MIN_GAIN_SECONDS: reroute threshold.) Tj
+T*
+(- LOCATION_MIN_INTERVAL_MS: live tracking throttle, currently 0 for demo.) Tj
+T*
+() Tj
+T*
+(Good code review explanation) Tj
+T*
+(The planner is an orchestration layer: it converts orders into pickup and delivery nodes,) Tj
+T*
+(uses Mapbox for real road travel times, sends the matrix to OR-Tools for optimization, then) Tj
+T*
+(persists the result and emits realtime events. Rerouting reuses the same solver starting) Tj
+T*
+(from the driver current position and only applies changes when the improvement is) Tj
+T*
+(meaningful.) Tj
+T*
+() Tj
+T*
+(Good live tracking explanation) Tj
+T*
+(The mobile app owns the GPS watcher. The backend only stores and validates the points it) Tj
+T*
+(receives. Tracking works only when the app starts the watcher after driver:session:started) Tj
+T*
+(and stops it before driver:session:end.) Tj
+ET
+endstream
+endobj
+xref
+0 14
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000141 00000 n 
+0000000211 00000 n 
+0000000337 00000 n 
+0000001494 00000 n 
+0000001620 00000 n 
+0000003136 00000 n 
+0000003262 00000 n 
+0000004341 00000 n 
+0000004469 00000 n 
+0000006003 00000 n 
+0000006131 00000 n 
+trailer
+<< /Size 14 /Root 1 0 R >>
+startxref
+7892
+%%EOF

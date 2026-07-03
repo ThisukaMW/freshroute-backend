@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { protect } from "../../middlewares/auth.middleware.js";
+import { requireOrderingPortalOpen } from "../../middlewares/orderingPortal.middleware.js";
 import {
   getSellerInventoryController,
   getProductStockController,
@@ -40,6 +41,6 @@ router.get("/:productId", getProductStockController);
 router.get("/:productId/history", getStockHistoryController);
 
 // POST /api/v1/inventory/validate-cart - Validate cart before checkout
-router.post("/validate-cart", validateCartStockController);
+router.post("/validate-cart", requireOrderingPortalOpen, validateCartStockController);
 
 export default router;
