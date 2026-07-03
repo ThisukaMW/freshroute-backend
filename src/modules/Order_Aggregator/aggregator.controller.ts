@@ -7,6 +7,7 @@ import {
 import {
   getAggregationRunById,
   getAggregationRuns,
+  getBatchHandoffBundle,
   getRouteStartHandoffBundle,
   runOrderAggregation,
 } from "./aggregator.service.js";
@@ -22,7 +23,7 @@ const normalizeTriggerMode = (value: unknown): "manual" | "payment_event" | "sch
   return "manual";
 };
 
-//manual and Automated trigger for controlled aggregation runs.
+// Manual admin override (any time) or scheduled overnight run via in-process job.
 export const runAggregation = async (req: AuthRequest, res: Response) => {
   try {
     const now = new Date();
@@ -117,10 +118,30 @@ export const getRouteStartHandoff = async (req: AuthRequest, res: Response) => {
       res.status(400).json({ message: "routeId is required" });
       return;
     }
-    const data = await getRouteStartHandoffBundle(routeId);
+    const fieldAdminId = req.role === "FIELD_ADMIN" ? req.fieldAdminId : undefined;
+    const data = await getRouteStartHandoffBundle(routeId, { fieldAdminId });
     res.json(data);
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Failed to fetch route handoff bundle";
-    res.status(400).json({ message });
+    const status = message.includes("not assigned") ? 403 : 400;
+    res.status(status).json({ message });
+  }
+};
+
+//get the batch handoff bundle for a specific batch.
+export const getBatchHandoff = async (req: AuthRequest, res: Response) => {
+  try {
+    const batchId = Array.isArray(req.params.batchId) ? req.params.batchId[0] : req.params.batchId;
+    if (!batchId) {
+      res.status(400).json({ message: "batchId is required" });
+      return;
+    }
+    const fieldAdminId = req.role === "FIELD_ADMIN" ? req.fieldAdminId : undefined;
+    const data = await getBatchHandoffBundle(batchId, { fieldAdminId });
+    res.json(data);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Failed to fetch batch handoff bundle";
+    const status = message.includes("not assigned") ? 403 : message.includes("not found") ? 404 : 400;
+    res.status(status).json({ message });
   }
 };

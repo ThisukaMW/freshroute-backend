@@ -15,9 +15,15 @@ import type {
 } from "./aggregator.types.js";
 import {
   getDeliveryDayBoundsColombo,
+  getDeliverySlotBoundsColombo,
   getOrderPlacementDayBoundsColombo,
 } from "./aggregator.colombo.js";
-import { assignNearestHub, batchNumber, routeNumber } from "./aggregator.utils.js";
+import { assignNearestHub, batchNumber, routeNumber, sequenceOrdersNearestNeighbor } from "./aggregator.utils.js";
+import {
+  buildSellerPickupGroups,
+  countRouteStops,
+  sequenceSellerPickups,
+} from "./aggregator.pickup-stops.js";
 
 const configDefault = {
   clusterRadiusKm: Number(process.env.AGGREGATOR_CLUSTER_RADIUS_KM ?? 8),
@@ -235,6 +241,9 @@ const getCandidates = async (placementDayStart: Date, placementDayEnd: Date): Pr
   });
 
   return orders.map((order) => {
+    const sellerIds = Array.from(
+      new Set(order.items.map((item) => item.product.seller?.id).filter(Boolean) as string[])
+    );
     const firstSeller = order.items[0]?.product.seller;
     return {
       id: order.id,
@@ -243,6 +252,7 @@ const getCandidates = async (placementDayStart: Date, placementDayEnd: Date): Pr
       isCancelled: order.isCancelled,
       batchId: order.batchId,
       deliveryDate: order.deliveryDate,
+      deliveryTimeSlot: order.deliveryTimeSlot,
       deliveryAddress: order.deliveryAddress,
       deliveryLat: order.deliveryLat,
       deliveryLng: order.deliveryLng,
@@ -255,6 +265,7 @@ const getCandidates = async (placementDayStart: Date, placementDayEnd: Date): Pr
       deliveryZoneCode: null,
       sellerLat: firstSeller?.latitude ?? null,
       sellerLng: firstSeller?.longitude ?? null,
+      sellerIds,
     };
   });
 };
@@ -317,8 +328,7 @@ const createBatchesAndRoutes = async (
   rejected: RejectedOrderReason[],
   autoAssignRoutes: boolean,
   triggerMode: "manual" | "payment_event" | "scheduled",
-  windowStart: Date,
-  windowEnd: Date
+  deliveryDayStart: Date
 ) => {
   const created: AggregationSummary["batchesCreated"] = [];
   const availableTrucks = [...trucks];
@@ -347,6 +357,11 @@ const createBatchesAndRoutes = async (
       fieldAdminCursor = fieldAdminPick.nextCursor;
     }
     const fieldAdminCandidate = fieldAdminPick?.item ?? undefined;
+    const deliveryTimeSlot = slice.deliveryTimeSlot;
+    const { windowStart: slotWindowStart, windowEnd: slotWindowEnd } = getDeliverySlotBoundsColombo(
+      deliveryDayStart,
+      deliveryTimeSlot
+    );
 
     try {
       const createdSlice = await prisma.$transaction(async (tx) => {
@@ -358,9 +373,9 @@ const createBatchesAndRoutes = async (
             storageType: slice.storageType,
             dropClusterKey: slice.clusterKey,
             pickupHubId: slice.pickupHubId,
-            scheduledDate: windowStart,
-            timeWindowStart: windowStart,
-            timeWindowEnd: windowEnd,
+            scheduledDate: deliveryDayStart,
+            timeWindowStart: slotWindowStart,
+            timeWindowEnd: slotWindowEnd,
             orderCount: slice.orders.length,
             totalVolume: slice.totalVolume,
             capacityUsedWeight: slice.totalWeight,
@@ -380,41 +395,131 @@ const createBatchesAndRoutes = async (
             batchId: batch.id,
             truckId: selectedTruck.id,
             status: "PLANNED",
-            scheduledStart: windowStart,
-            scheduledEnd: windowEnd,
+            scheduledStart: slotWindowStart,
+            scheduledEnd: slotWindowEnd,
           },
         });
 
         const pickupHub = await tx.hub.findUniqueOrThrow({ where: { id: slice.pickupHubId } });
+
+        const orderDetails = await tx.order.findMany({
+          where: { id: { in: slice.orders.map((order) => order.id) } },
+          include: {
+            items: {
+              include: {
+                product: {
+                  include: {
+                    seller: { include: { user: { select: { name: true } } } },
+                  },
+                },
+              },
+            },
+          },
+        });
+
+        const ordersForPickup = orderDetails.map((order) => ({
+          id: order.id,
+          orderNumber: order.orderNumber,
+          buyerId: order.buyerId,
+          items: order.items.map((item) => ({
+            id: item.id,
+            orderId: order.id,
+            orderNumber: order.orderNumber,
+            quantity: item.quantity,
+            sellerId: item.sellerId,
+            product: {
+              id: item.product.id,
+              name: item.product.name,
+              unit: item.product.unit,
+              seller: item.product.seller,
+            },
+          })),
+        }));
+
+        const sellerPickupGroups = sequenceSellerPickups(buildSellerPickupGroups(ordersForPickup));
+        const routeStopCount = countRouteStops(sellerPickupGroups.length, slice.orders.length);
+
+        await tx.batch.update({
+          where: { id: batch.id },
+          data: {
+            status: "ROUTED",
+            maxStopsApplied: routeStopCount,
+          },
+        });
+
+        let sequenceOrder = 1;
+
+        for (const sellerGroup of sellerPickupGroups) {
+          await tx.stop.create({
+            data: {
+              routeId: route.id,
+              type: "PICKUP",
+              sequenceOrder,
+              sellerId: sellerGroup.sellerId,
+              address: sellerGroup.address,
+              latitude: sellerGroup.latitude,
+              longitude: sellerGroup.longitude,
+              status: "PENDING",
+              itemsSummary: sellerGroup.itemsSummary,
+            },
+          });
+          sequenceOrder += 1;
+        }
+
         await tx.stop.create({
           data: {
             routeId: route.id,
             type: "PICKUP",
-            sequenceOrder: 1,
+            sequenceOrder,
             address: pickupHub.name,
             latitude: pickupHub.latitude,
             longitude: pickupHub.longitude,
             status: "PENDING",
+            itemsSummary: ordersForPickup.map((order) => ({
+              orderId: order.id,
+              orderNumber: order.orderNumber,
+              itemCount: order.items.length,
+            })),
           },
         });
+        sequenceOrder += 1;
 
-        for (let index = 0; index < slice.orders.length; index += 1) {
-          const order = slice.orders[index]!;
+        const orderedDeliveries = sequenceOrdersNearestNeighbor(
+          pickupHub.latitude,
+          pickupHub.longitude,
+          slice.orders
+        );
+
+        const buyerByOrderId = new Map(orderDetails.map((order) => [order.id, order.buyerId]));
+
+        for (const order of orderedDeliveries) {
           const stop = await tx.stop.create({
             data: {
               routeId: route.id,
               type: "DELIVERY",
-              sequenceOrder: index + 2,
+              sequenceOrder,
+              buyerId: buyerByOrderId.get(order.id) ?? null,
               address: order.deliveryAddress ?? "Delivery Address",
               latitude: order.deliveryLat,
               longitude: order.deliveryLng,
               status: "PENDING",
+              itemsSummary: ordersForPickup
+                .find((entry) => entry.id === order.id)
+                ?.items.map((item) => ({
+                  orderItemId: item.id,
+                  productId: item.product.id,
+                  productName: item.product.name,
+                  quantity: item.quantity,
+                  unit: item.product.unit,
+                  sellerId: item.sellerId,
+                })),
             },
           });
           await tx.order.update({
             where: { id: order.id },
             data: { batchId: batch.id, stopId: stop.id, status: "BATCHED" },
           });
+          sequenceOrder += 1;
         }
 
         if (autoAssignRoutes) {
@@ -438,6 +543,7 @@ const createBatchesAndRoutes = async (
             totalWeight: slice.totalWeight,
             totalVolume: slice.totalVolume,
             orderCount: slice.orders.length,
+            routeStopCount,
           })) {
             throw new Error("Auto assignment failed: truck not compatible for slice");
           }
@@ -472,6 +578,7 @@ const createBatchesAndRoutes = async (
           batchNumber: batch.batchNumber,
           pickupHubId: slice.pickupHubId,
           storageType: slice.storageType,
+          deliveryTimeSlot: slice.deliveryTimeSlot,
           clusterKey: slice.clusterKey,
           orderIds: slice.orders.map((order) => order.id),
           orderNumbers: slice.orders.map((order) => order.orderNumber),
@@ -523,7 +630,7 @@ export const runOrderAggregation = async (input: AggregationRunInput): Promise<A
     },
   });
   try {
-    const { deliveryDayStart, deliveryDayEnd } = getDeliveryDayBoundsColombo(input.windowStart);
+    const { deliveryDayStart } = getDeliveryDayBoundsColombo(input.windowStart);
     const { placementDayStart, placementDayEnd } = getOrderPlacementDayBoundsColombo(deliveryDayStart);
     const trucks = await getAvailableTrucks();
     const hubs = await ensureHubs();
@@ -574,8 +681,7 @@ export const runOrderAggregation = async (input: AggregationRunInput): Promise<A
           rejected,
           config.autoAssignRoutes,
           triggerMode,
-          deliveryDayStart,
-          deliveryDayEnd
+          deliveryDayStart
         );
 
     const summary: AggregationSummary = {
@@ -680,72 +786,169 @@ export const getAggregationRunById = async (runId: string) => {
   });
 };
 
-//get the route start handoff bundle for a specific route.
-export const getRouteStartHandoffBundle = async (routeId: string) => {
-  const route = await prisma.route.findUnique({
-    where: { id: routeId },
+//get the batch handoff bundle with full pickup/delivery context.
+export const getBatchHandoffBundle = async (
+  batchId: string,
+  options?: { fieldAdminId?: string }
+) => {
+  const batch = await prisma.batch.findUnique({
+    where: { id: batchId },
     include: {
-      batch: {
+      pickupHub: true,
+      routes: {
         include: {
-          pickupHub: true,
-          orders: {
-            select: {
-              id: true,
-              orderNumber: true,
-              deliveryAddress: true,
-              deliveryLat: true,
-              deliveryLng: true,
-              totalWeight: true,
-              totalVolume: true,
-              status: true,
+          stops: {
+            orderBy: { sequenceOrder: "asc" },
+            include: {
+              seller: { include: { user: { select: { id: true, name: true } } } },
+              buyer: { include: { user: { select: { id: true, name: true } } } },
+              order: { select: { id: true, orderNumber: true, status: true } },
             },
           },
         },
       },
-      stops: {
-        where: { type: "DELIVERY" },
-        select: {
-          id: true,
-          sequenceOrder: true,
-          address: true,
-          latitude: true,
-          longitude: true,
-          status: true,
-          orderId: true,
+      orders: {
+        include: {
+          items: {
+            include: {
+              product: { select: { id: true, name: true, unit: true } },
+              inspections: {
+                orderBy: { createdAt: "desc" },
+                take: 1,
+                select: {
+                  id: true,
+                  result: true,
+                  approvedQuantity: true,
+                  rejectedQuantity: true,
+                },
+              },
+            },
+          },
+          deliveryStop: { select: { id: true, status: true, type: true } },
         },
-        orderBy: { sequenceOrder: "asc" },
       },
     },
   });
 
-  if (!route) throw new Error("Route not found");
-  if (!route.batch) throw new Error("Route batch not found");
+  if (!batch) throw new Error("Batch not found");
+  const route = batch.routes[0];
+  if (!route) throw new Error("Batch route not found");
+
+  if (options?.fieldAdminId && route.fieldAdminId !== options.fieldAdminId) {
+    throw new Error("Batch not assigned to this field admin");
+  }
+
+  const allStops = route.stops;
+  const sellerPickups = allStops.filter((stop) => stop.type === "PICKUP" && stop.sellerId);
+  const hubPickup = allStops.find((stop) => stop.type === "PICKUP" && !stop.sellerId) ?? null;
+  const deliveries = allStops.filter((stop) => stop.type === "DELIVERY");
+
+  const sellerStopIdsByOrderItem = new Map<string, string[]>();
+  for (const stop of sellerPickups) {
+    const summary = (stop.itemsSummary as Array<{ orderItemId?: string }> | null) ?? [];
+    for (const entry of summary) {
+      if (!entry.orderItemId) continue;
+      const existing = sellerStopIdsByOrderItem.get(entry.orderItemId) ?? [];
+      existing.push(stop.id);
+      sellerStopIdsByOrderItem.set(entry.orderItemId, existing);
+    }
+  }
+
+  const hubComplete = hubPickup?.status === "COMPLETED";
+
+  const orders = batch.orders.map((order) => {
+    const sellerPickupStopIds = Array.from(
+      new Set(
+        order.items.flatMap((item) => sellerStopIdsByOrderItem.get(item.id) ?? [])
+      )
+    );
+    const sellerStopsForOrder = sellerPickups.filter((stop) => sellerPickupStopIds.includes(stop.id));
+    const pickupComplete =
+      sellerStopsForOrder.length > 0 &&
+      sellerStopsForOrder.every((stop) => stop.status === "COMPLETED") &&
+      order.items.every((item) => {
+        const inspection = item.inspections[0];
+        return inspection && ["APPROVED", "PARTIAL", "REJECTED"].includes(inspection.result);
+      });
+    const deliveryComplete = order.deliveryStop?.status === "COMPLETED" || order.status === "DELIVERED";
+
+    return {
+      id: order.id,
+      orderNumber: order.orderNumber,
+      status: order.status,
+      deliveryStopId: order.deliveryStop?.id ?? null,
+      sellerPickupStopIds,
+      items: order.items.map((item) => ({
+        orderItemId: item.id,
+        product: item.product,
+        quantity: item.quantity,
+        sellerId: item.sellerId,
+        inspectionStatus: item.inspections[0]?.result ?? null,
+      })),
+      fulfillment: {
+        pickupComplete,
+        hubComplete,
+        deliveryComplete,
+        eligibleForDelivery: pickupComplete && hubComplete && !deliveryComplete,
+      },
+    };
+  });
 
   return {
-    routeId: route.id,
-    routeNumber: route.routeNumber,
-    status: route.status,
-    batchId: route.batch.id,
-    truckId: route.truckId,
-    driverId: route.driverId,
-    fieldAdminId: route.fieldAdminId,
-    pickupHub: route.batch.pickupHub
-      ? {
-          id: route.batch.pickupHub.id,
-          name: route.batch.pickupHub.name,
-          latitude: route.batch.pickupHub.latitude,
-          longitude: route.batch.pickupHub.longitude,
-        }
-      : null,
-    deliveryStops: route.stops,
-    orders: route.batch.orders,
-    batchTotals: {
-      orderCount: route.batch.orderCount,
-      totalWeight: route.batch.capacityUsedWeight ?? 0,
-      totalVolume: route.batch.capacityUsedVolume ?? route.batch.totalVolume ?? 0,
-      maxStopsApplied: route.batch.maxStopsApplied ?? route.batch.orderCount,
-      storageType: route.batch.storageType,
+    batch: {
+      id: batch.id,
+      batchNumber: batch.batchNumber,
+      status: batch.status,
+      dropClusterKey: batch.dropClusterKey,
+      scheduledDate: batch.scheduledDate,
+      timeWindowStart: batch.timeWindowStart,
+      timeWindowEnd: batch.timeWindowEnd,
+      pickupHub: batch.pickupHub
+        ? {
+            id: batch.pickupHub.id,
+            name: batch.pickupHub.name,
+            latitude: batch.pickupHub.latitude,
+            longitude: batch.pickupHub.longitude,
+          }
+        : null,
     },
-    plannedStopOrder: route.stops.map((stop) => stop.id),
+    route: {
+      id: route.id,
+      routeNumber: route.routeNumber,
+      status: route.status,
+      fieldAdminId: route.fieldAdminId,
+      driverId: route.driverId,
+      truckId: route.truckId,
+    },
+    phases: {
+      sellerPickups,
+      hubPickup,
+      deliveries,
+    },
+    plannedStopOrder: allStops.map((stop) => stop.id),
+    orders,
+    batchTotals: {
+      orderCount: batch.orderCount,
+      totalWeight: batch.capacityUsedWeight ?? 0,
+      totalVolume: batch.capacityUsedVolume ?? batch.totalVolume ?? 0,
+      maxStopsApplied: batch.maxStopsApplied ?? batch.orderCount,
+      storageType: batch.storageType,
+    },
   };
+};
+
+//get the route start handoff bundle for a specific route (delegates to batch handoff).
+export const getRouteStartHandoffBundle = async (
+  routeId: string,
+  options?: { fieldAdminId?: string }
+) => {
+  const route = await prisma.route.findUnique({
+    where: { id: routeId },
+    select: { batchId: true, fieldAdminId: true },
+  });
+  if (!route) throw new Error("Route not found");
+  if (options?.fieldAdminId && route.fieldAdminId !== options.fieldAdminId) {
+    throw new Error("Route not assigned to this field admin");
+  }
+  return getBatchHandoffBundle(route.batchId, options);
 };

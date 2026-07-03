@@ -1,8 +1,13 @@
 import { Router } from 'express';
-import { protect, requireAdmin } from "../../middlewares/auth.middleware.js";
+import { protect, requireAdmin, authorize } from "../../middlewares/auth.middleware.js";
 import {
   listAllOrders,
   loginAdmin,
+  listBatchesController,
+  getBatchDetailController,
+  listRefundsController,
+  getRefundDetailController,
+  updateRefundController,
   getPendingUsersController,
   approveUserController,
   rejectUserController,
@@ -29,5 +34,14 @@ router.patch("/users/:userId/reject", rejectUserController);
 
 // See all orders ever placed
 router.get("/orders", listAllOrders);
+
+// Batch visibility for main admin
+router.get("/batches", listBatchesController);
+router.get("/batches/:batchId", getBatchDetailController);
+
+// Refund processing queue (company owner / ADMIN only)
+router.get("/refunds", authorize("ADMIN"), listRefundsController);
+router.get("/refunds/:id", authorize("ADMIN"), getRefundDetailController);
+router.patch("/refunds/:id", authorize("ADMIN"), updateRefundController);
 
 export default router;

@@ -4,11 +4,17 @@ import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
 import { findAdminByEmail } from './admin.service.js';
 import {
-  getAllOrders,          
+  getAllOrders,
+  listBatches,
+  getBatchById,
 } from "./admin.service.js";
-import { getLockedUsers, grantAccountAccess, approveUser, rejectUser, getPendingUsers } from "../auth/auth.service.js";
-import { createNotification } from "../notifications/notification.service.js";
+import { approveUser, rejectUser, getPendingUsers } from "../auth/auth.service.js";
 import { sendApprovalEmail, sendRejectionEmail } from "../../utils/mailer.js";
+import {
+  getAdminRefundById,
+  getAdminRefundQueue,
+  updateRefundStatus,
+} from "../field_admin/fieldadmin.service.js";
 
 export const listAllOrders: RequestHandler = async (_req, res) => {
   try {
@@ -17,6 +23,82 @@ export const listAllOrders: RequestHandler = async (_req, res) => {
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Error";
     res.status(500).json({ message });
+  }
+};
+
+export const listBatchesController: RequestHandler = async (req, res) => {
+  try {
+    const status = typeof req.query.status === "string" ? req.query.status : undefined;
+    const scheduledDate = typeof req.query.scheduledDate === "string" ? req.query.scheduledDate : undefined;
+    const fieldAdminId = typeof req.query.fieldAdminId === "string" ? req.query.fieldAdminId : undefined;
+    const dropClusterKey = typeof req.query.dropClusterKey === "string" ? req.query.dropClusterKey : undefined;
+    const limit = typeof req.query.limit === "string" ? Number(req.query.limit) : undefined;
+    const offset = typeof req.query.offset === "string" ? Number(req.query.offset) : undefined;
+    const data = await listBatches({ status, scheduledDate, fieldAdminId, dropClusterKey, limit, offset });
+    res.json(data);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Error";
+    res.status(500).json({ message });
+  }
+};
+
+export const getBatchDetailController: RequestHandler<{ batchId: string }> = async (req, res) => {
+  try {
+    const data = await getBatchById(req.params.batchId);
+    res.json(data);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Error";
+    const status = message.includes("not found") ? 404 : 500;
+    res.status(status).json({ message });
+  }
+};
+
+export const listRefundsController: RequestHandler = async (req, res) => {
+  try {
+    const status = typeof req.query.status === "string" ? req.query.status : undefined;
+    const fieldAdminId = typeof req.query.fieldAdminId === "string" ? req.query.fieldAdminId : undefined;
+    const routeId = typeof req.query.routeId === "string" ? req.query.routeId : undefined;
+    const data = await getAdminRefundQueue({ status, fieldAdminId, routeId });
+    res.json(data);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Error";
+    res.status(400).json({ message });
+  }
+};
+
+export const getRefundDetailController: RequestHandler<{ id: string }> = async (req, res) => {
+  try {
+    const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+    if (!id) {
+      res.status(400).json({ message: "Refund id is required" });
+      return;
+    }
+    const data = await getAdminRefundById(id);
+    res.json(data);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Error";
+    const status = message.includes("not found") ? 404 : 400;
+    res.status(status).json({ message });
+  }
+};
+
+export const updateRefundController: RequestHandler<{ id: string }> = async (req, res) => {
+  try {
+    const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+    if (!id) {
+      res.status(400).json({ message: "Refund id is required" });
+      return;
+    }
+    const { status } = req.body as { status: "PROCESSING" | "COMPLETED" | "FAILED" };
+    if (!status || !["PROCESSING", "COMPLETED", "FAILED"].includes(status)) {
+      res.status(400).json({ message: "status must be PROCESSING, COMPLETED, or FAILED" });
+      return;
+    }
+    const data = await updateRefundStatus(id, status);
+    res.json(data);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Error";
+    res.status(400).json({ message });
   }
 };
 

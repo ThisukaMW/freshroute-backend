@@ -21,6 +21,7 @@ import ratingRouter from "./modules/rating/rating.routes.js";
 import inventoryRoutes from "./modules/inventory/inventory.routes.js";
 import dashboardRoutes from "./modules/dashboard/dashboard.routes.js";
 import analyticsRouter from "./modules/analytics/analytics.routes.js";
+import systemRoutes from "./modules/system/system.routes.js";
 
 dotenv.config({ override: true });
 
@@ -61,5 +62,6 @@ app.use("/api/v1/notifications", notificationRoutes);
 app.use("/api/v1/trucks", truckRoutes);
 app.use("/api/v1/ratings", ratingRouter);
 app.use("/api/v1/analytics", analyticsRouter);
+app.use("/api/v1/system", systemRoutes);
 
 export default app;

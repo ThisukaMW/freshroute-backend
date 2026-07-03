@@ -73,3 +73,38 @@ export const isWithinScheduledAggregatorWindowColombo = (now: Date = new Date())
   const h = getColomboHour(now);
   return h >= 0 && h < 4;
 };
+
+export type DeliveryTimeSlot = "MORNING" | "AFTERNOON" | "EVENING";
+
+const SLOT_HOURS: Record<DeliveryTimeSlot, { startHour: number; endHour: number }> = {
+  MORNING: { startHour: 6, endHour: 12 },
+  AFTERNOON: { startHour: 12, endHour: 18 },
+  EVENING: { startHour: 18, endHour: 22 },
+};
+
+/** Delivery window for a buyer slot on a given Colombo delivery day. */
+export const getDeliverySlotBoundsColombo = (
+  deliveryDayStart: Date,
+  slot: DeliveryTimeSlot
+) => {
+  const { startHour, endHour } = SLOT_HOURS[slot];
+  const windowStart = new Date(deliveryDayStart.getTime() + startHour * 60 * 60 * 1000);
+  const windowEnd = new Date(deliveryDayStart.getTime() + endHour * 60 * 60 * 1000);
+  return { windowStart, windowEnd };
+};
+
+/** Target delivery day start (next Colombo civil day after payment/placement day). */
+export const getTargetDeliveryDayStartColombo = (anchor: Date): Date => {
+  const { year, month, day } = getColomboYmd(anchor);
+  const next = addCalendarDays(year, month, day, 1);
+  return colomboCivilDayStartUtc(next.year, next.month, next.day);
+};
+
+/** Buyer-facing delivery instant: next delivery day + slot start in Colombo. */
+export const computeOrderDeliveryDateColombo = (
+  paidAt: Date,
+  slot: DeliveryTimeSlot
+): Date => {
+  const deliveryDayStart = getTargetDeliveryDayStartColombo(paidAt);
+  return getDeliverySlotBoundsColombo(deliveryDayStart, slot).windowStart;
+};

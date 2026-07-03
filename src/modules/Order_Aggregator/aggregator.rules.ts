@@ -11,6 +11,9 @@ export const getEligibilityFailureReason = (order: CandidateOrder): string | nul
   if ((order.totalWeight ?? 0) <= 0 && (order.totalVolume ?? 0) <= 0) {
     return "Order weight/volume not defined";
   }
+  if (!order.deliveryTimeSlot) {
+    return "Delivery time slot missing";
+  }
   return null;
 };
 
@@ -27,15 +30,17 @@ export const canTruckCarrySlice = (
     totalWeight: number;
     totalVolume: number;
     orderCount: number;
+    routeStopCount?: number;
   }
 ) => {
   const storageCompatible =
     truck.storageSupport === "BOTH" || truck.storageSupport === slice.storageType;
+  const stopCount = slice.routeStopCount ?? slice.orderCount;
   return (
     storageCompatible &&
     slice.totalWeight <= truck.maxWeight &&
     slice.totalVolume <= truck.maxVolume &&
-    slice.orderCount <= (truck.maxStops ?? Number.MAX_SAFE_INTEGER)
+    stopCount <= (truck.maxStops ?? Number.MAX_SAFE_INTEGER)
   );
 };
 

@@ -474,6 +474,7 @@ model OrderItem {
 
   inspections ProductInspection[]
   refundItems RefundItem[]
+  damageReports DamageReport[]
 
   createdAt   DateTime    @default(now())
 
@@ -577,8 +578,11 @@ model ProductInspection {
   sellerId      String?
   unit          String?
   notes         String?
+  rejectionReason String?
+  rejectionDetails String?
   createdAt     DateTime     @default(now())
   refundItems   RefundItem[]
+  damageReports DamageReport[]
 
   @@index([fieldAdminId])
   @@index([orderItemId])
@@ -609,12 +613,23 @@ model DamageReport {
   stopId       String?
   stop         Stop?        @relation(fields: [stopId], references: [id], onDelete: Cascade)
 
+  orderItemId  String?
+  orderItem    OrderItem?   @relation(fields: [orderItemId], references: [id], onDelete: SetNull)
+
+  inspectionId String?
+  inspection   ProductInspection? @relation(fields: [inspectionId], references: [id], onDelete: SetNull)
+
+  damageType   String?
+  severity     String?
+  affectedItems String?
   description  String
   images       Json?
   createdAt    DateTime     @default(now())
 
   @@index([fieldAdminId])
   @@index([stopId])
+  @@index([orderItemId])
+  @@index([inspectionId])
 }
 
 model Assessment {

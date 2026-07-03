@@ -7,7 +7,6 @@ import {
   createRouteReassessment,
   getDashboardOverview,
   getAllOrders,
-  getAdminRefundQueue,
   getAssessmentCandidates,
   getFieldAdminNotifications,
   getFieldAdminProfile,
@@ -17,10 +16,12 @@ import {
   getPaymentHistory,
   getRefundEligibleOrders,
   getRefunds,
+  getRefundById,
   getRoutes,
   getTruckLiveLoadDebug,
   getTaskStops,
   markDeliveryComplete,
+  markStopComplete,
   initiateRefund,
   updateTruckCapacity,
 } from "./fieldadmin.service.js";
@@ -350,6 +351,21 @@ export const paymentRefunds = async (req: AuthRequest, res: Response) => {
   }
 };
 
+//get a single refund for the initiating field admin.
+export const paymentRefundDetail = async (req: AuthRequest, res: Response) => {
+  try {
+    const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+    if (!id) {
+      res.status(400).json({ message: "Refund id is required" });
+      return;
+    }
+    const data = await getRefundById(req.fieldAdminId!, id);
+    res.json(data);
+  } catch (error) {
+    fail(res, error, 404);
+  }
+};
+
 //get the eligible orders for payment refunds for a field admin.
 export const paymentRefundEligibleOrders = async (req: AuthRequest, res: Response) => {
   try {
@@ -370,19 +386,6 @@ export const paymentRefundInitiate = async (req: AuthRequest, res: Response) => 
     };
     const data = await initiateRefund(req.fieldAdminId!, { orderId, reason, orderItemIds });
     res.status(201).json(data);
-  } catch (error) {
-    fail(res, error, 400);
-  }
-};
-
-//get the admin refund queue for a field admin.
-export const adminRefundQueue = async (req: AuthRequest, res: Response) => {
-  try {
-    const status = typeof req.query.status === "string" ? req.query.status : undefined;
-    const fieldAdminId = typeof req.query.fieldAdminId === "string" ? req.query.fieldAdminId : undefined;
-    const routeId = typeof req.query.routeId === "string" ? req.query.routeId : undefined;
-    const data = await getAdminRefundQueue({ status, fieldAdminId, routeId });
-    res.json(data);
   } catch (error) {
     fail(res, error, 400);
   }
@@ -421,16 +424,20 @@ export const settingsSecurity = async (_req: AuthRequest, res: Response) => {
 //confirm the quality of an order item for a field admin.
 export const qualityConfirm = async (req: AuthRequest, res: Response) => {
   try {
-    const { orderItemId, notes, approvedQuantity } = req.body as {
+    const { orderItemId, notes, approvedQuantity, rejectionReason, rejectionDetails } = req.body as {
       orderItemId: string;
       notes?: string;
       approvedQuantity?: number;
+      rejectionReason?: string;
+      rejectionDetails?: string;
     };
     const data = await createInspection(req.fieldAdminId!, {
       orderItemId,
       result: approvedQuantity !== undefined ? undefined : "APPROVED",
       approvedQuantity,
       notes,
+      rejectionReason,
+      rejectionDetails,
     });
     res.status(201).json(data);
   } catch (error) {
@@ -471,16 +478,20 @@ export const qualityFeedback = async (req: AuthRequest, res: Response) => {
 //submit the rejection of an order item for a field admin.
 export const rejectSubmit = async (req: AuthRequest, res: Response) => {
   try {
-    const { orderItemId, notes, approvedQuantity } = req.body as {
+    const { orderItemId, notes, approvedQuantity, rejectionReason, rejectionDetails } = req.body as {
       orderItemId: string;
       notes?: string;
       approvedQuantity?: number;
+      rejectionReason?: string;
+      rejectionDetails?: string;
     };
     const data = await createInspection(req.fieldAdminId!, {
       orderItemId,
       result: approvedQuantity !== undefined ? undefined : "REJECTED",
       approvedQuantity,
       notes,
+      rejectionReason,
+      rejectionDetails,
     });
     res.status(201).json(data);
   } catch (error) {
@@ -513,6 +524,22 @@ export const rejectFeedback = async (req: AuthRequest, res: Response) => {
       notes,
     });
     res.status(201).json(data);
+  } catch (error) {
+    fail(res, error, 400);
+  }
+};
+
+//complete a stop (pickup or delivery) for a field admin.
+export const completeStop = async (req: AuthRequest, res: Response) => {
+  try {
+    const stopId = Array.isArray(req.params.stopId) ? req.params.stopId[0] : req.params.stopId;
+    const { notes } = req.body as { notes?: string };
+    if (!stopId) {
+      res.status(400).json({ message: "stopId is required" });
+      return;
+    }
+    const data = await markStopComplete(req.fieldAdminId!, { stopId, notes });
+    res.json(data);
   } catch (error) {
     fail(res, error, 400);
   }
@@ -592,12 +619,35 @@ export const assessSeller = async (req: AuthRequest, res: Response) => {
 //report damage to a stop for a field admin.
 export const reportDamage = async (req: AuthRequest, res: Response) => {
   try {
-    const { description, stopId, images } = req.body as {
+    const {
+      description,
+      stopId,
+      images,
+      damageType,
+      severity,
+      affectedItems,
+      orderItemId,
+      inspectionId,
+    } = req.body as {
       description: string;
       stopId?: string;
       images?: unknown;
+      damageType?: string;
+      severity?: string;
+      affectedItems?: string;
+      orderItemId?: string;
+      inspectionId?: string;
     };
-    const data = await createDamageReport(req.fieldAdminId!, { description, stopId, images });
+    const data = await createDamageReport(req.fieldAdminId!, {
+      description,
+      stopId,
+      images,
+      damageType,
+      severity,
+      affectedItems,
+      orderItemId,
+      inspectionId,
+    });
     res.status(201).json(data);
   } catch (error) {
     fail(res, error, 400);

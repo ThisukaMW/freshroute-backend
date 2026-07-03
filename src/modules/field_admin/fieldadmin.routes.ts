@@ -4,12 +4,12 @@ import {
   allHistory,
   allOrders,
   allRoutes,
-  adminRefundQueue,
   assessBuyer,
   assessDriver,
   assessSeller,
   assignedTasks,
   completeDelivery,
+  completeStop,
   completedRoutes,
   completedTasks,
   deliveredOrders,
@@ -27,6 +27,7 @@ import {
   paymentInvoices,
   paymentMethods,
   paymentRefundInitiate,
+  paymentRefundDetail,
   paymentRefundEligibleOrders,
   paymentRefunds,
   pendingOrders,
@@ -56,9 +57,6 @@ import {
 } from "./fieldadmin.controller.js";
 
 const router = Router();
-
-// Admin processing queue for itemized refund requests initiated by field admins.
-router.get("/admin/refund-queue", protect, authorize("ADMIN"), adminRefundQueue);
 
 // All field-admin routes require FIELD_ADMIN role.
 router.use(protect, authorize("FIELD_ADMIN"));
@@ -118,6 +116,7 @@ router.get("/payment/history", paymentHistory);
 router.get("/payment/invoices", paymentInvoices);
 router.get("/payment/methods", paymentMethods);
 router.get("/payment/refunds", paymentRefunds);
+router.get("/payment/refunds/:id", paymentRefundDetail);
 router.get("/payment/refunds/eligible-orders", paymentRefundEligibleOrders);
 // NOTE: added refund initiation endpoint used by refund screen action flow.
 router.post("/payment/refunds/initiate", paymentRefundInitiate);
@@ -143,6 +142,7 @@ router.post("/reject/feedback", rejectFeedback);
 
 // //Mark Delivery Complete API
 
+router.post("/stops/:stopId/complete", completeStop);
 router.post("/delivery/complete", completeDelivery);
 
 // //User Assesment APIs
