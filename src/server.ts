@@ -3,12 +3,20 @@ import "dotenv/config";
 import { createServer } from "http";
 import { Server } from "socket.io";
 import app from "./app.js";
+import prisma from "./config/database.js";
 import { setupSocketHandlers } from "./socket.js";
+import { closeTransporter } from "./utils/mailer.js";
 
 const loadClearExpiredCarts = async () => {
   const modulePath = "./jobs/cartExpiry.job." + "js";
   const { clearExpiredCarts } = await import(modulePath);
   return clearExpiredCarts;
+};
+
+const loadScheduledAggregation = async () => {
+  const modulePath = "./jobs/aggregatorScheduled.job." + "js";
+  const { runScheduledAggregationIfDue } = await import(modulePath);
+  return runScheduledAggregationIfDue;
 };
 import { setPlannerRealtimeIo } from "./modules/planner/planner.realtime.js";
 import { startRouteRerouteWorker } from "./modules/planner/route-reroute.worker.js";
@@ -58,39 +66,43 @@ const io = new Server(httpServer, {
 });
 
 setupSocketHandlers(io);
-setPlannerRealtimeIo(io);
-startRouteRerouteWorker();
 
-io.engine.on("connection_error", (error) => {
-  console.error(
-    `[socket] connect_error | code=${error.code} message=${error.message} context=${JSON.stringify({
-      reqOrigin: error.context?.req?.headers?.origin ?? "none",
-      reqUrl: error.context?.req?.url ?? "unknown",
-      transport: error.context?.transport?.name ?? "unknown",
-    })}`
-  );
-});
+let cartExpiryInterval: NodeJS.Timeout | null = null;
+let aggregationInterval: NodeJS.Timeout | null = null;
+let isShuttingDown = false;
 
-httpServer.on("error", (error: NodeJS.ErrnoException) => {
-  if (error.code === "EADDRINUSE") {
-    console.error(
-      `[server] port ${PORT} is already in use. Stop the existing process or change PORT.`
-    );
-    process.exit(1);
-    return;
+const shutdown = (signal: string) => {
+  if (isShuttingDown) return;
+  isShuttingDown = true;
+
+  console.log(`\n${signal} received, shutting down...`);
+
+  if (cartExpiryInterval) clearInterval(cartExpiryInterval);
+  if (aggregationInterval) clearInterval(aggregationInterval);
+
+  try {
+    io.disconnectSockets(true);
+    httpServer.closeAllConnections?.();
+    closeTransporter();
+    io.close();
+    httpServer.close();
+  } catch (error) {
+    console.error("Cleanup error:", error);
   }
 
-  console.error(`[server] unexpected listen error | message=${error.message}`);
-  process.exit(1);
-});
+  void prisma.$disconnect().catch(() => {});
 
-httpServer.listen(Number(PORT), HOST, async () => {
-  console.log(`Server running on http://${HOST}:${PORT}`);
-  console.log(
-    `[socket] heartbeat config | pingIntervalMs=${socketPingIntervalMs} pingTimeoutMs=${socketPingTimeoutMs}`
-  );
+  process.exit(0);
+};
+
+process.on("SIGINT", () => shutdown("SIGINT"));
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+
+httpServer.listen(PORT, async () => {
+  console.log(`Server running on port ${PORT}`);
 
   const clearExpiredCarts = await loadClearExpiredCarts();
+  const runScheduledAggregationIfDue = await loadScheduledAggregation();
 
   // Run once immediately on boot to catch any carts that expired while the server was down
   try {
@@ -99,8 +111,15 @@ httpServer.listen(Number(PORT), HOST, async () => {
     console.error("Cart expiry cleanup failed on startup:", error);
   }
 
+  // Catch up overnight batching if the server was down during 00:00–04:00 Colombo
+  try {
+    await runScheduledAggregationIfDue();
+  } catch (error) {
+    console.error("Scheduled aggregation check failed on startup:", error);
+  }
+
   // Then repeat every 30 minutes
-  setInterval(async () => {
+  cartExpiryInterval = setInterval(async () => {
     try {
       const clearExpiredCarts = await loadClearExpiredCarts();
       await clearExpiredCarts();
@@ -108,4 +127,14 @@ httpServer.listen(Number(PORT), HOST, async () => {
       console.error("Cart expiry cleanup failed:", error);
     }
   }, 30 * 60 * 1000);
+
+  // Poll every minute during the overnight window for scheduled aggregation
+  aggregationInterval = setInterval(async () => {
+    try {
+      const runScheduledAggregationIfDue = await loadScheduledAggregation();
+      await runScheduledAggregationIfDue();
+    } catch (error) {
+      console.error("Scheduled aggregation check failed:", error);
+    }
+  }, 60 * 1000);
 });

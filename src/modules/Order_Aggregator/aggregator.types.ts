@@ -1,3 +1,5 @@
+export type DeliveryTimeSlot = "MORNING" | "AFTERNOON" | "EVENING";
+
 export interface AggregationRunInput {
   windowStart: Date;
   windowEnd: Date;
@@ -8,6 +10,8 @@ export interface AggregationRunInput {
   maxWeightPerBatch?: number;
   maxVolumePerBatch?: number;
   autoAssignRoutes?: boolean;
+  autoAssignFleet?: boolean;
+  autoAssignDriver?: boolean;
   dryRun?: boolean;
 }
 
@@ -18,6 +22,7 @@ export interface CandidateOrder {
   isCancelled: boolean;
   batchId: string | null;
   deliveryDate: Date | null;
+  deliveryTimeSlot: DeliveryTimeSlot | null;
   deliveryAddress: string;
   deliveryLat: number;
   deliveryLng: number;
@@ -30,6 +35,7 @@ export interface CandidateOrder {
   deliveryZoneCode: string | null;
   sellerLat: number | null;
   sellerLng: number | null;
+  sellerIds: string[];
 }
 
 export interface RejectedOrderReason {
@@ -42,6 +48,7 @@ export interface ClusteredOrderGroup {
   pickupHubId: string;
   storageType: "NORMAL" | "COLD";
   deliveryZoneCode: string;
+  deliveryTimeSlot: DeliveryTimeSlot;
   clusterKey: string;
   orders: CandidateOrder[];
 }
@@ -50,6 +57,7 @@ export interface PackedBatchSlice {
   pickupHubId: string;
   storageType: "NORMAL" | "COLD";
   deliveryZoneCode: string;
+  deliveryTimeSlot: DeliveryTimeSlot;
   clusterKey: string;
   orders: CandidateOrder[];
   totalWeight: number;
@@ -70,6 +78,8 @@ export interface AggregationSummary {
     maxWeightPerBatch: number;
     maxVolumePerBatch: number;
     autoAssignRoutes: boolean;
+    autoAssignFleet: boolean;
+    autoAssignDriver: boolean;
   };
   totalCandidatesFetched: number;
   totalEligible: number;
@@ -84,6 +94,7 @@ export interface AggregationSummary {
     batchNumber: string;
     pickupHubId: string;
     storageType: "NORMAL" | "COLD";
+    deliveryTimeSlot: DeliveryTimeSlot;
     clusterKey: string;
     orderIds: string[];
     orderNumbers: string[];

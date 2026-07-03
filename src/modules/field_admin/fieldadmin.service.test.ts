@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import prisma from "../../config/database.js";
-import { createDamageReport, getAllOrders, getDashboardOverview, getFieldAdminProfile, getOrdersByStatus } from "./fieldadmin.service.js";
+import { createDamageReport, getAllOrders, getDashboardOverview, getFieldAdminProfile, getOrdersByStatus, markStopComplete } from "./fieldadmin.service.js";
 
 const withMock = <T extends object, K extends keyof T>(
   obj: T,
@@ -176,5 +176,44 @@ test("getDashboardOverview counts only active assigned/in-transit orders", async
   restoreStopCount();
   restoreAssessmentCount();
   restoreOrderCount();
+  restoreFieldAdmin();
+});
+
+test("markStopComplete blocks delivery before hub pickup is completed", async () => {
+  const restoreFieldAdmin = withMock(prisma.fieldAdmin, "findUnique", ((async () => ({
+    id: "fa-1",
+    userId: "u1",
+    user: { name: "Field Admin 1", email: "fieldadmin1@freshroute.com" },
+  })) as unknown) as typeof prisma.fieldAdmin.findUnique);
+
+  const restoreStopFindFirst = withMock(
+    prisma.stop,
+    "findFirst",
+    ((async (args: any) => {
+      if (args?.where?.id === "delivery-stop-1") {
+        return {
+          id: "delivery-stop-1",
+          type: "DELIVERY",
+          sellerId: null,
+          status: "PENDING",
+          itemsSummary: null,
+          notes: null,
+          order: { id: "o1" },
+          route: { id: "route-1", batchId: "batch-1", status: "IN_PROGRESS", truckId: null, driverId: null },
+        };
+      }
+      if (args?.where?.sellerId === null) {
+        return { status: "PENDING" };
+      }
+      return null;
+    }) as unknown) as typeof prisma.stop.findFirst
+  );
+
+  await assert.rejects(
+    markStopComplete("fa-1", { stopId: "delivery-stop-1" }),
+    /Hub pickup must be completed before delivery/
+  );
+
+  restoreStopFindFirst();
   restoreFieldAdmin();
 });

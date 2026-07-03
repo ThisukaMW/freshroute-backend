@@ -6,7 +6,9 @@
   "main": "index.js",
   "scripts": {
     "dev": "tsx watch src/server.ts",
-    "build": "tsc",
+    "dev:stop": "pkill -f 'tsx watch src/server.ts' 2>/dev/null || true; lsof -ti :5001 | xargs kill -9 2>/dev/null || true",
+    "build": "tsc && mkdir -p dist/src/generated && cp -r src/generated/prisma dist/src/generated/prisma",
+    "postinstall": "prisma generate",
     "start": "node dist/src/server.js",
     "test": "node --test --import tsx \"test/**/*.test.ts\"",
     "test:watch": "node --test --watch --import tsx \"test/**/*.test.ts\"",
