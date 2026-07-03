@@ -1,17 +1,4 @@
-// import { Router } from "express";
-// import { protect } from "../../middlewares/auth.middleware.js";
-// import { addProduct } from "./product.controller.js";
-
-// const router = Router();
-
-// // All product routes require auth
-// router.use(protect);
-
-// // POST /api/v1/products
-// router.post("/", addProduct);
-
-// export default router;
-
+// product.routes.ts
 import { Router } from "express";
 import { protect } from "../../middlewares/auth.middleware.js";
 import {
@@ -31,36 +18,22 @@ const upload = multer({ dest: "uploads/" });
 const router = Router();
 
 // ============================
-// PUBLIC ROUTES (No Auth Required)
+// SPECIFIC / STATIC ROUTES FIRST
+// (must all come before any "/:productId" wildcard route,
+//  otherwise Express matches the wildcard first)
 // ============================
-// Specific routes MUST come before wildcard /:productId routes
 router.get("/", getAllProductsController);
 router.get("/approved", getApprovedProductsController);
+router.get("/pending", protect, getPendingProductsController); // admin fetches this
 
-// Specific nested routes before parent wildcard
-router.get("/:productId/sellers", getSellersByProductNameController);
-
-// Wildcard ID route (after specific routes)
-router.get("/:productId", getProductByIdController);
+router.post("/add", protect, upload.array("images"), addProduct); // seller creates product
 
 // ============================
-// PROTECTED ROUTES (Auth Required)
+// WILDCARD / PARAM ROUTES (must always come LAST)
 // ============================
-// POST and PATCH must have protect middleware
-router.post("/add", protect, upload.array("images"), addProduct);
-router.patch("/:productId/status", protect, updateProductStatusController);
-router.patch("/:productId", protect, upload.array("images"), editProductController);
-
-// Protected GET routes
-router.get("/pending", protect, getPendingProductsController);
-router.get("/approved", getApprovedProductsController);
-router.get("/", getAllProductsController);
-
-// ── Parameterised routes after ──
-router.post("/add", protect, upload.array("images"), addProduct);
 router.get("/:productId/sellers", getSellersByProductNameController);
 router.get("/:productId", getProductByIdController);
-router.patch("/:productId/status", protect, updateProductStatusController);
-router.patch("/:productId", protect, editProductController); 
+router.patch("/:productId/status", protect, updateProductStatusController); // admin approve/reject
+router.patch("/:productId", protect, upload.array("images"), editProductController); // seller edit
 
 export default router;

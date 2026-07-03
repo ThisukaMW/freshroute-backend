@@ -258,6 +258,8 @@ export const getCustomerDashboardSummary = async (userId: string) => {
     .sort((a, b) => b.count - a.count)
     .slice(0, 4);
 
+  // ✅ FIX: id is now the real DB id (used to fetch order details).
+  // orderNumber is kept separately for display purposes (e.g. "ORD-...").
   const recentOrders = orders.map((order) => {
     const topItem = order.items[0];
     const vendorName = topItem ? sellerNameById.get(topItem.sellerId) || "FreshRoute vendor" : "FreshRoute vendor";
@@ -267,7 +269,8 @@ export const getCustomerDashboardSummary = async (userId: string) => {
       .replace(/(^|\s)\S/g, (letter) => letter.toUpperCase());
 
     return {
-      id: order.orderNumber,
+      id: order.id,                    // ✅ real UUID — used by getBuyerOrderById(id)
+      orderNumber: order.orderNumber,  // ✅ human-readable — used for display
       vendor: vendorName,
       total: `Rs. ${Number(order.totalAmount).toLocaleString()}`,
       status: order.status,
