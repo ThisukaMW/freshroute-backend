@@ -13,15 +13,16 @@ const userSelect = {
   status: true,
 } as const;
 
-export const getAllUsers = async () => {
-  return prisma.user.findMany({
+
+export const getAllUsers = async (db: any = prisma) => {
+  return db.user.findMany({
     orderBy: { createdAt: "desc" },
     select: userSelect,
   });
 };
 
-export const getUserById = async (id: string) => {
-  const user = await prisma.user.findUnique({
+export const getUserById = async (id: string, db: any = prisma) => {
+  const user = await db.user.findUnique({
     where: { id },
     select: {
       ...userSelect,
@@ -33,30 +34,30 @@ export const getUserById = async (id: string) => {
   return user;
 };
 
-export const updateUserRole = async (id: string, role: UserRole) => {
-  const user = await prisma.user.findUnique({ where: { id } });
+export const updateUserRole = async (id: string, role: UserRole, db: any = prisma) => {
+  const user = await db.user.findUnique({ where: { id } });
   if (!user) throw new Error("User not found");
 
   if (!USER_ROLES.includes(role)) {
     throw new Error("Invalid role");
   }
 
-  return prisma.user.update({
+  return db.user.update({
     where: { id },
     data: { role },
     select: userSelect,
   });
 };
 
-export const updateUserStatus = async (id: string, status: UserStatus) => {
-  const user = await prisma.user.findUnique({ where: { id } });
+export const updateUserStatus = async (id: string, status: UserStatus, db: any = prisma) => {
+  const user = await db.user.findUnique({ where: { id } });
   if (!user) throw new Error("User not found");
 
   if (!USER_STATUSES.includes(status)) {
     throw new Error("Invalid status");
   }
 
-  return prisma.user.update({
+  return db.user.update({
     where: { id },
     data: { status },
     select: userSelect,

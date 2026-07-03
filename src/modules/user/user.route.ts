@@ -1,23 +1,19 @@
 import { Router } from "express";
-import {
-  getUsers,
-  getUser,
-  patchUserRole,
-  patchUserStatus,
-} from "./user.controller.js";
+import { createControllers } from "./user.controller.js";
 
-const router = Router();
+export const createUserRouter = (controllerDeps?: any) => {
+  const { getUsers, getUser, patchUserRole, patchUserStatus } =
+    createControllers(controllerDeps);
 
+  const router = Router();
 
-router.get("/", getUsers);
+  router.get("/", getUsers);
+  router.get("/:id", getUser);
+  router.patch("/:id/role", patchUserRole);
+  router.patch("/:id/status", patchUserStatus);
 
+  return router;
+};
 
-router.get("/:id", getUser);
-
-// PATCH /api/v1/users/:id/role    → change role (buyer/seller/driver)
-router.patch("/:id/role", patchUserRole);
-
-// PATCH /api/v1/users/:id/status  → suspend or activate
-router.patch("/:id/status", patchUserStatus);
-
-export default router;
+// Export default router with real implementations
+export default createUserRouter();

@@ -380,6 +380,7 @@ model CartItem {
   seller    Seller    @relation(fields: [sellerId], references: [id], onDelete: Cascade)
 
   quantity  Float
+  price     Float     // snapshot of SellerProduct.price at time of add/update
   savedForLater Boolean @default(false)
 
   createdAt DateTime  @default(now())
@@ -696,44 +697,46 @@ model Notification {
 
 }
 
-// ============= TRUCK MANAGEMENT =============
+
+
+// ============= TRUCK / FLEET MANAGEMENT =============
+// Add this block to your existing schema.prisma
 
 enum TruckType {
   REFRIGERATED_VAN
-  FLATBED
-  BOX_TRUCK
-  SEMI_TRAILER
-  TANKER
-  DUMP_TRUCK
+  DRY_CARGO
+  REEFER
 }
 
-enum TemperatureSetting {
-  AMBIENT
-  CHILLED
-  FROZEN
+enum TiltRisk {
+  LOW
+  MEDIUM
+  HIGH
 }
 
 model Truck {
-  id                      String              @id @default(uuid())
-  truckId                 String              @unique
-  operator                String?
-  truckType               TruckType
-  temperatureSetting      TemperatureSetting?
-  route                   String?
-  fuelNeeded              Float?
-  capacityLbs             Float?
-  palletCapacity          Int?
-  deliveryEfficiencyPercent Float?
-  avgDelayHours           Float?
-  isActive                Boolean             @default(true)
+  id             String    @id  // User-supplied plate / truck ID (e.g. "NP1234567")
+  operator       String
+  type           String    // Free-text to match frontend dropdown
+  capacityLbs    Float
+  loadedLbs      Float     @default(0)
+  palletsLoaded  Int       @default(0)
+  palletsCap     Int       @default(0)
+  cratesLoaded   Int       @default(0)
+  boxesLoaded    Int       @default(0)
+  temperature    String    @default("Ambient")
+  efficiency     Float     @default(0)
+  avgDelay       String    @default("")
+  loadBalanceLeft  Float   @default(50)
+  loadBalanceRight Float   @default(50)
+  tiltRisk       String    @default("Low")
 
-  createdAt               DateTime            @default(now())
-  updatedAt               DateTime            @updatedAt
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   @@index([operator])
-  @@index([truckType])
-
 }
+
 // ============= INVENTORY SYSTEM =============
 
 enum StockChangeType {
@@ -765,6 +768,7 @@ model StockHistory {
   @@index([type])
   @@index([orderId])
 }
+<<<<<<< HEAD
 
 model Address {
   id        String   @id @default(uuid())
@@ -783,3 +787,5 @@ model Address {
 
   @@index([userId])
 }
+=======
+>>>>>>> 8a335c5bf5283fdeff6117b697fc67bec642f6e3
