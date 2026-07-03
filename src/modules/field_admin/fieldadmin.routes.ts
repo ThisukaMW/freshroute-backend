@@ -41,6 +41,8 @@ import {
   rejectSubmit,
   reportDamage,
   routeHistory,
+  routeHandoffsAll,
+  routeHandoffById,
   scheduledOrders,
   scheduledRoutes,
   scheduledTasks,
@@ -104,6 +106,8 @@ router.get("/me/terms", termsContent);
 // //All Route Related APIs
 
 router.get("/route/all", allRoutes);
+router.get("/route/handoff", routeHandoffsAll);
+router.get("/route/:routeId/handoff", routeHandoffById);
 router.get("/route/active", activeRoutes);
 router.get("/route/scheduled", scheduledRoutes);
 router.get("/route/completed", completedRoutes);

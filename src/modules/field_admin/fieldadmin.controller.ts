@@ -18,6 +18,8 @@ import {
   getRefunds,
   getRefundById,
   getRoutes,
+  getFieldAdminRouteHandoff,
+  getFieldAdminRouteHandoffs,
   getTruckLiveLoadDebug,
   getTaskStops,
   markDeliveryComplete,
@@ -154,6 +156,33 @@ export const allRoutes = async (req: AuthRequest, res: Response) => {
     res.json(data);
   } catch (error) {
     fail(res, error);
+  }
+};
+
+//get handoff bundles for all active assigned routes.
+export const routeHandoffsAll = async (req: AuthRequest, res: Response) => {
+  try {
+    const data = await getFieldAdminRouteHandoffs(req.fieldAdminId!);
+    res.json(data);
+  } catch (error) {
+    fail(res, error, 400);
+  }
+};
+
+//get handoff bundle for one assigned route (pickup/dropoff segmentation).
+export const routeHandoffById = async (req: AuthRequest, res: Response) => {
+  try {
+    const routeId = Array.isArray(req.params.routeId) ? req.params.routeId[0] : req.params.routeId;
+    if (!routeId) {
+      res.status(400).json({ message: "routeId is required" });
+      return;
+    }
+    const data = await getFieldAdminRouteHandoff(req.fieldAdminId!, routeId);
+    res.json(data);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Error";
+    const status = message.includes("not found") ? 404 : 400;
+    fail(res, error, status);
   }
 };
 

@@ -1,8 +1,22 @@
 import prisma from "../../config/database.js";
 
 // Get all orders, newest first, including buyer name, product details, and payment info
-export const getAllOrders = async () => {
+export const getAllOrders = async (filters?: { since?: string; until?: string }) => {
+  const placedAt: { gte?: Date; lte?: Date } = {};
+  if (filters?.since?.trim()) {
+    const since = new Date(filters.since);
+    since.setHours(0, 0, 0, 0);
+    placedAt.gte = since;
+  }
+  if (filters?.until?.trim()) {
+    const until = new Date(filters.until);
+    until.setHours(23, 59, 59, 999);
+    placedAt.lte = until;
+  }
+  const dateFilter = Object.keys(placedAt).length > 0 ? { placedAt } : {};
+
   return prisma.order.findMany({
+    where: dateFilter,
     orderBy: { placedAt: "desc" },
     include: {
       buyer: {
@@ -90,8 +104,14 @@ const batchDetailInclude = {
       deliveryStop: { select: { id: true, type: true, status: true, sequenceOrder: true } },
       items: {
         include: {
-          product: { select: { id: true, name: true, unit: true } },
-          seller: { include: { user: { select: { id: true, name: true } } } },
+          product: {
+            select: {
+              id: true,
+              name: true,
+              unit: true,
+              seller: { include: { user: { select: { id: true, name: true } } } },
+            },
+          },
           inspections: {
             orderBy: { createdAt: "desc" as const },
             take: 1,
@@ -168,5 +188,15 @@ export const getBatchById = async (batchId: string) => {
   if (!batch) {
     throw new Error("Batch not found");
   }
-  return batch;
+
+  return {
+    ...batch,
+    orders: batch.orders.map((order) => ({
+      ...order,
+      items: order.items.map((item) => ({
+        ...item,
+        seller: item.product.seller,
+      })),
+    })),
+  };
 };

@@ -809,6 +809,7 @@ export const getBatchHandoffBundle = async (
       },
       orders: {
         include: {
+          buyer: { include: { user: { select: { id: true, name: true } } } },
           items: {
             include: {
               product: { select: { id: true, name: true, unit: true } },
@@ -856,6 +857,32 @@ export const getBatchHandoffBundle = async (
 
   const hubComplete = hubPickup?.status === "COMPLETED";
 
+  const mapStopForHandoff = (stop: (typeof allStops)[number]) => ({
+    id: stop.id,
+    type: stop.type,
+    phase: stop.type === "DELIVERY" ? ("DROPOFF" as const) : ("PICKUP" as const),
+    stopKind:
+      stop.type === "DELIVERY"
+        ? ("DELIVERY" as const)
+        : stop.sellerId
+          ? ("SELLER_PICKUP" as const)
+          : ("HUB_PICKUP" as const),
+    sequenceOrder: stop.sequenceOrder,
+    address: stop.address,
+    latitude: stop.latitude,
+    longitude: stop.longitude,
+    status: stop.status,
+    sellerId: stop.sellerId,
+    sellerName: stop.seller?.user?.name ?? null,
+    buyerName: stop.buyer?.user?.name ?? null,
+    orderId: stop.order?.id ?? null,
+    orderNumber: stop.order?.orderNumber ?? null,
+    itemsSummary: stop.itemsSummary,
+    isCompleted: stop.status === "COMPLETED",
+  });
+
+  const allSellerPickupsComplete = sellerPickups.every((stop) => stop.status === "COMPLETED");
+
   const orders = batch.orders.map((order) => {
     const sellerPickupStopIds = Array.from(
       new Set(
@@ -863,36 +890,151 @@ export const getBatchHandoffBundle = async (
       )
     );
     const sellerStopsForOrder = sellerPickups.filter((stop) => sellerPickupStopIds.includes(stop.id));
-    const pickupComplete =
-      sellerStopsForOrder.length > 0 &&
-      sellerStopsForOrder.every((stop) => stop.status === "COMPLETED") &&
-      order.items.every((item) => {
+    const itemsInspected = order.items.every((item) => {
+      const inspection = item.inspections[0];
+      return inspection && ["APPROVED", "PARTIAL", "REJECTED"].includes(inspection.result);
+    });
+    const sellerPickupsForOrderComplete =
+      sellerStopsForOrder.length === 0 ||
+      sellerStopsForOrder.every((stop) => stop.status === "COMPLETED");
+    const pickupComplete = sellerPickupsForOrderComplete && itemsInspected;
+    const deliveryComplete = order.deliveryStop?.status === "COMPLETED" || order.status === "DELIVERED";
+    const eligibleForDelivery = pickupComplete && hubComplete && !deliveryComplete;
+
+    let currentPhase: "PICKUP" | "DROPOFF" | "COMPLETED" = "PICKUP";
+    if (deliveryComplete) {
+      currentPhase = "COMPLETED";
+    } else if (pickupComplete && hubComplete) {
+      currentPhase = "DROPOFF";
+    }
+
+    const orderItems = order.items.map((item) => ({
+      orderItemId: item.id,
+      product: item.product,
+      quantity: item.quantity,
+      sellerId: item.sellerId,
+      inspectionStatus: item.inspections[0]?.result ?? null,
+      isInspected: Boolean(
+        item.inspections[0] &&
+          ["APPROVED", "PARTIAL", "REJECTED"].includes(item.inspections[0].result)
+      ),
+    }));
+
+    const sellerStopDetails = sellerStopsForOrder.map((stop) => {
+      const summary = (stop.itemsSummary as Array<{ orderItemId?: string }> | null) ?? [];
+      const orderItemIdsAtStop = summary
+        .map((entry) => entry.orderItemId)
+        .filter((id): id is string => Boolean(id));
+      const relatedItems = order.items.filter((item) => orderItemIdsAtStop.includes(item.id));
+      const stopItemsInspected = relatedItems.every((item) => {
         const inspection = item.inspections[0];
         return inspection && ["APPROVED", "PARTIAL", "REJECTED"].includes(inspection.result);
       });
-    const deliveryComplete = order.deliveryStop?.status === "COMPLETED" || order.status === "DELIVERED";
+      return {
+        ...mapStopForHandoff(stop),
+        canComplete: stop.status !== "COMPLETED" && stopItemsInspected,
+        blockedReason:
+          stop.status === "COMPLETED"
+            ? null
+            : stopItemsInspected
+              ? null
+              : "Inspect all products at this seller stop before confirming pickup",
+      };
+    });
+
+    const deliveryStop = deliveries.find((stop) => stop.order?.id === order.id) ?? null;
+
+    let pickupNextAction: {
+      stopId: string;
+      stopKind: "SELLER_PICKUP" | "HUB_PICKUP";
+      canComplete: boolean;
+      blockedReason: string | null;
+    } | null = null;
+
+    const pendingSellerStop = sellerStopDetails.find((stop) => !stop.isCompleted);
+    if (pendingSellerStop) {
+      pickupNextAction = {
+        stopId: pendingSellerStop.id,
+        stopKind: "SELLER_PICKUP",
+        canComplete: pendingSellerStop.canComplete,
+        blockedReason: pendingSellerStop.blockedReason,
+      };
+    } else if (!hubComplete && allSellerPickupsComplete && hubPickup) {
+      pickupNextAction = {
+        stopId: hubPickup.id,
+        stopKind: "HUB_PICKUP",
+        canComplete: itemsInspected,
+        blockedReason: itemsInspected
+          ? null
+          : "Inspect all order products before hub pickup confirmation",
+      };
+    }
 
     return {
       id: order.id,
       orderNumber: order.orderNumber,
       status: order.status,
-      deliveryStopId: order.deliveryStop?.id ?? null,
+      customer: order.buyer?.user?.name ?? null,
+      currentPhase,
+      deliveryStopId: order.deliveryStop?.id ?? deliveryStop?.id ?? null,
       sellerPickupStopIds,
-      items: order.items.map((item) => ({
-        orderItemId: item.id,
-        product: item.product,
-        quantity: item.quantity,
-        sellerId: item.sellerId,
-        inspectionStatus: item.inspections[0]?.result ?? null,
-      })),
+      items: orderItems,
+      pickup: {
+        sellerStops: sellerStopDetails,
+        hubStop: hubPickup
+          ? {
+              ...mapStopForHandoff(hubPickup),
+              canComplete:
+                hubPickup.status !== "COMPLETED" && allSellerPickupsComplete && itemsInspected,
+              blockedReason:
+                hubPickup.status === "COMPLETED"
+                  ? null
+                  : !allSellerPickupsComplete
+                    ? "Complete all seller pickups on this route first"
+                    : !itemsInspected
+                      ? "Inspect all products before hub pickup"
+                      : null,
+            }
+          : null,
+        isComplete: pickupComplete && hubComplete,
+        nextAction: pickupNextAction,
+      },
+      dropoff: deliveryStop
+        ? {
+            ...mapStopForHandoff(deliveryStop),
+            canComplete: eligibleForDelivery,
+            blockedReason: eligibleForDelivery
+              ? null
+              : deliveryComplete
+                ? "Order already delivered"
+                : !hubComplete
+                  ? "Complete hub pickup before delivery"
+                  : !pickupComplete
+                    ? "Complete seller pickups and inspections first"
+                    : "Order not ready for delivery",
+          }
+        : null,
       fulfillment: {
         pickupComplete,
         hubComplete,
         deliveryComplete,
-        eligibleForDelivery: pickupComplete && hubComplete && !deliveryComplete,
+        eligibleForDelivery,
       },
     };
   });
+
+  const segmentedOrders = {
+    pickup: orders.filter((order) => order.currentPhase === "PICKUP").map((order) => order.id),
+    dropoff: orders.filter((order) => order.currentPhase === "DROPOFF").map((order) => order.id),
+    completed: orders.filter((order) => order.currentPhase === "COMPLETED").map((order) => order.id),
+  };
+
+  const routePhase: "PICKUP" | "DROPOFF" | "COMPLETED" =
+    deliveries.every((stop) => stop.status === "COMPLETED")
+      ? "COMPLETED"
+      : hubComplete
+        ? "DROPOFF"
+        : "PICKUP";
 
   return {
     batch: {
@@ -919,13 +1061,34 @@ export const getBatchHandoffBundle = async (
       fieldAdminId: route.fieldAdminId,
       driverId: route.driverId,
       truckId: route.truckId,
+      currentPhase: routePhase,
     },
     phases: {
-      sellerPickups,
-      hubPickup,
-      deliveries,
+      pickup: {
+        sellerPickups: sellerPickups.map(mapStopForHandoff),
+        hubPickup: hubPickup ? mapStopForHandoff(hubPickup) : null,
+      },
+      dropoff: {
+        deliveries: deliveries.map(mapStopForHandoff),
+      },
+      // backward-compatible flat keys
+      sellerPickups: sellerPickups.map(mapStopForHandoff),
+      hubPickup: hubPickup ? mapStopForHandoff(hubPickup) : null,
+      deliveries: deliveries.map(mapStopForHandoff),
     },
+    segmentedOrders,
     plannedStopOrder: allStops.map((stop) => stop.id),
+    optimizedStopOrder: allStops.map((stop) => ({
+      stopId: stop.id,
+      sequenceOrder: stop.sequenceOrder,
+      phase: stop.type === "DELIVERY" ? "DROPOFF" : "PICKUP",
+      stopKind:
+        stop.type === "DELIVERY"
+          ? "DELIVERY"
+          : stop.sellerId
+            ? "SELLER_PICKUP"
+            : "HUB_PICKUP",
+    })),
     orders,
     batchTotals: {
       orderCount: batch.orderCount,

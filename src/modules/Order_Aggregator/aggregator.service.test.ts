@@ -148,9 +148,11 @@ test("getBatchHandoffBundle returns phased pickup and delivery context", async (
   const payload = await getBatchHandoffBundle("batch-1");
   assert.equal(payload.batch.id, "batch-1");
   assert.equal(payload.route.id, "route-1");
-  assert.equal(payload.phases.sellerPickups.length, 1);
-  assert.equal(payload.phases.hubPickup?.id, "hub-stop-1");
-  assert.equal(payload.phases.deliveries.length, 1);
+  assert.equal(payload.phases.pickup.sellerPickups.length, 1);
+  assert.equal(payload.phases.pickup.hubPickup?.id, "hub-stop-1");
+  assert.equal(payload.phases.dropoff.deliveries.length, 1);
+  assert.equal(payload.orders[0]?.currentPhase, "PICKUP");
+  assert.equal(payload.segmentedOrders.pickup.length, 1);
   assert.deepEqual(payload.plannedStopOrder, ["seller-stop-1", "hub-stop-1", "delivery-stop-1"]);
   assert.equal(payload.orders[0]?.fulfillment.eligibleForDelivery, false);
 

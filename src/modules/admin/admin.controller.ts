@@ -44,9 +44,15 @@ export const listBatchesController: RequestHandler = async (req, res) => {
 
 export const getBatchDetailController: RequestHandler<{ batchId: string }> = async (req, res) => {
   try {
-    const data = await getBatchById(req.params.batchId);
+    const batchId = Array.isArray(req.params.batchId) ? req.params.batchId[0] : req.params.batchId;
+    if (!batchId) {
+      res.status(400).json({ message: "Batch id is required" });
+      return;
+    }
+    const data = await getBatchById(batchId);
     res.json(data);
   } catch (error: unknown) {
+    console.error("[getBatchDetailController] error:", error);
     const message = error instanceof Error ? error.message : "Error";
     const status = message.includes("not found") ? 404 : 500;
     res.status(status).json({ message });

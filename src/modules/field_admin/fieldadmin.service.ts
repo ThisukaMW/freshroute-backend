@@ -1,4 +1,5 @@
 import prisma from "../../config/database.js";
+import { getBatchHandoffBundle } from "../Order_Aggregator/aggregator.service.js";
 import {
   inferInspectionResult,
   isRefundWithinRemainingLimit,
@@ -14,6 +15,15 @@ const refundDetailInclude = {
       orderNumber: true,
       totalAmount: true,
       status: true,
+      buyer: { include: { user: { select: { name: true, email: true } } } },
+      payment: {
+        select: {
+          gatewayPaymentId: true,
+          amount: true,
+          status: true,
+          currency: true,
+        },
+      },
       batch: {
         select: {
           id: true,
@@ -1259,7 +1269,13 @@ export const initiateRefund = async (
 };
 
 //get the admin refund queue for a field admin.
-export const getAdminRefundQueue = async (filters?: { status?: string; fieldAdminId?: string; routeId?: string }) => {
+export const getAdminRefundQueue = async (filters?: {
+  status?: string;
+  fieldAdminId?: string;
+  routeId?: string;
+  since?: string;
+  until?: string;
+}) => {
   const routeFilter =
     filters?.routeId && filters.routeId.trim().length > 0
       ? { order: { batch: { routes: { some: { id: filters.routeId } } } } }
@@ -1271,11 +1287,25 @@ export const getAdminRefundQueue = async (filters?: { status?: string; fieldAdmi
   const statusFilter =
     filters?.status && filters.status.trim().length > 0 ? { status: filters.status as any } : {};
 
+  const createdAt: { gte?: Date; lte?: Date } = {};
+  if (filters?.since?.trim()) {
+    const since = new Date(filters.since);
+    since.setHours(0, 0, 0, 0);
+    createdAt.gte = since;
+  }
+  if (filters?.until?.trim()) {
+    const until = new Date(filters.until);
+    until.setHours(23, 59, 59, 999);
+    createdAt.lte = until;
+  }
+  const dateFilter = Object.keys(createdAt).length > 0 ? { createdAt } : {};
+
   return prisma.refund.findMany({
     where: {
       ...routeFilter,
       ...fieldAdminFilter,
       ...statusFilter,
+      ...dateFilter,
     },
     include: refundDetailInclude,
     orderBy: { createdAt: "desc" },
@@ -1348,6 +1378,35 @@ export const updateRefundStatus = async (refundId: string, status: "PROCESSING" 
 
     return updated;
   });
+};
+
+//get route handoff bundle for a field admin's assigned route.
+export const getFieldAdminRouteHandoff = async (fieldAdminId: string, routeId: string) => {
+  await ensureFieldAdminExists(fieldAdminId);
+  const route = await prisma.route.findFirst({
+    where: { id: routeId, fieldAdminId },
+    select: { batchId: true },
+  });
+  if (!route) {
+    throw new Error("Route not found for this field admin");
+  }
+  return getBatchHandoffBundle(route.batchId, { fieldAdminId });
+};
+
+//get handoff bundles for all active routes assigned to a field admin.
+export const getFieldAdminRouteHandoffs = async (fieldAdminId: string) => {
+  await ensureFieldAdminExists(fieldAdminId);
+  const routes = await prisma.route.findMany({
+    where: {
+      fieldAdminId,
+      status: { in: ["PLANNED", "ASSIGNED", "STARTED", "IN_PROGRESS"] },
+    },
+    select: { id: true, batchId: true },
+    orderBy: { scheduledStart: "desc" },
+  });
+  return Promise.all(
+    routes.map((route) => getBatchHandoffBundle(route.batchId, { fieldAdminId }))
+  );
 };
 
 //get the dashboard overview for a field admin.
