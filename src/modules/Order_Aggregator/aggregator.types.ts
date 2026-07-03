@@ -10,6 +10,8 @@ export interface AggregationRunInput {
   maxWeightPerBatch?: number;
   maxVolumePerBatch?: number;
   autoAssignRoutes?: boolean;
+  autoAssignFleet?: boolean;
+  autoAssignDriver?: boolean;
   dryRun?: boolean;
 }
 
@@ -76,6 +78,8 @@ export interface AggregationSummary {
     maxWeightPerBatch: number;
     maxVolumePerBatch: number;
     autoAssignRoutes: boolean;
+    autoAssignFleet: boolean;
+    autoAssignDriver: boolean;
   };
   totalCandidatesFetched: number;
   totalEligible: number;

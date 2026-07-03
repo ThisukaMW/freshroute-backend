@@ -7,6 +7,8 @@ import {
   getAllOrders,
   listBatches,
   getBatchById,
+  listFleetOptions,
+  assignRouteFleet,
 } from "./admin.service.js";
 import { approveUser, rejectUser, getPendingUsers } from "../auth/auth.service.js";
 import { sendApprovalEmail, sendRejectionEmail } from "../../utils/mailer.js";
@@ -15,6 +17,7 @@ import {
   getAdminRefundQueue,
   updateRefundStatus,
 } from "../field_admin/fieldadmin.service.js";
+import { getBatchRoutingHandoffBundle } from "../Order_Aggregator/aggregator.service.js";
 
 export const listAllOrders: RequestHandler = async (req, res) => {
   try {
@@ -59,6 +62,53 @@ export const getBatchDetailController: RequestHandler<{ batchId: string }> = asy
     console.error("[getBatchDetailController] error:", error);
     const message = error instanceof Error ? error.message : "Error";
     const status = message.includes("not found") ? 404 : 500;
+    res.status(status).json({ message });
+  }
+};
+
+export const getBatchRoutingHandoffController: RequestHandler<{ batchId: string }> = async (req, res) => {
+  try {
+    const batchId = Array.isArray(req.params.batchId) ? req.params.batchId[0] : req.params.batchId;
+    if (!batchId) {
+      res.status(400).json({ message: "Batch id is required" });
+      return;
+    }
+    const data = await getBatchRoutingHandoffBundle(batchId);
+    res.json(data);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Error";
+    const status = message.includes("not found") ? 404 : 400;
+    res.status(status).json({ message });
+  }
+};
+
+export const listFleetOptionsController: RequestHandler = async (_req, res) => {
+  try {
+    const data = await listFleetOptions();
+    res.json(data);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Error";
+    res.status(500).json({ message });
+  }
+};
+
+export const assignRouteFleetController: RequestHandler<{ routeId: string }> = async (req, res) => {
+  try {
+    const routeId = Array.isArray(req.params.routeId) ? req.params.routeId[0] : req.params.routeId;
+    if (!routeId) {
+      res.status(400).json({ message: "Route id is required" });
+      return;
+    }
+    const { truckId, fieldAdminId } = req.body as { truckId?: string; fieldAdminId?: string };
+    if (!truckId?.trim() || !fieldAdminId?.trim()) {
+      res.status(400).json({ message: "truckId and fieldAdminId are required" });
+      return;
+    }
+    const data = await assignRouteFleet(routeId, { truckId, fieldAdminId });
+    res.json(data);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Error";
+    const status = message.includes("not found") ? 404 : 400;
     res.status(status).json({ message });
   }
 };

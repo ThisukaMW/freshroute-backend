@@ -5,6 +5,9 @@ import {
   loginAdmin,
   listBatchesController,
   getBatchDetailController,
+  getBatchRoutingHandoffController,
+  listFleetOptionsController,
+  assignRouteFleetController,
   listRefundsController,
   getRefundDetailController,
   updateRefundController,
@@ -38,6 +41,11 @@ router.get("/orders", listAllOrders);
 // Batch visibility for main admin
 router.get("/batches", listBatchesController);
 router.get("/batches/:batchId", getBatchDetailController);
+router.get("/batches/:batchId/routing-handoff", getBatchRoutingHandoffController);
+
+// Fleet assignment (truck + field admin only — driver is assigned by routing/dispatch team)
+router.get("/fleet-options", listFleetOptionsController);
+router.patch("/routes/:routeId/fleet", assignRouteFleetController);
 
 // Refund processing queue (company owner / ADMIN only)
 router.get("/refunds", authorize("ADMIN"), listRefundsController);

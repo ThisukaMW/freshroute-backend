@@ -1,4 +1,5 @@
 import prisma from "../../config/database.js";
+import { canTruckCarrySlice } from "../Order_Aggregator/aggregator.rules.js";
 
 // Get all orders, newest first, including buyer name, product details, and payment info
 export const getAllOrders = async (filters?: { since?: string; until?: string }) => {
@@ -214,4 +215,124 @@ export const getBatchById = async (batchId: string) => {
       })),
     })),
   };
+};
+
+export const listFleetOptions = async () => {
+  const [trucks, fieldAdmins] = await Promise.all([
+    prisma.truck.findMany({
+      where: { isActive: true },
+      select: {
+        id: true,
+        vehicleNumber: true,
+        operator: true,
+        isAvailable: true,
+        maxWeight: true,
+        maxVolume: true,
+        maxStops: true,
+      },
+      orderBy: { vehicleNumber: "asc" },
+    }),
+    prisma.fieldAdmin.findMany({
+      where: { isActive: true },
+      include: { user: { select: { id: true, name: true, email: true } } },
+      orderBy: { createdAt: "asc" },
+    }),
+  ]);
+  return {
+    trucks,
+    fieldAdmins: fieldAdmins.map((fa) => ({
+      id: fa.id,
+      name: fa.user.name,
+      email: fa.user.email,
+    })),
+  };
+};
+
+export const assignRouteFleet = async (
+  routeId: string,
+  input: { truckId: string; fieldAdminId: string }
+) => {
+  return prisma.$transaction(async (tx) => {
+    const route = await tx.route.findUnique({
+      where: { id: routeId },
+      include: {
+        batch: {
+          include: {
+            orders: {
+              select: { id: true, status: true, totalWeight: true, totalVolume: true },
+            },
+          },
+        },
+        stops: { select: { id: true } },
+      },
+    });
+    if (!route) throw new Error("Route not found");
+
+    const [truck, fieldAdmin] = await Promise.all([
+      tx.truck.findUnique({ where: { id: input.truckId } }),
+      tx.fieldAdmin.findUnique({
+        where: { id: input.fieldAdminId },
+        include: { user: { select: { name: true, email: true } } },
+      }),
+    ]);
+
+    if (!truck || !truck.isActive) throw new Error("Truck not found or inactive");
+    if (!truck.isAvailable) throw new Error("Truck is not available");
+    if (!fieldAdmin || !fieldAdmin.isActive) throw new Error("Field admin not found or inactive");
+
+    const totalWeight = route.batch.orders.reduce((sum, o) => sum + (o.totalWeight ?? 0), 0);
+    const totalVolume = route.batch.orders.reduce((sum, o) => sum + (o.totalVolume ?? 0), 0);
+    const routeStopCount = route.stops.length;
+
+    if (
+      !canTruckCarrySlice(truck, {
+        storageType: route.batch.storageType,
+        totalWeight,
+        totalVolume,
+        orderCount: route.batch.orders.length,
+        routeStopCount,
+      })
+    ) {
+      throw new Error("Selected truck cannot carry this batch");
+    }
+
+    const updatedRoute = await tx.route.update({
+      where: { id: routeId },
+      data: {
+        truckId: input.truckId,
+        fieldAdminId: input.fieldAdminId,
+        status: "ASSIGNED",
+      },
+      include: {
+        fieldAdmin: { include: { user: { select: { name: true, email: true } } } },
+        truck: { select: { id: true, vehicleNumber: true, vehicleType: true } },
+        driver: { include: { user: { select: { name: true } } } },
+      },
+    });
+
+    await tx.order.updateMany({
+      where: { batchId: route.batchId, status: { in: ["BATCHED", "ASSIGNED"] } },
+      data: { status: "ASSIGNED" },
+    });
+
+    const activeOrders = await tx.order.findMany({
+      where: {
+        status: { in: ["BATCHED", "ASSIGNED", "IN_TRANSIT"] },
+        batch: { routes: { some: { truckId: input.truckId } } },
+      },
+      select: { totalWeight: true, totalVolume: true },
+    });
+    const currentLoadWeight = activeOrders.reduce((sum, o) => sum + (o.totalWeight ?? 0), 0);
+    const currentLoadVolume = activeOrders.reduce((sum, o) => sum + (o.totalVolume ?? 0), 0);
+    await tx.truck.update({
+      where: { id: input.truckId },
+      data: {
+        currentLoadWeight,
+        currentLoadVolume,
+        currentLoadStops: activeOrders.length,
+      },
+    });
+
+    return updatedRoute;
+  });
 };

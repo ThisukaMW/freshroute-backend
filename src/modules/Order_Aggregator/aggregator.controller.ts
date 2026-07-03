@@ -8,6 +8,7 @@ import {
   getAggregationRunById,
   getAggregationRuns,
   getBatchHandoffBundle,
+  getBatchRoutingHandoffBundle,
   getRouteStartHandoffBundle,
   runOrderAggregation,
 } from "./aggregator.service.js";
@@ -142,6 +143,22 @@ export const getBatchHandoff = async (req: AuthRequest, res: Response) => {
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Failed to fetch batch handoff bundle";
     const status = message.includes("not assigned") ? 403 : message.includes("not found") ? 404 : 400;
+    res.status(status).json({ message });
+  }
+};
+
+export const getBatchRoutingHandoff = async (req: AuthRequest, res: Response) => {
+  try {
+    const batchId = Array.isArray(req.params.batchId) ? req.params.batchId[0] : req.params.batchId;
+    if (!batchId) {
+      res.status(400).json({ message: "batchId is required" });
+      return;
+    }
+    const data = await getBatchRoutingHandoffBundle(batchId);
+    res.json(data);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Failed to fetch routing handoff bundle";
+    const status = message.includes("not found") ? 404 : 400;
     res.status(status).json({ message });
   }
 };
