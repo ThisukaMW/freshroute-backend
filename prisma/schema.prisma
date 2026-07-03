@@ -768,7 +768,6 @@ model StockHistory {
   @@index([type])
   @@index([orderId])
 }
-<<<<<<< HEAD
 
 model Address {
   id        String   @id @default(uuid())
@@ -787,5 +786,3 @@ model Address {
 
   @@index([userId])
 }
-=======
->>>>>>> 8a335c5bf5283fdeff6117b697fc67bec642f6e3
