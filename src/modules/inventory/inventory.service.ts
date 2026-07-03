@@ -318,20 +318,26 @@ async function createLowStockNotification(sellerId: string, productId: string, c
     include: { user: true },
   });
   if (!seller) return;
+  try {
+    const product = await prisma.product.findUnique({
+      where: { id: productId },
+      select: { name: true, unit: true, lowStock: true },
+    });
 
-  const product = await prisma.product.findUnique({ where: { id: productId } });
+    if (!product) return;
 
-  await prisma.notification.create({
-    data: {
-      userId: seller.userId,
-      title: "⚠️ Low Stock Alert",
-      body: `${product?.name} is running low (${currentStock}/${product?.lowStock} remaining)`,
-      data: {
-        type: "LOW_STOCK",
-        productId,
-        currentStock,
-        lowStockThreshold: product?.lowStock,
-      },
-    },
-  });
+    await notifySellerLowStock(
+      seller.userId,
+      product.name,
+      currentStock,
+      product.unit,
+      product.lowStock
+    );
+  } catch (err) {
+    console.error("[createLowStockNotification] failed:", err);
+  }
+}
+
+function notifySellerLowStock(userId: string, name: string, currentStock: number, unit: string, lowStock: number) {
+  throw new Error("Function not implemented.");
 }

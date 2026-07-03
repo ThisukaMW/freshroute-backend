@@ -9,7 +9,6 @@ export const getBuyerIdFromUserId = async (userId: string) => {
     throw new Error("userId is required");
   }
 
-  // First, verify the user exists
   const user = await prisma.user.findUnique({
     where: { id: userId },
   });
@@ -18,10 +17,9 @@ export const getBuyerIdFromUserId = async (userId: string) => {
     throw new Error(`User not found with id: ${userId}`);
   }
 
-  // Use upsert to safely create or get buyer
   const buyer = await prisma.buyer.upsert({
     where: { userId },
-    update: {}, // No updates needed
+    update: {},
     create: {
       userId,
       deliveryAddress: "",
@@ -50,7 +48,6 @@ export const getOrCreateCart = async (buyerId: string) => {
 
 // Reset stale CONFIRMED reservations from failed payment attempts
 export const resetStaleConfirmedReservations = async (buyerId: string) => {
-  // Find all PENDING orders for this buyer
   const pendingOrders = await prisma.order.findMany({
     where: {
       buyerId,
@@ -60,14 +57,12 @@ export const resetStaleConfirmedReservations = async (buyerId: string) => {
 
   if (pendingOrders.length === 0) return;
 
-  // Get payments for all these orders
   const payments = await prisma.payment.findMany({
     where: {
       orderId: { in: pendingOrders.map((o) => o.id) },
     },
   });
 
-  // Find order IDs with no COMPLETED payments
   const completedOrderIds = new Set(
     payments
       .filter((p: any) => p.status === "COMPLETED")
@@ -80,7 +75,6 @@ export const resetStaleConfirmedReservations = async (buyerId: string) => {
 
   if (staleOrderIds.length === 0) return;
 
-  // Reset those reservations back to ACTIVE
   const reset = await prisma.stockReservation.updateMany({
     where: {
       buyerId,
@@ -104,8 +98,8 @@ export const resetStaleConfirmedReservations = async (buyerId: string) => {
 
 /**
  * Add Item to Cart with Stock Validation (SOFT RESERVATION)
- * ✅ INCLUDES: sellerId validation, stock checking, conflict resolution
- * ✅ SOFT RESERVE: Creates StockReservation, NO actual stock deduction
+ * ✅ Returns sellerProduct.price (not Product.price) — no schema change needed
+ * ✅ FIXED: no longer double-counts existing cart quantity against stock
  */
 export const addItemToCart = async (
   userId: string,
@@ -128,7 +122,7 @@ export const addItemToCart = async (
   }
   console.log(`✅ [CART] Validation passed - All required fields present`);
 
-  // VALIDATION 2: Check seller's product stock
+  // Get seller's product listing (source of truth for price + stock)
   const sellerProduct = await prisma.sellerProduct.findUnique({
     where: {
       productId_sellerId: {
@@ -144,21 +138,6 @@ export const addItemToCart = async (
     );
     throw new Error("This seller does not offer this product");
   }
-
-  if (sellerProduct.stock < quantity) {
-    console.error(
-      `❌ [CART] Insufficient stock - Available: ${sellerProduct.stock}, Requested: ${quantity}`,
-    );
-    throw new Error(
-      `Insufficient stock. Available: ${sellerProduct.stock}, Requested: ${quantity}`,
-    );
-  }
-  console.log(
-    `✅ [CART] Stock check passed - Available: ${sellerProduct.stock}`,
-  );
-
-  // Get buyer and cart
-  32;
 
   const buyerId = await getBuyerIdFromUserId(userId);
   const cart = await getOrCreateCart(buyerId);
@@ -189,26 +168,18 @@ export const addItemToCart = async (
     console.log(
       `📝 [CART] Updating existing item - Current quantity: ${existingItem.quantity}, Adding: ${quantity}`,
     );
-    // ✅ FIX 1: + not - (accumulate quantity)
     const newTotalQuantity = existingItem.quantity + quantity;
 
-    // ✅ FIX 2: CHECK 1 — remaining stock must cover new addition
-    if (sellerProduct.stock < quantity) {
+    // ✅ FIXED: sellerProduct.stock is NEVER decremented on add-to-cart
+    // (stock is only soft-reserved via StockReservation), so it already
+    // represents the true total available stock. No need to add back
+    // existingItem.quantity — that was double-counting and allowed overselling.
+    if (newTotalQuantity > sellerProduct.stock) {
+      const canAddMore = Math.max(0, sellerProduct.stock - existingItem.quantity);
       throw new Error(
-        `Cannot add ${quantity}kg. ` +
-          `You already have ${existingItem.quantity}kg in cart. ` +
-          `Seller only has ${sellerProduct.stock}kg remaining stock.`,
-      );
-    }
-
-    // ✅ FIX 3: CHECK 2 — total must not exceed original stock
-    const originalStock = sellerProduct.stock + existingItem.quantity;
-    if (newTotalQuantity > originalStock) {
-      throw new Error(
-        `Total quantity ${newTotalQuantity}kg exceeds seller's ` +
-          `total available stock of ${originalStock}kg. ` +
-          `You have ${existingItem.quantity}kg in cart, ` +
-          `seller has ${sellerProduct.stock}kg remaining.`,
+        `Cannot add ${quantity}. You already have ${existingItem.quantity} in cart. ` +
+          `Seller only has ${sellerProduct.stock} total available, ` +
+          `so you can add at most ${canAddMore} more.`,
       );
     }
 
@@ -221,7 +192,16 @@ export const addItemToCart = async (
       `✅ [CART] Item updated - New quantity: ${cartItem.quantity}, cartItemId: ${cartItem.id}`,
     );
   } else {
-    // New item — no existing cart entry, just create it
+    // New item — validate against full stock
+    if (sellerProduct.stock < quantity) {
+      console.error(
+        `❌ [CART] Insufficient stock - Available: ${sellerProduct.stock}, Requested: ${quantity}`,
+      );
+      throw new Error(
+        `Insufficient stock. Available: ${sellerProduct.stock}, Requested: ${quantity}`,
+      );
+    }
+
     console.log(
       `➕ [CART] Creating NEW CartItem - cartId: ${cart.id}, productId: ${productId}, sellerId: ${sellerId}, quantity: ${quantity}`,
     );
@@ -242,16 +222,15 @@ export const addItemToCart = async (
   // ✅ SOFT RESERVATION: Create StockReservation (NO stock deduction)
   const expiresAt = new Date(Date.now() + 20 * 60 * 1000); // 20 minutes
   console.log(
-    `📦 [CART] Creating/updating StockReservation - cartItemId: ${cartItem.id}, quantity: ${quantity}`,
+    `📦 [CART] Creating/updating StockReservation - cartItemId: ${cartItem.id}, quantity: ${cartItem.quantity}`,
   );
 
-  // Update or create reservation
   const reservation = await prisma.stockReservation.upsert({
     where: {
       cartItemId: cartItem.id,
     },
     update: {
-      quantity,
+      quantity: cartItem.quantity, // ✅ keep reservation synced with true cart quantity
       expiresAt,
       status: "ACTIVE",
     },
@@ -259,7 +238,7 @@ export const addItemToCart = async (
       productId,
       sellerId,
       buyerId,
-      quantity,
+      quantity: cartItem.quantity,
       cartItemId: cartItem.id,
       expiresAt,
       status: "ACTIVE",
@@ -287,13 +266,12 @@ export const addItemToCart = async (
       sellerId: cartItem.sellerId,
       name: cartItem.product.name,
       category: cartItem.product.category,
-      price: cartItem.product.price,
+      price: sellerProduct.price, // ✅ seller's price, not base Product.price
       unit: cartItem.product.unit,
       quantity: cartItem.quantity,
       imageUrl: cartItem.product.imageUrl,
       vendor: cartItem.seller?.businessName || "Unknown Seller",
     },
-    // ✅ Return actual available stock (NOT reduced yet - soft reserved only)
     sellerStock: sellerProduct.stock,
     reservation: {
       id: reservation.id,
@@ -302,16 +280,16 @@ export const addItemToCart = async (
     },
   };
 };
+
 /**
  * Get Cart with Calculated Totals
- * ✅ INCLUDES: subtotal, tax, discount, formatting
+ * ✅ Resolves each item's price from SellerProduct (fresh lookup), not Product.price
  */
 export const getCartWithTotals = async (userId: string) => {
   console.log(`\n🔵 [GET CART] getCartWithTotals START - userId: ${userId}`);
   const buyerId = await getBuyerIdFromUserId(userId);
   console.log(`✅ [GET CART] buyerId resolved: ${buyerId}`);
 
-  // Reset stale CONFIRMED reservations from failed payment attempts
   await resetStaleConfirmedReservations(buyerId);
 
   const cart = await prisma.cart.findUnique({
@@ -340,31 +318,12 @@ export const getCartWithTotals = async (userId: string) => {
 
   console.log(`✅ [GET CART] Cart found with ${cart.items.length} total items`);
 
-  // Filter active items
   const activeItems = cart.items.filter((item: any) => !item.savedForLater);
   console.log(
     `✅ [GET CART] After filtering: ${activeItems.length} active items`,
   );
 
-  // Calculate subtotal
-  let subtotal = 0;
-  activeItems.forEach((item: any) => {
-    subtotal += item.quantity * item.product.price;
-  });
-
-  // Calculate tax (10%)
-  const tax = subtotal * 0.1;
-
-  // Calculate discount from promo
-  let discount = 0;
-  if (cart.promoCode) {
-    discount = subtotal * (cart.promoCode.discount / 100);
-  }
-
-  // Calculate total
-  const total = subtotal + tax - discount;
-
-  // Format response
+  // ✅ Resolve seller price + stock together (one lookup per item, reused for both)
   const itemsWithAvailability = await Promise.all(
     activeItems.map(async (item: any) => {
       const sellerProduct = await prisma.sellerProduct.findUnique({
@@ -377,6 +336,8 @@ export const getCartWithTotals = async (userId: string) => {
       });
 
       const sellerStock = sellerProduct?.stock ?? 0;
+      // fallback to base product price only if the seller listing was deleted
+      const sellerPrice = sellerProduct?.price ?? item.product.price;
       const availableStock = Math.max(0, sellerStock - item.quantity);
 
       return {
@@ -385,7 +346,7 @@ export const getCartWithTotals = async (userId: string) => {
         sellerId: item.sellerId || item.product.sellerId,
         name: item.product.name,
         category: item.product.category,
-        price: item.product.price,
+        price: sellerPrice, // ✅ seller's price
         unit: item.product.unit,
         quantity: item.quantity,
         imageUrl: item.product.imageUrl,
@@ -395,6 +356,21 @@ export const getCartWithTotals = async (userId: string) => {
       };
     }),
   );
+
+  // ✅ Calculate totals AFTER resolving seller prices above
+  let subtotal = 0;
+  itemsWithAvailability.forEach((item) => {
+    subtotal += item.quantity * item.price;
+  });
+
+  const tax = subtotal * 0.1;
+
+  let discount = 0;
+  if (cart.promoCode) {
+    discount = subtotal * (cart.promoCode.discount / 100);
+  }
+
+  const total = subtotal + tax - discount;
 
   const formattedResponse = {
     id: cart.id,
@@ -411,7 +387,7 @@ export const getCartWithTotals = async (userId: string) => {
   );
   formattedResponse.items.forEach((item: any, idx: number) => {
     console.log(
-      `   Item #${idx + 1}: ${item.id} | product: ${item.productId} | seller: ${item.sellerId} | qty: ${item.quantity}`,
+      `   Item #${idx + 1}: ${item.id} | product: ${item.productId} | seller: ${item.sellerId} | qty: ${item.quantity} | price: ${item.price}`,
     );
   });
   console.log(
@@ -424,8 +400,6 @@ export const getCartWithTotals = async (userId: string) => {
 /*
  * Remove Item from Cart
  * PROPERLY DELETES: CartItem + cascades to StockReservation
- * UPDATED: Now accepts sellerId for multi-seller support
- * VERIFIED: Checks item was actually deleted
  */
 export const removeItemFromCart = async (
   userId: string,
@@ -442,11 +416,9 @@ export const removeItemFromCart = async (
     throw new Error("Cart not found");
   }
 
-  // Find the cart item to remove
   let cartItem;
 
   if (sellerId) {
-    // Get the specific cart item with this seller
     cartItem = await prisma.cartItem.findUnique({
       where: {
         cartId_productId_sellerId: {
@@ -457,7 +429,6 @@ export const removeItemFromCart = async (
       },
     });
   } else {
-    // Fallback: find any cart item with this productId
     cartItem = await prisma.cartItem.findFirst({
       where: {
         cartId: cart.id,
@@ -471,14 +442,12 @@ export const removeItemFromCart = async (
     throw new Error("Item not found in cart");
   }
 
-  // Delete the CartItem (this will cascade-delete StockReservation due to schema)
   console.log(`🔄 [REMOVE ITEM] Deleting CartItem...`);
   const deletedItem = await prisma.cartItem.delete({
     where: { id: cartItem.id },
   });
   console.log(`✅ [REMOVE ITEM] CartItem deleted: ${deletedItem.id}`);
 
-  // Verify it's gone
   console.log(`🔍 [REMOVE ITEM] Verifying deletion...`);
   const verifyExists = await prisma.cartItem
     .findUnique({
@@ -492,7 +461,6 @@ export const removeItemFromCart = async (
   }
   console.log(`✅ [REMOVE ITEM] Verification passed - Item confirmed deleted`);
 
-  // Also verify StockReservation was cascade-deleted
   const orphanedReservation = await prisma.stockReservation
     .findFirst({
       where: { cartItemId: cartItem.id },
@@ -503,7 +471,6 @@ export const removeItemFromCart = async (
     console.warn(
       `⚠️ [REMOVE ITEM] WARNING: StockReservation still exists after CartItem deletion`,
     );
-    // Clean it up manually
     await prisma.stockReservation.delete({
       where: { id: orphanedReservation.id },
     });
@@ -517,9 +484,7 @@ export const removeItemFromCart = async (
 
 /**
  * Update Item Quantity
- * ✅ RESTORES/HOLDS stock when quantity changes
- * ✅ UPDATED: Now accepts sellerId for multi-seller support
- * ✅ NEW: Validates against seller's available stock
+ * ✅ Returns seller price (already fetched for stock check, reused for price)
  */
 export const updateItemQuantity = async (
   userId: string,
@@ -538,7 +503,6 @@ export const updateItemQuantity = async (
 
   if (!cart) throw new Error("Cart not found");
 
-  // Get current cart item
   let cartItem;
 
   if (sellerId) {
@@ -562,9 +526,10 @@ export const updateItemQuantity = async (
 
   if (!cartItem) throw new Error("Item not found in cart");
 
-  // ✅ NEW: Validate quantity doesn't exceed seller's available stock
+  let sellerProduct: { price: number; stock: number } | null = null;
+
   if (cartItem.sellerId) {
-    const sellerProduct = await prisma.sellerProduct.findUnique({
+    sellerProduct = await prisma.sellerProduct.findUnique({
       where: {
         productId_sellerId: {
           productId: cartItem.productId,
@@ -575,18 +540,14 @@ export const updateItemQuantity = async (
 
     if (!sellerProduct) throw new Error("Product not found for this seller");
 
-    // Calculate original stock (current available + already reserved in cart)
-    const originalStock = sellerProduct.stock + cartItem.quantity;
-
-    if (quantity > originalStock) {
+    // ✅ sellerProduct.stock is already the true total (soft reservation model)
+    if (quantity > sellerProduct.stock) {
       throw new Error(
         `❌ Cannot increase to ${quantity}. ` +
-          `Seller only has ${originalStock} total available. ` +
-          `Current reserved: ${cartItem.quantity}, available to add: ${sellerProduct.stock}`,
+          `Seller only has ${sellerProduct.stock} total available.`,
       );
     }
 
-    // ✅ UPDATE RESERVATION instead of adjusting stock
     try {
       await prisma.stockReservation.updateMany({
         where: { cartItemId: cartItem.id },
@@ -600,7 +561,6 @@ export const updateItemQuantity = async (
     }
   }
 
-  // Update the quantity
   const updatedItem = await prisma.cartItem.update({
     where: { id: cartItem.id },
     data: { quantity },
@@ -613,7 +573,7 @@ export const updateItemQuantity = async (
     sellerId: updatedItem.sellerId,
     name: updatedItem.product.name,
     category: updatedItem.product.category,
-    price: updatedItem.product.price,
+    price: sellerProduct?.price ?? updatedItem.product.price, // ✅ seller price
     unit: updatedItem.product.unit,
     quantity: updatedItem.quantity,
     imageUrl: updatedItem.product.imageUrl,
@@ -653,6 +613,7 @@ export const applyPromoCode = async (userId: string, code: string) => {
 
 /**
  * Calculate Cart Total (without items)
+ * ✅ Resolves seller price per item instead of using Product.price
  */
 export const calculateCartTotal = async (userId: string) => {
   const buyerId = await getBuyerIdFromUserId(userId);
@@ -671,9 +632,18 @@ export const calculateCartTotal = async (userId: string) => {
   if (!cart) throw new Error("Cart not found");
 
   let subtotal = 0;
-  cart.items.forEach((item: any) => {
-    subtotal += item.quantity * item.product.price;
-  });
+  for (const item of cart.items) {
+    const sellerProduct = await prisma.sellerProduct.findUnique({
+      where: {
+        productId_sellerId: {
+          productId: item.productId,
+          sellerId: item.sellerId,
+        },
+      },
+    });
+    const price = sellerProduct?.price ?? item.product.price;
+    subtotal += item.quantity * price;
+  }
 
   const tax = subtotal * 0.1;
   let discount = 0;
@@ -694,7 +664,6 @@ export const calculateCartTotal = async (userId: string) => {
 
 /**
  * Save Item for Later
- * ✅ UPDATED: Now requires sellerId for composite key lookup
  */
 export const saveItemForLater = async (
   userId: string,
@@ -734,7 +703,6 @@ export const clearCart = async (userId: string) => {
   const buyerId = await getBuyerIdFromUserId(userId);
   console.log(`✅ [CLEAR CART] buyerId resolved: ${buyerId}`);
 
-  // STEP 1: Get all cart items BEFORE deleting
   const cart = await prisma.cart.findUnique({
     where: { buyerId },
     include: {
@@ -761,11 +729,10 @@ export const clearCart = async (userId: string) => {
 
   cart.items.forEach((item, idx) => {
     console.log(
-      `   Item #${idx + 1}: ${item.id} | product: ${item.productId} | seller: ${item.productId}`,
+      `   Item #${idx + 1}: ${item.id} | product: ${item.productId} | seller: ${item.sellerId}`,
     );
   });
 
-  // STEP 2: Delete all StockReservations for these items
   console.log(`🔄 [CLEAR CART] Deleting StockReservations...`);
   const deletedReservations = await prisma.stockReservation.deleteMany({
     where: {
@@ -778,7 +745,6 @@ export const clearCart = async (userId: string) => {
     `✅ [CLEAR CART] Deleted ${deletedReservations.count} StockReservations`,
   );
 
-  // STEP 3: Delete all CartItems
   console.log(`🔄 [CLEAR CART] Deleting CartItems...`);
   const deletedItems = await prisma.cartItem.deleteMany({
     where: {
@@ -787,7 +753,6 @@ export const clearCart = async (userId: string) => {
   });
   console.log(`✅ [CLEAR CART] Deleted ${deletedItems.count} CartItems`);
 
-  // STEP 4: Verify cart is empty
   const verifyCart = await prisma.cart.findUnique({
     where: { buyerId },
     include: {
@@ -819,10 +784,3 @@ export const clearCart = async (userId: string) => {
     reservationsCleared: deletedReservations.count,
   };
 };
-
-//     tax,
-//     discount,
-//     total
-//   };
-
-// };

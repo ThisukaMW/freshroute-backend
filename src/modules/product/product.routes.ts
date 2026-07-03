@@ -53,5 +53,14 @@ router.patch("/:productId", protect, upload.array("images"), editProductControll
 
 // Protected GET routes
 router.get("/pending", protect, getPendingProductsController);
+router.get("/approved", getApprovedProductsController);
+router.get("/", getAllProductsController);
+
+// ── Parameterised routes after ──
+router.post("/add", protect, upload.array("images"), addProduct);
+router.get("/:productId/sellers", getSellersByProductNameController);
+router.get("/:productId", getProductByIdController);
+router.patch("/:productId/status", protect, updateProductStatusController);
+router.patch("/:productId", protect, editProductController); 
 
 export default router;

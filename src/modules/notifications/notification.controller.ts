@@ -79,8 +79,9 @@ export const saveFcmTokenController = async (req: AuthRequest, res: Response) =>
 
     await saveFcmToken(userId, fcmToken);
     res.json({ message: "FCM token saved" });
-  } catch (err) {
-    res.status(500).json({ message: "Failed to save FCM token" });
+  } catch (err: any) {
+    console.error("[FCM Token Error] userId:", req.userId, "error:", err?.message || err);
+    res.status(500).json({ message: "Failed to save FCM token", error: err?.message });
   }
 };
 

@@ -33,7 +33,7 @@ export const loginUser = async (email: string, password: string) => {
   }
 
   // Block if account is pending admin approval
-  if (user.status === "INACTIVE") {
+  if (user.status === "INACTIVE" && user.role !== "BUYER") {
     const err: any = new Error(
       "Your account is pending admin approval. You'll be notified once approved.",
     );
@@ -160,7 +160,7 @@ export const createCustomer = async (data: {
       phone: data.phone || null,
       city: data.city ?? undefined,
       address: data.address ?? undefined,
-      status: "INACTIVE", // must wait for admin approval
+      status: "ACTIVE", 
     },
   });
 
