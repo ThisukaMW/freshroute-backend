@@ -61,3 +61,40 @@ export const routeNumber = () =>
   `RT-${new Date().toISOString().replace(/[-:TZ.]/g, "").slice(0, 14)}-${Math.floor(
     Math.random() * 900 + 100
   )}`;
+
+/** Greedy nearest-neighbor sequencing from a hub to delivery stops. */
+export const sequenceOrdersNearestNeighbor = (
+  hubLat: number,
+  hubLng: number,
+  orders: CandidateOrder[]
+): CandidateOrder[] => {
+  const remaining = [...orders];
+  const sequenced: CandidateOrder[] = [];
+  let currentLat = hubLat;
+  let currentLng = hubLng;
+
+  while (remaining.length > 0) {
+    let nearestIdx = 0;
+    let nearestDist = Number.POSITIVE_INFINITY;
+    for (let i = 0; i < remaining.length; i += 1) {
+      const order = remaining[i]!;
+      const dist = haversineDistanceKm(
+        currentLat,
+        currentLng,
+        order.deliveryLat,
+        order.deliveryLng
+      );
+      if (dist < nearestDist) {
+        nearestDist = dist;
+        nearestIdx = i;
+      }
+    }
+    const [next] = remaining.splice(nearestIdx, 1);
+    if (!next) break;
+    sequenced.push(next);
+    currentLat = next.deliveryLat;
+    currentLng = next.deliveryLng;
+  }
+
+  return sequenced;
+};

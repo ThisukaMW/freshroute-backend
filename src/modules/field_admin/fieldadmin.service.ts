@@ -1,8 +1,72 @@
 import prisma from "../../config/database.js";
+import { getBatchHandoffBundle } from "../Order_Aggregator/aggregator.service.js";
 import {
   inferInspectionResult,
+  isRefundWithinRemainingLimit,
+  isValidRefundAmount,
   normalizeApprovedQuantity,
 } from "./fieldadmin.rules.js";
+
+const refundDetailInclude = {
+  fieldAdmin: { include: { user: { select: { id: true, name: true, email: true } } } },
+  order: {
+    select: {
+      id: true,
+      orderNumber: true,
+      totalAmount: true,
+      status: true,
+      buyer: { include: { user: { select: { name: true, email: true } } } },
+      payment: {
+        select: {
+          gatewayPaymentId: true,
+          amount: true,
+          status: true,
+          currency: true,
+        },
+      },
+      batch: {
+        select: {
+          id: true,
+          routes: {
+            select: {
+              id: true,
+              routeNumber: true,
+              status: true,
+              fieldAdminId: true,
+            },
+          },
+        },
+      },
+    },
+  },
+  refundItems: {
+    include: {
+      orderItem: {
+        select: {
+          id: true,
+          quantity: true,
+          unitPrice: true,
+          sellerId: true,
+          product: { select: { id: true, name: true, unit: true } },
+        },
+      },
+      inspection: {
+        select: {
+          id: true,
+          result: true,
+          approvedQuantity: true,
+          rejectedQuantity: true,
+          notes: true,
+        },
+      },
+    },
+  },
+} as const;
+
+const VALID_REFUND_STATUS_TRANSITIONS: Record<string, string[]> = {
+  PENDING: ["PROCESSING", "FAILED"],
+  PROCESSING: ["COMPLETED", "FAILED"],
+};
 
 const ACTIVE_LOAD_STATUSES: Array<"BATCHED" | "ASSIGNED" | "IN_TRANSIT"> = ["BATCHED", "ASSIGNED", "IN_TRANSIT"];
 const ACTIVE_ROUTE_STATUSES: Array<"ASSIGNED" | "STARTED" | "IN_PROGRESS"> = ["ASSIGNED", "STARTED", "IN_PROGRESS"];
@@ -116,6 +180,17 @@ const orderSelect = {
           routeNumber: true,
           status: true,
           scheduledStart: true,
+          stops: {
+            select: {
+              id: true,
+              type: true,
+              sellerId: true,
+              status: true,
+              sequenceOrder: true,
+              itemsSummary: true,
+            },
+            orderBy: { sequenceOrder: "asc" as const },
+          },
           driver: {
             select: {
               id: true,
@@ -136,7 +211,13 @@ const orderSelect = {
     select: {
       id: true,
       quantity: true,
+      sellerId: true,
       product: { select: { id: true, name: true, unit: true } },
+      inspections: {
+        orderBy: { createdAt: "desc" as const },
+        take: 1,
+        select: { result: true },
+      },
     },
   },
   buyer: { include: { user: { select: { name: true, email: true } } } },
@@ -162,16 +243,59 @@ const toFieldAdminOrderContract = (
         routeNumber: string;
         status: string;
         scheduledStart: Date;
+        stops: Array<{
+          id: string;
+          type: string;
+          sellerId: string | null;
+          status: string;
+          itemsSummary: unknown;
+        }>;
         driver: { id: string; user: { name: string } } | null;
         truck: { id: string; vehicleNumber: string | null } | null;
       }>;
     } | null;
-    items: Array<{ id: string; quantity: number; product: { id: string; name: string; unit: string } }>;
+    items: Array<{
+      id: string;
+      quantity: number;
+      sellerId: string;
+      product: { id: string; name: string; unit: string };
+      inspections: Array<{ result: string }>;
+    }>;
     buyer: { user: { name: string; email: string } };
   }>
 ) =>
   orders.map((order) => {
     const route = order.batch?.routes[0] ?? null;
+    const routeStops = route?.stops ?? [];
+    const sellerPickups = routeStops.filter((stop) => stop.type === "PICKUP" && stop.sellerId);
+    const hubPickup = routeStops.find((stop) => stop.type === "PICKUP" && !stop.sellerId) ?? null;
+
+    const orderItemIds = new Set(order.items.map((item) => item.id));
+    const pickupStopIds = sellerPickups
+      .filter((stop) => {
+        const summary = (stop.itemsSummary as Array<{ orderItemId?: string; orderId?: string }> | null) ?? [];
+        return summary.some(
+          (entry) =>
+            (entry.orderItemId && orderItemIds.has(entry.orderItemId)) || entry.orderId === order.id
+        );
+      })
+      .map((stop) => stop.id);
+
+    const sellerPickupsForOrder = sellerPickups.filter((stop) => pickupStopIds.includes(stop.id));
+    const sellerPickupsComplete =
+      sellerPickupsForOrder.length > 0 &&
+      sellerPickupsForOrder.every((stop) => stop.status === "COMPLETED");
+    const hubComplete = hubPickup?.status === "COMPLETED";
+
+    let fulfillmentPhase: "AWAITING_SELLER_PICKUP" | "AWAITING_HUB" | "IN_TRANSIT" | "DELIVERED" = "AWAITING_SELLER_PICKUP";
+    if (order.status === "DELIVERED") {
+      fulfillmentPhase = "DELIVERED";
+    } else if (order.status === "IN_TRANSIT") {
+      fulfillmentPhase = "IN_TRANSIT";
+    } else if (sellerPickupsComplete && !hubComplete) {
+      fulfillmentPhase = "AWAITING_HUB";
+    }
+
     return {
       id: order.id,
       orderNumber: order.orderNumber,
@@ -188,8 +312,13 @@ const toFieldAdminOrderContract = (
         quantity: item.quantity,
         name: item.product.name,
         unit: item.product.unit,
+        sellerId: item.sellerId,
+        inspectionStatus: item.inspections[0]?.result ?? null,
       })),
+      pickupStopIds,
+      hubStopId: hubPickup?.id ?? null,
       deliveryStopId: order.deliveryStop?.id ?? null,
+      fulfillmentPhase,
       route: route
         ? {
             id: route.id,
@@ -384,10 +513,30 @@ export const createInspection = async (
     approvedQuantity?: number;
     result?: "APPROVED" | "REJECTED" | "PARTIAL";
     notes?: string;
+    rejectionReason?: string;
+    rejectionDetails?: string;
   }
 ) => {
   await ensureFieldAdminExists(fieldAdminId);
   const orderItem = await ensureOrderItemOwnedByFieldAdmin(fieldAdminId, payload.orderItemId);
+
+  if (!["ASSIGNED", "BATCHED"].includes(orderItem.order.status)) {
+    throw new Error("Inspections are only allowed during the pickup phase (ASSIGNED or BATCHED orders)");
+  }
+
+  const sellerPickupStop = await prisma.stop.findFirst({
+    where: {
+      route: { fieldAdminId, batch: { orders: { some: { id: orderItem.orderId } } } },
+      type: "PICKUP",
+      sellerId: orderItem.sellerId,
+      status: { not: "COMPLETED" },
+    },
+    select: { id: true },
+  });
+  if (!sellerPickupStop) {
+    throw new Error("No pending seller pickup stop found for this order item");
+  }
+
   const totalQuantity = orderItem.quantity;
   const approvedQuantity = normalizeApprovedQuantity(payload.approvedQuantity, totalQuantity);
   const result = payload.result ?? inferInspectionResult(approvedQuantity, totalQuantity);
@@ -406,6 +555,8 @@ export const createInspection = async (
       sellerId: orderItem.sellerId,
       unit: orderItem.product.unit,
       notes: payload.notes,
+      rejectionReason: payload.rejectionReason,
+      rejectionDetails: payload.rejectionDetails,
     },
   });
 };
@@ -430,8 +581,72 @@ export const getInspectionHistory = async (
   });
 };
 
-//mark the delivery of a stop as complete.
-export const markDeliveryComplete = async (
+//sync batch status based on route progress.
+const syncBatchStatus = async (
+  tx: Pick<typeof prisma, "batch" | "stop" | "route">,
+  batchId: string,
+  routeId: string
+) => {
+  const hubPickup = await tx.stop.findFirst({
+    where: { routeId, type: "PICKUP", sellerId: null },
+    select: { status: true },
+  });
+  const route = await tx.route.findUnique({
+    where: { id: routeId },
+    select: { status: true },
+  });
+
+  if (route?.status === "COMPLETED") {
+    await tx.batch.update({
+      where: { id: batchId },
+      data: { status: "COMPLETED", completedAt: new Date() },
+    });
+    return;
+  }
+
+  if (hubPickup?.status === "COMPLETED" || route?.status === "IN_PROGRESS") {
+    await tx.batch.update({
+      where: { id: batchId },
+      data: { status: "IN_PROGRESS" },
+    });
+    return;
+  }
+
+  const anySellerPickupStarted = await tx.stop.count({
+    where: { routeId, type: "PICKUP", sellerId: { not: null }, status: "COMPLETED" },
+  });
+  if (anySellerPickupStarted > 0) {
+    await tx.batch.update({
+      where: { id: batchId },
+      data: { status: "IN_PROGRESS" },
+    });
+  }
+};
+
+const getSellerStopOrderItemIds = (itemsSummary: unknown) => {
+  const summary = (itemsSummary as Array<{ orderItemId?: string }> | null) ?? [];
+  return summary.map((entry) => entry.orderItemId).filter(Boolean) as string[];
+};
+
+const ensureOrderItemsInspected = async (
+  tx: Pick<typeof prisma, "productInspection">,
+  orderItemIds: string[]
+) => {
+  if (orderItemIds.length === 0) return;
+  const inspections = await tx.productInspection.findMany({
+    where: { orderItemId: { in: orderItemIds } },
+    orderBy: { createdAt: "desc" },
+    distinct: ["orderItemId"],
+    select: { orderItemId: true, result: true },
+  });
+  const inspectedIds = new Set(inspections.map((row) => row.orderItemId).filter(Boolean));
+  if (orderItemIds.some((id) => !inspectedIds.has(id))) {
+    throw new Error("All order items at this seller stop must be inspected before pickup confirmation");
+  }
+};
+
+//mark a stop complete with pickup/delivery phase gates.
+export const markStopComplete = async (
   fieldAdminId: string,
   payload: { stopId: string; notes?: string }
 ) => {
@@ -452,38 +667,100 @@ export const markDeliveryComplete = async (
     throw new Error("Stop already completed");
   }
 
-  const updatedStop = await prisma.$transaction(async (tx) => {
-    // Route start handoff for execution happens here atomically with first completion action.
-    await tx.order.updateMany({
-      where: {
-        batchId: stop.route.batchId,
-        status: { in: ["ASSIGNED", "BATCHED"] },
-      },
-      data: { status: "IN_TRANSIT" },
-    });
+  if (stop.type === "PICKUP" && stop.sellerId) {
+    const orderItemIds = getSellerStopOrderItemIds(stop.itemsSummary);
+    await ensureOrderItemsInspected(prisma, orderItemIds);
+  }
 
-    if (stop.route.status === "ASSIGNED" || stop.route.status === "STARTED") {
-      await tx.route.update({
-        where: { id: stop.route.id },
-        data: { status: "IN_PROGRESS", actualStart: new Date() },
-      });
+  if (stop.type === "PICKUP" && !stop.sellerId) {
+    const incompleteSellerPickups = await prisma.stop.count({
+      where: {
+        routeId: stop.route.id,
+        type: "PICKUP",
+        sellerId: { not: null },
+        status: { not: "COMPLETED" },
+      },
+    });
+    if (incompleteSellerPickups > 0) {
+      throw new Error("All seller pickup stops must be completed before hub pickup");
     }
 
+    const batchOrderItems = await prisma.orderItem.findMany({
+      where: { order: { batchId: stop.route.batchId } },
+      select: { id: true },
+    });
+    await ensureOrderItemsInspected(
+      prisma,
+      batchOrderItems.map((item) => item.id)
+    );
+  }
+
+  if (stop.type === "DELIVERY") {
+    const hubPickup = await prisma.stop.findFirst({
+      where: { routeId: stop.route.id, type: "PICKUP", sellerId: null },
+      select: { status: true },
+    });
+    if (!hubPickup || hubPickup.status !== "COMPLETED") {
+      throw new Error("Hub pickup must be completed before delivery");
+    }
+
+    if (stop.order) {
+      const orderItems = await prisma.orderItem.findMany({
+        where: { orderId: stop.order.id },
+        select: { id: true, sellerId: true },
+      });
+      const sellerIds = Array.from(new Set(orderItems.map((item) => item.sellerId)));
+      const incompleteSellerStops = await prisma.stop.count({
+        where: {
+          routeId: stop.route.id,
+          type: "PICKUP",
+          sellerId: { in: sellerIds },
+          status: { not: "COMPLETED" },
+        },
+      });
+      if (incompleteSellerStops > 0) {
+        throw new Error("All seller pickups for this order must be completed before delivery");
+      }
+      await ensureOrderItemsInspected(
+        prisma,
+        orderItems.map((item) => item.id)
+      );
+    }
+  }
+
+  const updatedStop = await prisma.$transaction(async (tx) => {
     const completedStop = await tx.stop.update({
       where: { id: stop.id },
       data: { status: "COMPLETED", completedAt: new Date(), notes: payload.notes ?? stop.notes },
     });
 
-    if (stop.order) {
+    await tx.deliveryVerification.create({
+      data: { fieldAdminId, stopId: stop.id, type: stop.type, notes: payload.notes },
+    });
+
+    if (stop.type === "PICKUP" && !stop.sellerId) {
+      await tx.order.updateMany({
+        where: {
+          batchId: stop.route.batchId,
+          status: { in: ["ASSIGNED", "BATCHED"] },
+        },
+        data: { status: "IN_TRANSIT" },
+      });
+
+      if (stop.route.status === "ASSIGNED" || stop.route.status === "STARTED" || stop.route.status === "PLANNED") {
+        await tx.route.update({
+          where: { id: stop.route.id },
+          data: { status: "IN_PROGRESS", actualStart: new Date() },
+        });
+      }
+    }
+
+    if (stop.type === "DELIVERY" && stop.order) {
       await tx.order.update({
         where: { id: stop.order.id },
         data: { status: "DELIVERED", actualDelivery: new Date() },
       });
     }
-
-    await tx.deliveryVerification.create({
-      data: { fieldAdminId, stopId: stop.id, type: stop.type, notes: payload.notes },
-    });
 
     if (stop.route.truckId) {
       await recalculateTruckLiveLoad(tx, stop.route.truckId);
@@ -497,7 +774,7 @@ export const markDeliveryComplete = async (
       },
     });
 
-    if (remainingDeliveries === 0) {
+    if (remainingDeliveries === 0 && stop.type === "DELIVERY") {
       await tx.route.update({
         where: { id: stop.route.id },
         data: { status: "COMPLETED", actualEnd: new Date() },
@@ -514,11 +791,19 @@ export const markDeliveryComplete = async (
       }
     }
 
+    await syncBatchStatus(tx, stop.route.batchId, stop.route.id);
+
     return completedStop;
   });
 
   return updatedStop;
 };
+
+//backward-compatible alias for delivery/complete endpoint.
+export const markDeliveryComplete = async (
+  fieldAdminId: string,
+  payload: { stopId: string; notes?: string }
+) => markStopComplete(fieldAdminId, payload);
 
 //create an assessment for a target.
 export const createAssessment = async (
@@ -555,11 +840,31 @@ export const createAssessment = async (
 //create a damage report for a stop.
 export const createDamageReport = async (
   fieldAdminId: string,
-  payload: { description: string; stopId?: string; images?: unknown }
+  payload: {
+    description: string;
+    stopId?: string;
+    images?: unknown;
+    damageType?: string;
+    severity?: string;
+    affectedItems?: string;
+    orderItemId?: string;
+    inspectionId?: string;
+  }
 ) => {
   await ensureFieldAdminExists(fieldAdminId);
   if (payload.stopId) {
     await ensureStopOwnedByFieldAdmin(fieldAdminId, payload.stopId);
+  }
+  if (payload.orderItemId) {
+    await ensureOrderItemOwnedByFieldAdmin(fieldAdminId, payload.orderItemId);
+  }
+  if (payload.inspectionId) {
+    const inspection = await prisma.productInspection.findFirst({
+      where: { id: payload.inspectionId, fieldAdminId },
+    });
+    if (!inspection) {
+      throw new Error("Inspection not found for this field admin");
+    }
   }
   return prisma.damageReport.create({
     data: {
@@ -567,6 +872,11 @@ export const createDamageReport = async (
       description: payload.description,
       stopId: payload.stopId,
       images: payload.images as object | undefined,
+      damageType: payload.damageType,
+      severity: payload.severity,
+      affectedItems: payload.affectedItems,
+      orderItemId: payload.orderItemId,
+      inspectionId: payload.inspectionId,
     },
   });
 };
@@ -892,6 +1202,27 @@ export const initiateRefund = async (
 
   const totalAmount = Number(refundLines.reduce((sum, line) => sum + line.lineAmount, 0).toFixed(2));
 
+  const order = await prisma.order.findUniqueOrThrow({
+    where: { id: payload.orderId },
+    select: { totalAmount: true },
+  });
+
+  if (!isValidRefundAmount(totalAmount, order.totalAmount)) {
+    throw new Error("Refund amount must be greater than zero and not exceed order total");
+  }
+
+  const existingRefunds = await prisma.refund.aggregate({
+    where: {
+      orderId: payload.orderId,
+      status: { in: ["PENDING", "PROCESSING", "COMPLETED"] },
+    },
+    _sum: { amount: true },
+  });
+  const existingReservedAmount = existingRefunds._sum.amount ?? 0;
+  if (!isRefundWithinRemainingLimit(existingReservedAmount, totalAmount, order.totalAmount)) {
+    throw new Error("Refund amount exceeds remaining refundable balance for this order");
+  }
+
   return prisma.$transaction(async (tx) => {
     const refund = await tx.refund.create({
       data: {
@@ -938,7 +1269,13 @@ export const initiateRefund = async (
 };
 
 //get the admin refund queue for a field admin.
-export const getAdminRefundQueue = async (filters?: { status?: string; fieldAdminId?: string; routeId?: string }) => {
+export const getAdminRefundQueue = async (filters?: {
+  status?: string;
+  fieldAdminId?: string;
+  routeId?: string;
+  since?: string;
+  until?: string;
+}) => {
   const routeFilter =
     filters?.routeId && filters.routeId.trim().length > 0
       ? { order: { batch: { routes: { some: { id: filters.routeId } } } } }
@@ -950,60 +1287,126 @@ export const getAdminRefundQueue = async (filters?: { status?: string; fieldAdmi
   const statusFilter =
     filters?.status && filters.status.trim().length > 0 ? { status: filters.status as any } : {};
 
+  const createdAt: { gte?: Date; lte?: Date } = {};
+  if (filters?.since?.trim()) {
+    const since = new Date(filters.since);
+    since.setHours(0, 0, 0, 0);
+    createdAt.gte = since;
+  }
+  if (filters?.until?.trim()) {
+    const until = new Date(filters.until);
+    until.setHours(23, 59, 59, 999);
+    createdAt.lte = until;
+  }
+  const dateFilter = Object.keys(createdAt).length > 0 ? { createdAt } : {};
+
   return prisma.refund.findMany({
     where: {
       ...routeFilter,
       ...fieldAdminFilter,
       ...statusFilter,
+      ...dateFilter,
     },
-    include: {
-      fieldAdmin: { include: { user: { select: { id: true, name: true, email: true } } } },
-      order: {
-        select: {
-          id: true,
-          orderNumber: true,
-          totalAmount: true,
-          status: true,
-          batch: {
-            select: {
-              id: true,
-              routes: {
-                select: {
-                  id: true,
-                  routeNumber: true,
-                  status: true,
-                  fieldAdminId: true,
-                },
-              },
-            },
-          },
-        },
-      },
-      refundItems: {
-        include: {
-          orderItem: {
-            select: {
-              id: true,
-              quantity: true,
-              unitPrice: true,
-              sellerId: true,
-              product: { select: { id: true, name: true, unit: true } },
-            },
-          },
-          inspection: {
-            select: {
-              id: true,
-              result: true,
-              approvedQuantity: true,
-              rejectedQuantity: true,
-              notes: true,
-            },
-          },
-        },
-      },
-    },
+    include: refundDetailInclude,
     orderBy: { createdAt: "desc" },
   });
+};
+
+//get a single refund for the initiating field admin.
+export const getRefundById = async (fieldAdminId: string, refundId: string) => {
+  await ensureFieldAdminExists(fieldAdminId);
+  const refund = await prisma.refund.findFirst({
+    where: { id: refundId, initiatedBy: fieldAdminId },
+    include: refundDetailInclude,
+  });
+  if (!refund) {
+    throw new Error("Refund not found");
+  }
+  return refund;
+};
+
+//get a single refund for admin review.
+export const getAdminRefundById = async (refundId: string) => {
+  const refund = await prisma.refund.findUnique({
+    where: { id: refundId },
+    include: refundDetailInclude,
+  });
+  if (!refund) {
+    throw new Error("Refund not found");
+  }
+  return refund;
+};
+
+//update refund status (admin action).
+export const updateRefundStatus = async (refundId: string, status: "PROCESSING" | "COMPLETED" | "FAILED") => {
+  const refund = await prisma.refund.findUnique({
+    where: { id: refundId },
+    include: { order: { select: { id: true, totalAmount: true } } },
+  });
+  if (!refund) {
+    throw new Error("Refund not found");
+  }
+
+  const allowed = VALID_REFUND_STATUS_TRANSITIONS[refund.status] ?? [];
+  if (!allowed.includes(status)) {
+    throw new Error(`Cannot transition refund from ${refund.status} to ${status}`);
+  }
+
+  return prisma.$transaction(async (tx) => {
+    const updated = await tx.refund.update({
+      where: { id: refundId },
+      data: { status },
+      include: refundDetailInclude,
+    });
+
+    if (status === "COMPLETED") {
+      const completedRefunds = await tx.refund.aggregate({
+        where: { orderId: refund.orderId, status: "COMPLETED" },
+        _sum: { amount: true },
+      });
+      const totalRefunded = completedRefunds._sum.amount ?? 0;
+      const paymentStatus = totalRefunded >= refund.order.totalAmount ? "REFUNDED" : "COMPLETED";
+
+      await tx.payment.updateMany({
+        where: { orderId: refund.orderId },
+        data: {
+          status: paymentStatus,
+          refundedAt: new Date(),
+        },
+      });
+    }
+
+    return updated;
+  });
+};
+
+//get route handoff bundle for a field admin's assigned route.
+export const getFieldAdminRouteHandoff = async (fieldAdminId: string, routeId: string) => {
+  await ensureFieldAdminExists(fieldAdminId);
+  const route = await prisma.route.findFirst({
+    where: { id: routeId, fieldAdminId },
+    select: { batchId: true },
+  });
+  if (!route) {
+    throw new Error("Route not found for this field admin");
+  }
+  return getBatchHandoffBundle(route.batchId, { fieldAdminId });
+};
+
+//get handoff bundles for all active routes assigned to a field admin.
+export const getFieldAdminRouteHandoffs = async (fieldAdminId: string) => {
+  await ensureFieldAdminExists(fieldAdminId);
+  const routes = await prisma.route.findMany({
+    where: {
+      fieldAdminId,
+      status: { in: ["PLANNED", "ASSIGNED", "STARTED", "IN_PROGRESS"] },
+    },
+    select: { id: true, batchId: true },
+    orderBy: { scheduledStart: "desc" },
+  });
+  return Promise.all(
+    routes.map((route) => getBatchHandoffBundle(route.batchId, { fieldAdminId }))
+  );
 };
 
 //get the dashboard overview for a field admin.

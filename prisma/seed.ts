@@ -946,6 +946,7 @@ async function main() {
       timeWindowStart: today,
       timeWindowEnd: batchEnd,
       orderCount: 12,
+      maxStopsApplied: 15,
       closedAt: today,
     },
   });
@@ -967,6 +968,51 @@ async function main() {
     },
   });
 
+  // Seller pickup stops → hub consolidation (matches aggregator route shape)
+  await prisma.stop.create({
+    data: {
+      routeId: route.id,
+      type: "PICKUP",
+      sequenceOrder: 1,
+      sellerId: seller.id,
+      address: "Farm Fresh Stall, Colombo",
+      latitude: 6.91,
+      longitude: 79.86,
+      status: "COMPLETED",
+      completedAt: today,
+      itemsSummary: [{ sellerId: seller.id, note: "Farm Fresh seller pickup" }],
+    },
+  });
+
+  await prisma.stop.create({
+    data: {
+      routeId: route.id,
+      type: "PICKUP",
+      sequenceOrder: 2,
+      sellerId: seller2.id,
+      address: "Green Valley Produce, Colombo",
+      latitude: 6.935,
+      longitude: 79.85,
+      status: "COMPLETED",
+      completedAt: today,
+      itemsSummary: [{ sellerId: seller2.id, note: "Green Valley seller pickup" }],
+    },
+  });
+
+  await prisma.stop.create({
+    data: {
+      routeId: route.id,
+      type: "PICKUP",
+      sequenceOrder: 3,
+      address: primaryHub.name,
+      latitude: primaryHub.latitude,
+      longitude: primaryHub.longitude,
+      status: "COMPLETED",
+      completedAt: today,
+      itemsSummary: [{ note: "Hub consolidation pickup" }],
+    },
+  });
+
   // ─── Create orders + stops ────────────────────────────────────────────────────
   const now = new Date();
 
@@ -985,7 +1031,7 @@ async function main() {
       data: {
         routeId: route.id,
         type: "DELIVERY",
-        sequenceOrder: i + 1,
+        sequenceOrder: i + 4,
         address: buyerInfo.address,
         latitude: buyerInfo.lat,
         longitude: buyerInfo.lng,
