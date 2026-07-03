@@ -127,19 +127,19 @@ export const createOrder = async (input: CreateOrderInput) => {
   // Calculate order items with seller-specific prices
   const orderItems = input.items.map((item) => {
     const product = products.find((p) => p.id === item.productId)!;
-    
+
     // ✅ FIX: Get price from SellerProduct, not Product
     const sellerProduct = sellerProducts.find(
       (sp) => sp.productId === item.productId && sp.sellerId === item.sellerId
     );
-    
+
     if (!sellerProduct) {
       throw new Error(
         `Seller ${item.sellerId} does not offer product ${item.productId}`
       );
     }
 
-    const unitPrice = sellerProduct.price;  // ← Use seller's price
+    const unitPrice = sellerProduct.price; // ← Use seller's price
     const totalPrice = parseFloat((unitPrice * item.quantity).toFixed(2));
 
     return {
@@ -160,7 +160,6 @@ export const createOrder = async (input: CreateOrderInput) => {
     .toString()
     .padStart(3, "0")}`;
 
-  // Create order
   // Create order
   const order = await prisma.order.create({
     data: {
@@ -251,6 +250,21 @@ export const createOrder = async (input: CreateOrderInput) => {
 
       throw error;
     }
+  }
+
+  // ✅ Clear buyer's cart from DB immediately after successful order
+  // This prevents syncCartFromDB() on CartPage from pulling items back
+  // after the buyer is redirected to order confirmation
+  try {
+    await prisma.cartItem.deleteMany({
+      where: {
+        cart: { buyerId: input.buyerId },
+      },
+    });
+    console.log(`✅ Cart cleared for buyer ${input.buyerId} after order ${order.orderNumber}`);
+  } catch (cartClearError) {
+    // Non-fatal — expiry job will clean up anyway
+    console.error("⚠️ Failed to clear cart after order:", cartClearError);
   }
 
   // ─── NOTIFICATIONS ────────────────────────────────────────────────────────
@@ -396,10 +410,6 @@ export const getSellerOrderById = async (orderId: string, sellerId: string) => {
         },
       },
       payment: true,
-      // NOTE: driver field not implemented in Order model
-      // driver: {
-      //   select: { user: { select: { name: true, phone: true } } },
-      // },
     },
   });
 

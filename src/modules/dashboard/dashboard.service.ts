@@ -1,220 +1,110 @@
 import prisma from "../../config/database.js";
 import { startOfDay, endOfDay, subDays } from "date-fns";
 
-// ============= HELPER FUNCTION =============
-/**
- * Get seller ID from user ID
- * ✅ Called by all service functions to verify seller exists
- */
+const activeBuyerStatuses = new Set([
+  "PENDING",
+  "PAYMENT_PENDING",
+  "PAID",
+  "BATCHED",
+  "ASSIGNED",
+  "IN_TRANSIT",
+]);
+
 const getSellerIdFromUserId = async (userId: string) => {
-  const seller = await prisma.seller.findUnique({
-    where: { userId },
-  });
-
-  if (!seller) {
-    throw new Error("Seller profile not found");
-  }
-
+  const seller = await prisma.seller.findUnique({ where: { userId } });
+  if (!seller) throw new Error("Seller profile not found");
   return seller.id;
 };
 
-// ============= SERVICE FUNCTIONS =============
-
-/**
- * Get today's orders for a seller
- * Returns count and comparison with yesterday
- */
 export const getTodayOrders = async (userId: string) => {
   const sellerId = await getSellerIdFromUserId(userId);
-  
   const today = new Date();
-  const todayStart = startOfDay(today);
-  const todayEnd = endOfDay(today);
 
-  const yesterday = subDays(today, 1);
-  const yesterdayStart = startOfDay(yesterday);
-  const yesterdayEnd = endOfDay(yesterday);
-
-  // Get today's orders
   const todayCount = await prisma.orderItem.count({
-    where: {
-      sellerId,
-      createdAt: {
-        gte: todayStart,
-        lte: todayEnd,
-      },
-    },
+    where: { sellerId, createdAt: { gte: startOfDay(today), lte: endOfDay(today) } },
   });
 
-  // Get yesterday's orders
   const yesterdayCount = await prisma.orderItem.count({
     where: {
       sellerId,
-      createdAt: {
-        gte: yesterdayStart,
-        lte: yesterdayEnd,
-      },
+      createdAt: { gte: startOfDay(subDays(today, 1)), lte: endOfDay(subDays(today, 1)) },
     },
   });
 
   const difference = todayCount - yesterdayCount;
-  const differenceLabel = difference >= 0 ? `+${difference}` : `${difference}`;
-
   return {
     ordersToday: todayCount,
-    vsYesterday: differenceLabel,
+    vsYesterday: difference >= 0 ? `+${difference}` : `${difference}`,
   };
 };
 
-/**
- * Get today's revenue for a seller
- * Returns total revenue and payout info
- */
 export const getTodayRevenue = async (userId: string) => {
   const sellerId = await getSellerIdFromUserId(userId);
-  
   const today = new Date();
-  const todayStart = startOfDay(today);
-  const todayEnd = endOfDay(today);
 
   const revenueData = await prisma.orderItem.aggregate({
-    _sum: {
-      totalPrice: true,
-    },
-    where: {
-      sellerId,
-      createdAt: {
-        gte: todayStart,
-        lte: todayEnd,
-      },
-    },
+    _sum: { totalPrice: true },
+    where: { sellerId, createdAt: { gte: startOfDay(today), lte: endOfDay(today) } },
   });
 
-  const revenue = revenueData._sum.totalPrice || 0;
-
   return {
-    revenueToday: revenue,
+    revenueToday: revenueData._sum.totalPrice || 0,
     payoutInfo: "Payout next week",
   };
 };
 
-/**
- * Get count of active products for a seller
- * Also returns count of low stock items
- */
 export const getActiveProducts = async (userId: string) => {
   const sellerId = await getSellerIdFromUserId(userId);
-  
+
   const activeCount = await prisma.product.count({
-    where: {
-      sellerId,
-      status: "APPROVED",
-    },
+    where: { sellerId, status: "APPROVED" },
   });
 
   const lowStockCount = await prisma.product.count({
-    where: {
-      sellerId,
-      status: "APPROVED",
-      stock: {
-        gt: 0,
-        lte: 10, // Assuming low stock threshold is 10
-      },
-    },
+    where: { sellerId, status: "APPROVED", stock: { gt: 0, lte: 10 } },
   });
 
-  return {
-    activeProducts: activeCount,
-    lowInStock: lowStockCount,
-  };
+  return { activeProducts: activeCount, lowInStock: lowStockCount };
 };
 
-/**
- * Calculate fulfillment SLA
- * Returns percentage of orders delivered on time in the last 24 hours
- */
 export const getFulfillmentSLA = async (userId: string) => {
   const sellerId = await getSellerIdFromUserId(userId);
-  
   const last24Hours = subDays(new Date(), 1);
 
-  // Get all delivered orders from seller in last 24 hours
   const deliveredOrders = await prisma.order.findMany({
     where: {
       status: "DELIVERED",
-      updatedAt: {
-        gte: last24Hours,
-      },
-      items: {
-        some: {
-          sellerId,
-        },
-      },
-    },
-    include: {
-      items: {
-        where: { sellerId },
-      },
+      updatedAt: { gte: last24Hours },
+      items: { some: { sellerId } },
     },
   });
 
-  // For simplicity, assume orders delivered within estimated time = SLA met
-  // You can enhance this based on your business logic
   if (deliveredOrders.length === 0) {
-    return {
-      slaPercentage: 100,
-      period: "Last 24 hours",
-    };
+    return { slaPercentage: 100, period: "Last 24 hours" };
   }
 
-  // Simple calculation: if order was delivered, SLA is met
-  // In production, you'd compare estimatedDelivery vs actualDelivery
-  const slaPercentage = Math.round(
-    (deliveredOrders.length / Math.max(deliveredOrders.length, 1)) * 100
-  );
-
   return {
-    slaPercentage,
+    slaPercentage: Math.round((deliveredOrders.length / Math.max(deliveredOrders.length, 1)) * 100),
     period: "Last 24 hours",
   };
 };
 
-/**
- * Get recent catalog updates (recently created/updated products)
- * Returns last 3 products with their current status
- */
 export const getRecentCatalogUpdates = async (userId: string) => {
   const sellerId = await getSellerIdFromUserId(userId);
-  
+
   const products = await prisma.product.findMany({
-    where: {
-      sellerId,
-      status: "APPROVED",
-    },
-    orderBy: {
-      updatedAt: "desc",
-    },
+    where: { sellerId, status: "APPROVED" },
+    orderBy: { updatedAt: "desc" },
     take: 3,
-    select: {
-      id: true,
-      name: true,
-      price: true,
-      unit: true,
-      stock: true,
-      imageUrl: true,
-      updatedAt: true,
-    },
+    select: { id: true, name: true, price: true, unit: true, stock: true, imageUrl: true, updatedAt: true },
   });
 
   return products.map((product) => {
     let status = "Healthy";
-    if (product.stock === 0) {
-      status = "Out of stock";
-    } else if (product.stock <= 10) {
-      status = "Low stock";
-    } else if (product.updatedAt && new Date().getTime() - new Date(product.updatedAt).getTime() < 24 * 60 * 60 * 1000) {
+    if (product.stock === 0) status = "Out of stock";
+    else if (product.stock <= 10) status = "Low stock";
+    else if (new Date().getTime() - new Date(product.updatedAt).getTime() < 24 * 60 * 60 * 1000)
       status = "New arrival";
-    }
 
     return {
       name: product.name,
@@ -226,27 +116,25 @@ export const getRecentCatalogUpdates = async (userId: string) => {
   });
 };
 
-/**
- * Get all dashboard metrics in one call
- * Fetches: today's orders, revenue, active products, SLA, recent catalog updates
- */
 export const getSellerDashboardMetrics = async (userId: string) => {
-  const sellerId = await getSellerIdFromUserId(userId);
-  const seller = await prisma.seller.findUnique({
-    where: { userId },
-    select: { businessName: true }, // or whatever your field is called
+  await getSellerIdFromUserId(userId); // validates seller exists
+
+  // ✅ Fetch user.name — the actual person's name, not businessName which can be empty
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { name: true },
   });
-  const [ordersData, revenueData, productsData, slaData, recentProducts] =
-    await Promise.all([
-      getTodayOrders(userId),
-      getTodayRevenue(userId),
-      getActiveProducts(userId),
-      getFulfillmentSLA(userId),
-      getRecentCatalogUpdates(userId),
-    ]);
+
+  const [ordersData, revenueData, productsData, slaData, recentProducts] = await Promise.all([
+    getTodayOrders(userId),
+    getTodayRevenue(userId),
+    getActiveProducts(userId),
+    getFulfillmentSLA(userId),
+    getRecentCatalogUpdates(userId),
+  ]);
 
   return {
-    sellerName: seller?.businessName ?? "Seller",
+    sellerName: user?.name ?? "Seller",
     ordersToday: {
       value: ordersData.ordersToday,
       label: "Orders today",
@@ -271,48 +159,155 @@ export const getSellerDashboardMetrics = async (userId: string) => {
   };
 };
 
-/**
- * Get low stock alerts for a seller
- * Returns products where stock <= lowStock threshold
- */
-export const getLowStockAlerts = async (userId: string) => {
-  const sellerId = await getSellerIdFromUserId(userId);
-
-  // Get all approved products for this seller with low stock
-  const alerts = await prisma.sellerProduct.findMany({
-    where: {
-      sellerId,
-      product: {
-        status: "APPROVED",
-      },
-    },
+const getBuyerFromUserId = async (userId: string) => {
+  const buyer = await prisma.buyer.findUnique({
+    where: { userId },
     include: {
-      product: {
+      user: {
         select: {
-          id: true,
           name: true,
-          unit: true,
-          lowStock: true,
+          email: true,
         },
       },
     },
-    orderBy: {
-      stock: "asc", // Show lowest stock first
-    },
   });
 
-  // Filter and format: only include items below their lowStock threshold
-  const formattedAlerts = alerts
-    .filter((sp) => sp.stock <= sp.product.lowStock)
-    .map((sp) => ({
-      id: sp.product.id,
-      name: sp.product.name,
-      unit: sp.product.unit,
-      stock: sp.stock,
-      lowStock: sp.product.lowStock,
-    }));
+  if (!buyer) {
+    throw new Error("Buyer profile not found");
+  }
+
+  return buyer;
+};
+
+export const getCustomerDashboardSummary = async (userId: string) => {
+  const buyer = await getBuyerFromUserId(userId);
+
+  const [orders, cart, featuredProducts] = await Promise.all([
+    prisma.order.findMany({
+      where: { buyerId: buyer.id },
+      orderBy: { createdAt: "desc" },
+      take: 6,
+      include: {
+        items: {
+          include: {
+            product: {
+              select: { name: true, unit: true, imageUrl: true },
+            },
+          },
+        },
+      },
+    }),
+    prisma.cart.findUnique({
+      where: { buyerId: buyer.id },
+      include: {
+        items: {
+          include: {
+            product: {
+              select: { price: true, unit: true },
+            },
+          },
+        },
+      },
+    }),
+    prisma.product.findMany({
+      where: { status: "APPROVED" },
+      orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+      take: 6,
+      select: {
+        id: true,
+        name: true,
+        price: true,
+        unit: true,
+        imageUrl: true,
+        sellerId: true,
+      },
+    }),
+  ]);
+
+  const sellerIds = [...new Set(orders.flatMap((order) => order.items.map((item) => item.sellerId)))];
+  const sellers = sellerIds.length
+    ? await prisma.seller.findMany({
+        where: { id: { in: sellerIds } },
+        select: { id: true, businessName: true },
+      })
+    : [];
+
+  const sellerNameById = new Map(sellers.map((seller) => [seller.id, seller.businessName]));
+
+  const activeOrders = orders.filter((order) => activeBuyerStatuses.has(order.status));
+  const lastOrder = orders[0] ?? null;
+
+  const cartItems = cart?.items ?? [];
+  const cartCount = cartItems.reduce((sum, item) => sum + Number(item.quantity), 0);
+  const cartSubtotal = cartItems.reduce((sum, item) => sum + Number(item.quantity) * Number(item.product.price), 0);
+
+  const favouriteVendorCounts = new Map<string, { vendor: string; count: number }>();
+  for (const order of orders) {
+    for (const item of order.items) {
+      const vendorName = sellerNameById.get(item.sellerId) || "FreshRoute vendor";
+      const existing = favouriteVendorCounts.get(item.sellerId);
+      if (existing) {
+        existing.count += 1;
+      } else {
+        favouriteVendorCounts.set(item.sellerId, { vendor: vendorName, count: 1 });
+      }
+    }
+  }
+
+  const favouriteVendorList = [...favouriteVendorCounts.values()]
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 4);
+
+  // ✅ FIX: id is now the real DB id (used to fetch order details).
+  // orderNumber is kept separately for display purposes (e.g. "ORD-...").
+  const recentOrders = orders.map((order) => {
+    const topItem = order.items[0];
+    const vendorName = topItem ? sellerNameById.get(topItem.sellerId) || "FreshRoute vendor" : "FreshRoute vendor";
+    const statusLabel = order.status
+      .replaceAll("_", " ")
+      .toLowerCase()
+      .replace(/(^|\s)\S/g, (letter) => letter.toUpperCase());
+
+    return {
+      id: order.id,                    // ✅ real UUID — used by getBuyerOrderById(id)
+      orderNumber: order.orderNumber,  // ✅ human-readable — used for display
+      vendor: vendorName,
+      total: `Rs. ${Number(order.totalAmount).toLocaleString()}`,
+      status: order.status,
+      statusLabel,
+      createdAt: order.createdAt,
+    };
+  });
+
+  const featuredList = featuredProducts.map((product) => ({
+    id: product.id,
+    name: product.name,
+    vendor: product.sellerId ? sellerNameById.get(product.sellerId) || "FreshRoute vendor" : "FreshRoute vendor",
+    price: `Rs. ${Number(product.price).toLocaleString()} / ${product.unit}`,
+    imageUrl: product.imageUrl,
+  }));
 
   return {
-    alerts: formattedAlerts,
+    userName: buyer.user.name,
+    activeOrders: {
+      value: activeOrders.length,
+      helper: activeOrders.length > 0 ? `${activeOrders.length} in progress` : "Nothing active right now",
+    },
+    lastOrder: {
+      value: lastOrder ? `Rs. ${Number(lastOrder.totalAmount).toLocaleString()}` : "Rs. 0",
+      helper: lastOrder ? `Ordered from ${sellerNameById.get(lastOrder.items[0]?.sellerId ?? "") || "FreshRoute vendor"}` : "No orders yet",
+    },
+    favouriteVendors: {
+      value: favouriteVendorList.length,
+      helper: favouriteVendorList[0]?.vendor ? `Top vendor: ${favouriteVendorList[0].vendor}` : "Tap vendors to build favorites",
+    },
+    cart: {
+      itemCount: cartCount,
+      subtotal: `Rs. ${cartSubtotal.toLocaleString()}`,
+      total: `Rs. ${cartSubtotal.toLocaleString()}`,
+    },
+    featuredProducts: featuredList,
+    recentOrders,
+    favouriteVendorList,
   };
 };

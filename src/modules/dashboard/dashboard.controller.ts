@@ -7,7 +7,7 @@ import {
   getActiveProducts,
   getFulfillmentSLA,
   getRecentCatalogUpdates,
-  getLowStockAlerts,
+  getCustomerDashboardSummary,
 } from "./dashboard.service.js";
 
 /**
@@ -144,10 +144,10 @@ export const getRecentProducts = async (
 };
 
 /**
- * GET /api/v1/dashboard/seller/low-stock-alerts
- * Get low stock alerts for a seller
+ * GET /api/v1/dashboard/customer/summary
+ * Get customer dashboard summary data
  */
-export const getLowStockAlertsController = async (
+export const getCustomerSummary = async (
   req: AuthRequest,
   res: Response
 ): Promise<void> => {
@@ -157,10 +157,16 @@ export const getLowStockAlertsController = async (
       return;
     }
 
-    const data = await getLowStockAlerts(req.userId);
+    if (req.role !== "BUYER") {
+      res.status(403).json({ message: "Only buyers can access this endpoint" });
+      return;
+    }
+
+    const data = await getCustomerDashboardSummary(req.userId);
     res.json(data);
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : "Error fetching low stock alerts";
-    res.status(500).json({ message });
+    const message = error instanceof Error ? error.message : "Error fetching customer summary";
+    const statusCode = message.includes("Buyer") ? 404 : 500;
+    res.status(statusCode).json({ message });
   }
 };
