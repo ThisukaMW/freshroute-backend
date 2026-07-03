@@ -187,19 +187,12 @@ model User {
   updatedAt     DateTime    @updatedAt
 
   // Relationships
-<<<<<<< HEAD
   driverProfile     Driver?
   sellerProfile     Seller?
   buyerProfile      Buyer?
   fieldAdminProfile FieldAdmin?
   notifications     Notification[]
-=======
-  driverProfile Driver?
-  sellerProfile Seller?
-  buyerProfile  Buyer?
-  notifications Notification[]
   notificationPrefs Json?
->>>>>>> dev-aysh
 
   tokenVersion Int @default(0)
 
@@ -1083,11 +1076,7 @@ model StockHistory {
   @@index([productId, createdAt(sort: Desc)])
   @@index([type])
   @@index([orderId])
-<<<<<<< HEAD
 }
-=======
-}
-<<<<<<< HEAD
 
 model Address {
   id        String   @id @default(uuid())
@@ -1106,6 +1095,3 @@ model Address {
 
   @@index([userId])
 }
-=======
->>>>>>> 8a335c5bf5283fdeff6117b697fc67bec642f6e3
->>>>>>> dev-aysh
