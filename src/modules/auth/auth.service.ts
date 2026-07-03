@@ -79,6 +79,9 @@ export const loginUser = async (email: string, password: string) => {
     email: user.email,
     role,
     status: user.status,
+    phone: user.phone,
+    city: user.city,
+    address: user.address,
   };
 
   // Create a JWT token with user info and token version (for session invalidation)
@@ -162,7 +165,7 @@ export const createCustomer = async (data: {
       phone: data.phone || null,
       city: data.city ?? undefined,
       address: data.address ?? undefined,
-      status: "ACTIVE", 
+      status: "ACTIVE",
     },
   });
 
@@ -173,6 +176,21 @@ export const createCustomer = async (data: {
       deliveryAddress: data.address || "To be updated",
       latitude: data.latitude ?? 6.9271,
       longitude: data.longitude ?? 79.8612,
+    },
+  });
+
+  // 🆕 Also seed this as their first saved address, so it shows up
+  // immediately in the Profile page's "Saved addresses" list and
+  // survives until the user edits/removes it.
+  await prisma.address.create({
+    data: {
+      userId: user.id,
+      label: "Home",
+      address: data.address,
+      city: data.city,
+      latitude: data.latitude ?? 6.9271,
+      longitude: data.longitude ?? 79.8612,
+      isDefault: true,
     },
   });
 
@@ -212,13 +230,13 @@ export const findVendorByEmail = async (email: string) => {
 // Creates a new seller account with a seller profile — starts as INACTIVE
 export const createVendor = async (input: VendorSignupInput) => {
   const hashedPassword = await bcrypt.hash(input.password, 10);
-  return prisma.user.create({
+  const vendor = await prisma.user.create({
     data: {
       name: input.ownerName,
       email: input.email,
       phone: input.phone?.trim() || null,
       role: "SELLER",
-      status: "INACTIVE", // must wait for admin approval
+      status: "INACTIVE",
       city: input.city,
       address: input.businessAddress,
       passwordHash: hashedPassword,
@@ -228,12 +246,27 @@ export const createVendor = async (input: VendorSignupInput) => {
           businessAddress: input.businessAddress,
           latitude: input.latitude ?? 0,
           longitude: input.longitude ?? 0,
-          isApproved: false, // seller profile also needs approval
+          isApproved: false,
         },
       },
     },
     include: { sellerProfile: true },
   });
+
+  // 🆕 Seed the business address as the seller's first saved address
+  await prisma.address.create({
+    data: {
+      userId: vendor.id,
+      label: "Store",
+      address: input.businessAddress,
+      city: input.city,
+      latitude: input.latitude ?? 0,
+      longitude: input.longitude ?? 0,
+      isDefault: true,
+    },
+  });
+
+  return vendor;
 };
 
 // ---------------- SELLER LOGIN ----------------

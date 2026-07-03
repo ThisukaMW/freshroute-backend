@@ -125,6 +125,7 @@ model User {
   status        UserStatus  @default(ACTIVE)
   city          String?    
   address       String?
+  addresses Address[]
   passwordHash  String
   prevPasswordHash  String?   // stores old hash before a reset, cleared after secure-account
 
@@ -141,12 +142,14 @@ model User {
   sellerProfile Seller?
   buyerProfile  Buyer?
   notifications Notification[]
+  notificationPrefs Json?
 
   tokenVersion Int @default(0)
 
 
   @@index([email])
   @@index([role, status])
+
 }
 
 // ============= ACTOR PROFILES =============
@@ -761,4 +764,22 @@ model StockHistory {
   @@index([productId, createdAt(sort: Desc)])
   @@index([type])
   @@index([orderId])
+}
+
+model Address {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  label     String
+  address   String
+  city      String?
+  latitude  Float?
+  longitude Float?
+  isDefault Boolean  @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
 }

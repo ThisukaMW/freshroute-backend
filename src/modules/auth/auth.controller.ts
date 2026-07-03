@@ -71,7 +71,6 @@ export const loginUserController = async (req: Request, res: Response) => {
   }
 };
 
-/** Register a new buyer account. Deletes old INACTIVE account with same email to allow re-register. */
 export const registerCustomer = async (req: Request, res: Response) => {
   try {
     const { name, email, password, phone, city, address, latitude, longitude } = req.body;
@@ -127,10 +126,20 @@ export const registerCustomer = async (req: Request, res: Response) => {
       { expiresIn: "7d" }
     );
 
+    // 🔧 FIX: echo back phone/city/address so frontend can populate Redux
     return res.status(201).json({
       message:    "Registration successful.",
       token,
-      user:       { id: customer.id, name: customer.name, email: customer.email, role: "buyer", status: "ACTIVE" },
+      user: {
+        id:      customer.id,
+        name:    customer.name,
+        email:   customer.email,
+        role:    "buyer",
+        status:  "ACTIVE",
+        phone:   customer.phone,
+        city:    customer.city,
+        address: customer.address,
+      },
       redirectTo: "/buyer/products",
     });
   } catch (err: any) {
