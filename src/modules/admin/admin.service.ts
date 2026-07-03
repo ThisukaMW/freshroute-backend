@@ -141,6 +141,8 @@ export const listBatches = async (filters?: {
   scheduledDate?: string;
   fieldAdminId?: string;
   dropClusterKey?: string;
+  since?: string;
+  until?: string;
   limit?: number;
   offset?: number;
 }) => {
@@ -160,6 +162,19 @@ export const listBatches = async (filters?: {
     const nextDay = new Date(day);
     nextDay.setDate(nextDay.getDate() + 1);
     where.scheduledDate = { gte: day, lt: nextDay };
+  } else if (filters?.since?.trim() || filters?.until?.trim()) {
+    const scheduledDate: { gte?: Date; lte?: Date } = {};
+    if (filters.since?.trim()) {
+      const since = new Date(filters.since);
+      since.setHours(0, 0, 0, 0);
+      scheduledDate.gte = since;
+    }
+    if (filters.until?.trim()) {
+      const until = new Date(filters.until);
+      until.setHours(23, 59, 59, 999);
+      scheduledDate.lte = until;
+    }
+    where.scheduledDate = scheduledDate;
   }
 
   const limit = Math.min(filters?.limit ?? 50, 100);

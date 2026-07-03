@@ -16,9 +16,11 @@ import {
   updateRefundStatus,
 } from "../field_admin/fieldadmin.service.js";
 
-export const listAllOrders: RequestHandler = async (_req, res) => {
+export const listAllOrders: RequestHandler = async (req, res) => {
   try {
-    const data = await getAllOrders();
+    const since = typeof req.query.since === "string" ? req.query.since : undefined;
+    const until = typeof req.query.until === "string" ? req.query.until : undefined;
+    const data = await getAllOrders({ since, until });
     res.json(data);
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Error";
@@ -32,9 +34,11 @@ export const listBatchesController: RequestHandler = async (req, res) => {
     const scheduledDate = typeof req.query.scheduledDate === "string" ? req.query.scheduledDate : undefined;
     const fieldAdminId = typeof req.query.fieldAdminId === "string" ? req.query.fieldAdminId : undefined;
     const dropClusterKey = typeof req.query.dropClusterKey === "string" ? req.query.dropClusterKey : undefined;
+    const since = typeof req.query.since === "string" ? req.query.since : undefined;
+    const until = typeof req.query.until === "string" ? req.query.until : undefined;
     const limit = typeof req.query.limit === "string" ? Number(req.query.limit) : undefined;
     const offset = typeof req.query.offset === "string" ? Number(req.query.offset) : undefined;
-    const data = await listBatches({ status, scheduledDate, fieldAdminId, dropClusterKey, limit, offset });
+    const data = await listBatches({ status, scheduledDate, fieldAdminId, dropClusterKey, since, until, limit, offset });
     res.json(data);
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Error";
@@ -64,7 +68,9 @@ export const listRefundsController: RequestHandler = async (req, res) => {
     const status = typeof req.query.status === "string" ? req.query.status : undefined;
     const fieldAdminId = typeof req.query.fieldAdminId === "string" ? req.query.fieldAdminId : undefined;
     const routeId = typeof req.query.routeId === "string" ? req.query.routeId : undefined;
-    const data = await getAdminRefundQueue({ status, fieldAdminId, routeId });
+    const since = typeof req.query.since === "string" ? req.query.since : undefined;
+    const until = typeof req.query.until === "string" ? req.query.until : undefined;
+    const data = await getAdminRefundQueue({ status, fieldAdminId, routeId, since, until });
     res.json(data);
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Error";
