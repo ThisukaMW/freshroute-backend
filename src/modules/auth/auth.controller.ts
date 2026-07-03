@@ -31,11 +31,7 @@ const validatePersonName = (name: string): string | null => {
   return null;
 };
 
-/**
- * Sri Lankan phone validation.
- * Accepts: +94XXXXXXXXX  |  94XXXXXXXXX  |  9-digit local part
- * Phone is always optional — returns null (valid) when the value is empty/undefined.
- */
+
 const validatePhone = (phone: string | undefined): string | null => {
   if (!phone || !phone.trim()) return null;  // optional field
   const n = phone.replace(/\s/g, "");
@@ -74,10 +70,9 @@ export const loginUserController = async (req: Request, res: Response) => {
   }
 };
 
-/** Register a new buyer account. Deletes old INACTIVE account with same email to allow re-register. */
 export const registerCustomer = async (req: Request, res: Response) => {
   try {
-    const { name, email, password, phone, city, address } = req.body;
+    const { name, email, password, phone, city, address, latitude, longitude } = req.body;
 
     // Required fields
     if (!name || !email || !password || !address) {
@@ -114,11 +109,35 @@ export const registerCustomer = async (req: Request, res: Response) => {
       address,
     });
 
-    await notifyAdminsBuyerRegistered(customer.name, customer.email, customer.id);
+    // Buyers auto-login — no admin approval needed
+    const token = jwt.sign(
+      {
+        userId:       customer.id,
+        name:         customer.name,
+        email:        customer.email,
+        role:         "BUYER",
+        status:       "ACTIVE",
+        tokenVersion: 0,
+      },
+      process.env.JWT_SECRET!,
+      { expiresIn: "7d" }
+    );
 
+    // 🔧 FIX: echo back phone/city/address so frontend can populate Redux
     return res.status(201).json({
-      message: "Registration successful. Your account is pending admin approval.",
-      user:    { id: customer.id, name: customer.name, email: customer.email, role: "buyer", status: "INACTIVE" },
+      message:    "Registration successful.",
+      token,
+      user: {
+        id:      customer.id,
+        name:    customer.name,
+        email:   customer.email,
+        role:    "buyer",
+        status:  "ACTIVE",
+        phone:   customer.phone,
+        city:    customer.city,
+        address: customer.address,
+      },
+      redirectTo: "/buyer/products",
     });
   } catch (err: any) {
     console.error("[registerCustomer] error:", err);

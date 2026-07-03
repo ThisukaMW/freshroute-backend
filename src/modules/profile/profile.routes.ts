@@ -10,6 +10,13 @@ import {
   updatePasswordController,
   getSellerStatusController,
   deleteAccountController,
+  listAddressesController,
+  addAddressController,
+  updateAddressController,
+  deleteAddressController,
+  setDefaultAddressController,
+  getNotificationPrefsController,
+  updateNotificationPrefsController,
 } from "./profile.controller.js";
 
 const router = Router();
@@ -34,5 +41,15 @@ router.get("/status", getSellerStatusController);
 
 // Sellers can update their business name and address
 router.patch("/business", updateBusinessInfoController);
+
+// Buyers and sellers can manage a list of saved addresses
+router.get("/addresses", listAddressesController);
+router.post("/addresses", addAddressController);
+router.patch("/addresses/:id", updateAddressController);
+router.delete("/addresses/:id", deleteAddressController);
+router.patch("/addresses/:id/default", setDefaultAddressController);
+
+router.get("/notification-prefs", getNotificationPrefsController);
+router.patch("/notification-prefs", updateNotificationPrefsController);
 
 export default router;
