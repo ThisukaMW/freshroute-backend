@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { protect } from "../../middlewares/auth.middleware.js";
+import { requireOrderingPortalOpen } from "../../middlewares/orderingPortal.middleware.js";
 import {
   placeOrder,
   myOrders,
@@ -16,7 +17,7 @@ router.use(protect);
 
 // ============= BUYER ROUTES =============
 // POST /api/v1/orders
-router.post("/", placeOrder);
+router.post("/", requireOrderingPortalOpen, placeOrder);
 
 // GET /api/v1/orders (buyer's orders)
 router.get("/", myOrders);

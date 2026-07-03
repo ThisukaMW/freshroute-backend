@@ -1,5 +1,6 @@
 import Stripe from "stripe";
 import prisma from "../../config/database.js";
+import { computeOrderDeliveryDateColombo } from "../Order_Aggregator/aggregator.colombo.js";
 
 let stripeInstance: Stripe | null = null;
 
@@ -74,13 +75,26 @@ export const handleWebhookEvent = async (payload: Buffer, sig: string) => {
     const orderId = session.metadata?.orderId;
     if (!orderId) return;
 
-    // ✅ Stock already deducted when order was created
-    // Here we just finalize the payment status
-    
+    const order = await prisma.order.findUnique({
+      where: { id: orderId },
+      select: { deliveryTimeSlot: true },
+    });
+    if (!order?.deliveryTimeSlot) {
+      console.error(`Order ${orderId} missing deliveryTimeSlot — cannot set deliveryDate`);
+    }
+
+    const paidAt = new Date();
+    const deliveryDate = order?.deliveryTimeSlot
+      ? computeOrderDeliveryDateColombo(paidAt, order.deliveryTimeSlot)
+      : undefined;
+
     // Update order to PAID
     await prisma.order.update({
       where: { id: orderId },
-      data: { status: "PAID" },
+      data: {
+        status: "PAID",
+        ...(deliveryDate ? { deliveryDate } : {}),
+      },
     });
 
     await prisma.payment.updateMany({

@@ -1,0 +1,1169 @@
+{
+  "runId": "run-001",
+  "generatedAt": "2026-05-08T07:48:54.757Z",
+  "executionTimestamps": {
+    "scriptGeneratedAt": "2026-05-08T07:48:54.757Z",
+    "aggregationStartedAt": "2026-05-08T07:48:54.942Z",
+    "aggregationCompletedAt": "2026-05-08T07:48:55.179Z"
+  },
+  "metrics": {
+    "preview": {
+      "runId": "d7161920-f68b-4dde-a898-127b622e4f9e",
+      "dryRun": true,
+      "triggerMode": "manual",
+      "windowStart": "2026-05-07T18:30:00.000Z",
+      "windowEnd": "2026-05-08T18:29:59.999Z",
+      "config": {
+        "triggerMode": "manual",
+        "clusterRadiusKm": 8,
+        "minPoints": 2,
+        "maxStopsPerBatch": 20,
+        "maxWeightPerBatch": 500,
+        "maxVolumePerBatch": 100,
+        "autoAssignRoutes": true
+      },
+      "totalCandidatesFetched": 68,
+      "totalEligible": 59,
+      "totalRejected": 9,
+      "totalClusters": 6,
+      "totalPackedSlices": 6,
+      "totalBatchesCreated": 0,
+      "totalOrdersBatched": 0,
+      "totalRoutesAutoAssigned": 0,
+      "batchesCreated": [],
+      "rejectedOrders": [
+        {
+          "orderId": "2cbdc30d-26e1-4529-b2e0-7559fb28fdaa",
+          "orderNumber": "SIM-ORD-017",
+          "reason": "Order status is not PAID"
+        },
+        {
+          "orderId": "06071e2d-8a48-4978-aa55-c11924a50275",
+          "orderNumber": "SIM-ORD-019",
+          "reason": "Order is cancelled"
+        },
+        {
+          "orderId": "cae1dcd5-5472-4db7-99c4-ff9c43dcdf85",
+          "orderNumber": "SIM-ORD-023",
+          "reason": "Order weight/volume not defined"
+        },
+        {
+          "orderId": "ca6afbdb-f0f4-4f8d-89e1-0d0608653493",
+          "orderNumber": "SIM-ORD-034",
+          "reason": "Order status is not PAID"
+        },
+        {
+          "orderId": "53125e42-26a0-4c16-bbc6-bcf4c4a6319b",
+          "orderNumber": "SIM-ORD-038",
+          "reason": "Order is cancelled"
+        },
+        {
+          "orderId": "1a6e479f-4f1e-46fc-81ee-b393cd87c1eb",
+          "orderNumber": "SIM-ORD-046",
+          "reason": "Order weight/volume not defined"
+        },
+        {
+          "orderId": "897ce090-dfcf-4897-9801-6b41639a9c50",
+          "orderNumber": "SIM-ORD-051",
+          "reason": "Order status is not PAID"
+        },
+        {
+          "orderId": "e4ea3e52-4bc2-428a-963b-544628e905d0",
+          "orderNumber": "SIM-ORD-057",
+          "reason": "Order is cancelled"
+        },
+        {
+          "orderId": "38abbdc4-829e-4ba9-955b-569a7ed977cf",
+          "orderNumber": "SIM-ORD-068",
+          "reason": "Order status is not PAID"
+        }
+      ]
+    },
+    "execution": {
+      "runId": "b29a8165-6330-42ac-8f31-5360673fbcd8",
+      "dryRun": false,
+      "triggerMode": "manual",
+      "windowStart": "2026-05-07T18:30:00.000Z",
+      "windowEnd": "2026-05-08T18:29:59.999Z",
+      "config": {
+        "triggerMode": "manual",
+        "clusterRadiusKm": 8,
+        "minPoints": 2,
+        "maxStopsPerBatch": 20,
+        "maxWeightPerBatch": 500,
+        "maxVolumePerBatch": 100,
+        "autoAssignRoutes": true
+      },
+      "totalCandidatesFetched": 68,
+      "totalEligible": 59,
+      "totalRejected": 17,
+      "totalClusters": 6,
+      "totalPackedSlices": 6,
+      "totalBatchesCreated": 4,
+      "totalOrdersBatched": 51,
+      "totalRoutesAutoAssigned": 4,
+      "batchesCreated": [
+        {
+          "batchId": "a5e558e5-728f-4d3f-9179-42d2ac2bb847",
+          "batchNumber": "BATCH-20260508074855-574",
+          "pickupHubId": "af58d909-15a4-4d10-8a3d-e43ae8dd45b7",
+          "storageType": "NORMAL",
+          "clusterKey": "af58d909-15a4-4d10-8a3d-e43ae8dd45b7-NORMAL-CMB_NORTH-cluster-1",
+          "orderIds": [
+            "a2e8b797-dc37-4bb0-9ff6-c16d52cd4776",
+            "ea250fb1-1fa6-48fb-b6ab-3b9e17bb3f20",
+            "719d1d27-0c6d-4bbd-8ed4-2eb00aa6bfd4",
+            "fd143f6d-0a5b-4977-a6bc-8ace7141166a",
+            "cc3005a4-0abf-42da-8763-a38aa28329e8",
+            "6dc695f7-1c72-4c1b-b568-127d7fccd3fa",
+            "8c27ce82-d88a-4bf7-9722-88eec6f0b41f",
+            "6fb2d679-8178-4ffa-b85c-274d8d75ca7d",
+            "5364d486-b07a-48b5-a380-673b9597967c",
+            "5d897ddd-fd98-41e2-9acd-9139e321df77",
+            "b2312ffe-779d-43b2-92f7-210efd8e8645",
+            "c411d7b0-4f45-4b57-9fa5-93ad15567056",
+            "161c67e4-f983-4291-a4e5-f348f6e76c68",
+            "710ff64f-f568-400a-893e-76b0dfabe102",
+            "95476de3-f793-4c72-8020-c057e3d5c519",
+            "5f99a05f-73d7-47cc-b8d1-b7a45a7d7aec"
+          ],
+          "orderNumbers": [
+            "SIM-ORD-007",
+            "SIM-ORD-031",
+            "SIM-ORD-043",
+            "SIM-ORD-067",
+            "SIM-ORD-001",
+            "SIM-ORD-013",
+            "SIM-ORD-049",
+            "SIM-ORD-061",
+            "SIM-ORD-037",
+            "SIM-ORD-058",
+            "SIM-ORD-022",
+            "SIM-ORD-004",
+            "SIM-ORD-028",
+            "SIM-ORD-052",
+            "SIM-ORD-064",
+            "SIM-ORD-016"
+          ],
+          "totalWeight": 429.5,
+          "totalVolume": 47.2
+        },
+        {
+          "batchId": "4ce70f71-3d75-4ea3-bd05-01c674d6d175",
+          "batchNumber": "BATCH-20260508074855-900",
+          "pickupHubId": "2358b37a-bae2-415c-ae9d-a1e5f3f7debf",
+          "storageType": "NORMAL",
+          "clusterKey": "2358b37a-bae2-415c-ae9d-a1e5f3f7debf-NORMAL-CMB_CENTRAL-cluster-1",
+          "orderIds": [
+            "8c7a510f-baba-4165-9784-7b571477db8e",
+            "f260d2ad-7d69-41fd-b319-921940f4d3d1",
+            "22c1279b-9997-427f-9476-03cf33d12998",
+            "10e6118e-1b0c-426e-a0e8-f4fdcc71651e",
+            "512e2ccc-fd81-4368-b1a6-43512b7b4fff",
+            "2215258e-ec89-420a-9c05-49bc89e4fe6a",
+            "0745c244-68b1-4300-b9db-4c6cc49975a0",
+            "31776a15-66fd-4279-a83c-721b59d1dabd",
+            "52d66aa4-d282-460d-a46d-388e97d25aad",
+            "ed09305c-1098-43f8-8c14-68abf1fc7b74",
+            "3a22011a-20d0-48c8-a9b1-6fb0c4280fb8",
+            "cf5bf3f7-010c-4b99-87a1-e1b24016b00d",
+            "4def10cb-fb90-4f40-a36e-9d6f062b3db8",
+            "93d64763-4fc5-45ca-bfa1-6a3df24cb7fb"
+          ],
+          "orderNumbers": [
+            "SIM-ORD-008",
+            "SIM-ORD-032",
+            "SIM-ORD-044",
+            "SIM-ORD-056",
+            "SIM-ORD-002",
+            "SIM-ORD-014",
+            "SIM-ORD-026",
+            "SIM-ORD-062",
+            "SIM-ORD-011",
+            "SIM-ORD-047",
+            "SIM-ORD-059",
+            "SIM-ORD-029",
+            "SIM-ORD-041",
+            "SIM-ORD-053"
+          ],
+          "totalWeight": 427,
+          "totalVolume": 51.2
+        },
+        {
+          "batchId": "e5d77bd4-a59e-419f-b1f5-e281937d80fb",
+          "batchNumber": "BATCH-20260508074855-922",
+          "pickupHubId": "ea2ba564-846f-476f-a4c2-3b04777d2407",
+          "storageType": "NORMAL",
+          "clusterKey": "ea2ba564-846f-476f-a4c2-3b04777d2407-NORMAL-CMB_SOUTH-cluster-1",
+          "orderIds": [
+            "787ecce7-c248-412f-8776-1683b6518cd3",
+            "3c255199-b988-4284-a6dd-9e0e626d9bf6",
+            "1dbfcd85-14fa-4e4c-98cb-bf598a4ad60a",
+            "853a8a5e-2a39-4a5f-869e-e19eb103e0bd",
+            "5ced7bc3-2930-4617-a930-c4ecb064736b",
+            "6d9d6395-4c1a-4ee1-8cc1-cb0f17808404",
+            "1f11856b-13ee-4c4a-817d-06ae7e170d2f",
+            "e86b90df-ae44-4c68-8418-21a6fe4076a2",
+            "580b891a-9ec3-49ec-9694-42a830f3d6e1",
+            "ba053dec-311d-4b43-95aa-673e87a9e34e",
+            "b45600ed-4200-4970-b906-e875dc842717",
+            "6f00dee5-028b-42a7-b162-52967d1450d7",
+            "599e79af-7e5c-457b-aa4d-ad8190c9b910",
+            "66c129a5-52e3-41f5-bf96-10e8d89331e5",
+            "0bdedf8f-789b-40e2-9cf1-d276e519c082",
+            "5d0fb928-024e-452e-91b1-7ff5a0fdc741"
+          ],
+          "orderNumbers": [
+            "SIM-ORD-006",
+            "SIM-ORD-018",
+            "SIM-ORD-042",
+            "SIM-ORD-054",
+            "SIM-ORD-066",
+            "SIM-ORD-012",
+            "SIM-ORD-024",
+            "SIM-ORD-036",
+            "SIM-ORD-048",
+            "SIM-ORD-009",
+            "SIM-ORD-021",
+            "SIM-ORD-033",
+            "SIM-ORD-003",
+            "SIM-ORD-027",
+            "SIM-ORD-039",
+            "SIM-ORD-063"
+          ],
+          "totalWeight": 317,
+          "totalVolume": 61.6
+        },
+        {
+          "batchId": "b6234d5a-dd8a-463a-bb6d-f4ce02b32e9a",
+          "batchNumber": "BATCH-20260508074855-620",
+          "pickupHubId": "2358b37a-bae2-415c-ae9d-a1e5f3f7debf",
+          "storageType": "COLD",
+          "clusterKey": "2358b37a-bae2-415c-ae9d-a1e5f3f7debf-COLD-CMB_CENTRAL-cluster-1",
+          "orderIds": [
+            "df1f5969-c858-49c7-a173-82603e304398",
+            "71daaed2-ed8d-4042-a9f8-08ec31023371",
+            "fb3201d7-1916-4f57-9d07-0383445a26aa",
+            "a279dac6-862b-4f1a-b0a3-f58699a868e5",
+            "0e86b868-5320-4171-8898-5cb788b28d59"
+          ],
+          "orderNumbers": [
+            "SIM-ORD-020",
+            "SIM-ORD-050",
+            "SIM-ORD-035",
+            "SIM-ORD-005",
+            "SIM-ORD-065"
+          ],
+          "totalWeight": 139,
+          "totalVolume": 17.2
+        }
+      ],
+      "rejectedOrders": [
+        {
+          "orderId": "2cbdc30d-26e1-4529-b2e0-7559fb28fdaa",
+          "orderNumber": "SIM-ORD-017",
+          "reason": "Order status is not PAID"
+        },
+        {
+          "orderId": "06071e2d-8a48-4978-aa55-c11924a50275",
+          "orderNumber": "SIM-ORD-019",
+          "reason": "Order is cancelled"
+        },
+        {
+          "orderId": "cae1dcd5-5472-4db7-99c4-ff9c43dcdf85",
+          "orderNumber": "SIM-ORD-023",
+          "reason": "Order weight/volume not defined"
+        },
+        {
+          "orderId": "ca6afbdb-f0f4-4f8d-89e1-0d0608653493",
+          "orderNumber": "SIM-ORD-034",
+          "reason": "Order status is not PAID"
+        },
+        {
+          "orderId": "53125e42-26a0-4c16-bbc6-bcf4c4a6319b",
+          "orderNumber": "SIM-ORD-038",
+          "reason": "Order is cancelled"
+        },
+        {
+          "orderId": "1a6e479f-4f1e-46fc-81ee-b393cd87c1eb",
+          "orderNumber": "SIM-ORD-046",
+          "reason": "Order weight/volume not defined"
+        },
+        {
+          "orderId": "897ce090-dfcf-4897-9801-6b41639a9c50",
+          "orderNumber": "SIM-ORD-051",
+          "reason": "Order status is not PAID"
+        },
+        {
+          "orderId": "e4ea3e52-4bc2-428a-963b-544628e905d0",
+          "orderNumber": "SIM-ORD-057",
+          "reason": "Order is cancelled"
+        },
+        {
+          "orderId": "38abbdc4-829e-4ba9-955b-569a7ed977cf",
+          "orderNumber": "SIM-ORD-068",
+          "reason": "Order status is not PAID"
+        },
+        {
+          "orderId": "4d4e6f4d-5df5-417b-be20-dc8079d1d262",
+          "orderNumber": "SIM-ORD-055",
+          "reason": "No available truck can carry this clustered slice"
+        },
+        {
+          "orderId": "dbd8d1e7-5b4d-4777-be6b-ace58c264b37",
+          "orderNumber": "SIM-ORD-025",
+          "reason": "No available truck can carry this clustered slice"
+        },
+        {
+          "orderId": "5fc1a5af-37d2-4fb2-bb7e-a3e440db4d53",
+          "orderNumber": "SIM-ORD-010",
+          "reason": "No available truck can carry this clustered slice"
+        },
+        {
+          "orderId": "ffab12d3-25fd-4578-8287-e4670a180ad7",
+          "orderNumber": "SIM-ORD-040",
+          "reason": "No available truck can carry this clustered slice"
+        },
+        {
+          "orderId": "151f9eb2-6de0-4099-b607-a0699892c1da",
+          "orderNumber": "SIM-ORD-030",
+          "reason": "No available truck can carry this clustered slice"
+        },
+        {
+          "orderId": "67f7e940-830f-4f62-b3d3-a0f2b9414cf9",
+          "orderNumber": "SIM-ORD-060",
+          "reason": "No available truck can carry this clustered slice"
+        },
+        {
+          "orderId": "ace3dd43-9336-4511-8b66-11a6468db7ce",
+          "orderNumber": "SIM-ORD-045",
+          "reason": "No available truck can carry this clustered slice"
+        },
+        {
+          "orderId": "6a62e596-3f22-4dcf-a051-369f3e76c1d8",
+          "orderNumber": "SIM-ORD-015",
+          "reason": "No available truck can carry this clustered slice"
+        }
+      ]
+    }
+  },
+  "successfulAllocations": [
+    {
+      "batchId": "a5e558e5-728f-4d3f-9179-42d2ac2bb847",
+      "batchNumber": "BATCH-20260508074855-574",
+      "orderIds": [
+        "a2e8b797-dc37-4bb0-9ff6-c16d52cd4776",
+        "ea250fb1-1fa6-48fb-b6ab-3b9e17bb3f20",
+        "719d1d27-0c6d-4bbd-8ed4-2eb00aa6bfd4",
+        "fd143f6d-0a5b-4977-a6bc-8ace7141166a",
+        "cc3005a4-0abf-42da-8763-a38aa28329e8",
+        "6dc695f7-1c72-4c1b-b568-127d7fccd3fa",
+        "8c27ce82-d88a-4bf7-9722-88eec6f0b41f",
+        "6fb2d679-8178-4ffa-b85c-274d8d75ca7d",
+        "5364d486-b07a-48b5-a380-673b9597967c",
+        "5d897ddd-fd98-41e2-9acd-9139e321df77",
+        "b2312ffe-779d-43b2-92f7-210efd8e8645",
+        "c411d7b0-4f45-4b57-9fa5-93ad15567056",
+        "161c67e4-f983-4291-a4e5-f348f6e76c68",
+        "710ff64f-f568-400a-893e-76b0dfabe102",
+        "95476de3-f793-4c72-8020-c057e3d5c519",
+        "5f99a05f-73d7-47cc-b8d1-b7a45a7d7aec"
+      ],
+      "orderNumbers": [
+        "SIM-ORD-007",
+        "SIM-ORD-031",
+        "SIM-ORD-043",
+        "SIM-ORD-067",
+        "SIM-ORD-001",
+        "SIM-ORD-013",
+        "SIM-ORD-049",
+        "SIM-ORD-061",
+        "SIM-ORD-037",
+        "SIM-ORD-058",
+        "SIM-ORD-022",
+        "SIM-ORD-004",
+        "SIM-ORD-028",
+        "SIM-ORD-052",
+        "SIM-ORD-064",
+        "SIM-ORD-016"
+      ],
+      "storageType": "NORMAL",
+      "totalWeight": 429.5,
+      "totalVolume": 47.2
+    },
+    {
+      "batchId": "4ce70f71-3d75-4ea3-bd05-01c674d6d175",
+      "batchNumber": "BATCH-20260508074855-900",
+      "orderIds": [
+        "8c7a510f-baba-4165-9784-7b571477db8e",
+        "f260d2ad-7d69-41fd-b319-921940f4d3d1",
+        "22c1279b-9997-427f-9476-03cf33d12998",
+        "10e6118e-1b0c-426e-a0e8-f4fdcc71651e",
+        "512e2ccc-fd81-4368-b1a6-43512b7b4fff",
+        "2215258e-ec89-420a-9c05-49bc89e4fe6a",
+        "0745c244-68b1-4300-b9db-4c6cc49975a0",
+        "31776a15-66fd-4279-a83c-721b59d1dabd",
+        "52d66aa4-d282-460d-a46d-388e97d25aad",
+        "ed09305c-1098-43f8-8c14-68abf1fc7b74",
+        "3a22011a-20d0-48c8-a9b1-6fb0c4280fb8",
+        "cf5bf3f7-010c-4b99-87a1-e1b24016b00d",
+        "4def10cb-fb90-4f40-a36e-9d6f062b3db8",
+        "93d64763-4fc5-45ca-bfa1-6a3df24cb7fb"
+      ],
+      "orderNumbers": [
+        "SIM-ORD-008",
+        "SIM-ORD-032",
+        "SIM-ORD-044",
+        "SIM-ORD-056",
+        "SIM-ORD-002",
+        "SIM-ORD-014",
+        "SIM-ORD-026",
+        "SIM-ORD-062",
+        "SIM-ORD-011",
+        "SIM-ORD-047",
+        "SIM-ORD-059",
+        "SIM-ORD-029",
+        "SIM-ORD-041",
+        "SIM-ORD-053"
+      ],
+      "storageType": "NORMAL",
+      "totalWeight": 427,
+      "totalVolume": 51.2
+    },
+    {
+      "batchId": "e5d77bd4-a59e-419f-b1f5-e281937d80fb",
+      "batchNumber": "BATCH-20260508074855-922",
+      "orderIds": [
+        "787ecce7-c248-412f-8776-1683b6518cd3",
+        "3c255199-b988-4284-a6dd-9e0e626d9bf6",
+        "1dbfcd85-14fa-4e4c-98cb-bf598a4ad60a",
+        "853a8a5e-2a39-4a5f-869e-e19eb103e0bd",
+        "5ced7bc3-2930-4617-a930-c4ecb064736b",
+        "6d9d6395-4c1a-4ee1-8cc1-cb0f17808404",
+        "1f11856b-13ee-4c4a-817d-06ae7e170d2f",
+        "e86b90df-ae44-4c68-8418-21a6fe4076a2",
+        "580b891a-9ec3-49ec-9694-42a830f3d6e1",
+        "ba053dec-311d-4b43-95aa-673e87a9e34e",
+        "b45600ed-4200-4970-b906-e875dc842717",
+        "6f00dee5-028b-42a7-b162-52967d1450d7",
+        "599e79af-7e5c-457b-aa4d-ad8190c9b910",
+        "66c129a5-52e3-41f5-bf96-10e8d89331e5",
+        "0bdedf8f-789b-40e2-9cf1-d276e519c082",
+        "5d0fb928-024e-452e-91b1-7ff5a0fdc741"
+      ],
+      "orderNumbers": [
+        "SIM-ORD-006",
+        "SIM-ORD-018",
+        "SIM-ORD-042",
+        "SIM-ORD-054",
+        "SIM-ORD-066",
+        "SIM-ORD-012",
+        "SIM-ORD-024",
+        "SIM-ORD-036",
+        "SIM-ORD-048",
+        "SIM-ORD-009",
+        "SIM-ORD-021",
+        "SIM-ORD-033",
+        "SIM-ORD-003",
+        "SIM-ORD-027",
+        "SIM-ORD-039",
+        "SIM-ORD-063"
+      ],
+      "storageType": "NORMAL",
+      "totalWeight": 317,
+      "totalVolume": 61.6
+    },
+    {
+      "batchId": "b6234d5a-dd8a-463a-bb6d-f4ce02b32e9a",
+      "batchNumber": "BATCH-20260508074855-620",
+      "orderIds": [
+        "df1f5969-c858-49c7-a173-82603e304398",
+        "71daaed2-ed8d-4042-a9f8-08ec31023371",
+        "fb3201d7-1916-4f57-9d07-0383445a26aa",
+        "a279dac6-862b-4f1a-b0a3-f58699a868e5",
+        "0e86b868-5320-4171-8898-5cb788b28d59"
+      ],
+      "orderNumbers": [
+        "SIM-ORD-020",
+        "SIM-ORD-050",
+        "SIM-ORD-035",
+        "SIM-ORD-005",
+        "SIM-ORD-065"
+      ],
+      "storageType": "COLD",
+      "totalWeight": 139,
+      "totalVolume": 17.2
+    }
+  ],
+  "rejectedOrders": [
+    {
+      "orderId": "2cbdc30d-26e1-4529-b2e0-7559fb28fdaa",
+      "orderNumber": "SIM-ORD-017",
+      "reason": "Order status is not PAID"
+    },
+    {
+      "orderId": "06071e2d-8a48-4978-aa55-c11924a50275",
+      "orderNumber": "SIM-ORD-019",
+      "reason": "Order is cancelled"
+    },
+    {
+      "orderId": "cae1dcd5-5472-4db7-99c4-ff9c43dcdf85",
+      "orderNumber": "SIM-ORD-023",
+      "reason": "Order weight/volume not defined"
+    },
+    {
+      "orderId": "ca6afbdb-f0f4-4f8d-89e1-0d0608653493",
+      "orderNumber": "SIM-ORD-034",
+      "reason": "Order status is not PAID"
+    },
+    {
+      "orderId": "53125e42-26a0-4c16-bbc6-bcf4c4a6319b",
+      "orderNumber": "SIM-ORD-038",
+      "reason": "Order is cancelled"
+    },
+    {
+      "orderId": "1a6e479f-4f1e-46fc-81ee-b393cd87c1eb",
+      "orderNumber": "SIM-ORD-046",
+      "reason": "Order weight/volume not defined"
+    },
+    {
+      "orderId": "897ce090-dfcf-4897-9801-6b41639a9c50",
+      "orderNumber": "SIM-ORD-051",
+      "reason": "Order status is not PAID"
+    },
+    {
+      "orderId": "e4ea3e52-4bc2-428a-963b-544628e905d0",
+      "orderNumber": "SIM-ORD-057",
+      "reason": "Order is cancelled"
+    },
+    {
+      "orderId": "38abbdc4-829e-4ba9-955b-569a7ed977cf",
+      "orderNumber": "SIM-ORD-068",
+      "reason": "Order status is not PAID"
+    },
+    {
+      "orderId": "4d4e6f4d-5df5-417b-be20-dc8079d1d262",
+      "orderNumber": "SIM-ORD-055",
+      "reason": "No available truck can carry this clustered slice"
+    },
+    {
+      "orderId": "dbd8d1e7-5b4d-4777-be6b-ace58c264b37",
+      "orderNumber": "SIM-ORD-025",
+      "reason": "No available truck can carry this clustered slice"
+    },
+    {
+      "orderId": "5fc1a5af-37d2-4fb2-bb7e-a3e440db4d53",
+      "orderNumber": "SIM-ORD-010",
+      "reason": "No available truck can carry this clustered slice"
+    },
+    {
+      "orderId": "ffab12d3-25fd-4578-8287-e4670a180ad7",
+      "orderNumber": "SIM-ORD-040",
+      "reason": "No available truck can carry this clustered slice"
+    },
+    {
+      "orderId": "151f9eb2-6de0-4099-b607-a0699892c1da",
+      "orderNumber": "SIM-ORD-030",
+      "reason": "No available truck can carry this clustered slice"
+    },
+    {
+      "orderId": "67f7e940-830f-4f62-b3d3-a0f2b9414cf9",
+      "orderNumber": "SIM-ORD-060",
+      "reason": "No available truck can carry this clustered slice"
+    },
+    {
+      "orderId": "ace3dd43-9336-4511-8b66-11a6468db7ce",
+      "orderNumber": "SIM-ORD-045",
+      "reason": "No available truck can carry this clustered slice"
+    },
+    {
+      "orderId": "6a62e596-3f22-4dcf-a051-369f3e76c1d8",
+      "orderNumber": "SIM-ORD-015",
+      "reason": "No available truck can carry this clustered slice"
+    }
+  ],
+  "rejectionReasons": [
+    {
+      "reason": "No available truck can carry this clustered slice",
+      "count": 8
+    },
+    {
+      "reason": "Order status is not PAID",
+      "count": 4
+    },
+    {
+      "reason": "Order is cancelled",
+      "count": 3
+    },
+    {
+      "reason": "Order weight/volume not defined",
+      "count": 2
+    }
+  ],
+  "batchingDecisions": [
+    {
+      "batchId": "a5e558e5-728f-4d3f-9179-42d2ac2bb847",
+      "clusterKey": "af58d909-15a4-4d10-8a3d-e43ae8dd45b7-NORMAL-CMB_NORTH-cluster-1",
+      "pickupHubId": "af58d909-15a4-4d10-8a3d-e43ae8dd45b7",
+      "storageType": "NORMAL",
+      "orderCount": 16
+    },
+    {
+      "batchId": "4ce70f71-3d75-4ea3-bd05-01c674d6d175",
+      "clusterKey": "2358b37a-bae2-415c-ae9d-a1e5f3f7debf-NORMAL-CMB_CENTRAL-cluster-1",
+      "pickupHubId": "2358b37a-bae2-415c-ae9d-a1e5f3f7debf",
+      "storageType": "NORMAL",
+      "orderCount": 14
+    },
+    {
+      "batchId": "e5d77bd4-a59e-419f-b1f5-e281937d80fb",
+      "clusterKey": "ea2ba564-846f-476f-a4c2-3b04777d2407-NORMAL-CMB_SOUTH-cluster-1",
+      "pickupHubId": "ea2ba564-846f-476f-a4c2-3b04777d2407",
+      "storageType": "NORMAL",
+      "orderCount": 16
+    },
+    {
+      "batchId": "b6234d5a-dd8a-463a-bb6d-f4ce02b32e9a",
+      "clusterKey": "2358b37a-bae2-415c-ae9d-a1e5f3f7debf-COLD-CMB_CENTRAL-cluster-1",
+      "pickupHubId": "2358b37a-bae2-415c-ae9d-a1e5f3f7debf",
+      "storageType": "COLD",
+      "orderCount": 5
+    }
+  ],
+  "routeGroupAssignments": [
+    {
+      "batchId": "a5e558e5-728f-4d3f-9179-42d2ac2bb847",
+      "routeGroupingKey": "af58d909-15a4-4d10-8a3d-e43ae8dd45b7-NORMAL-CMB_NORTH-cluster-1",
+      "assignedOrderIds": [
+        "a2e8b797-dc37-4bb0-9ff6-c16d52cd4776",
+        "ea250fb1-1fa6-48fb-b6ab-3b9e17bb3f20",
+        "719d1d27-0c6d-4bbd-8ed4-2eb00aa6bfd4",
+        "fd143f6d-0a5b-4977-a6bc-8ace7141166a",
+        "cc3005a4-0abf-42da-8763-a38aa28329e8",
+        "6dc695f7-1c72-4c1b-b568-127d7fccd3fa",
+        "8c27ce82-d88a-4bf7-9722-88eec6f0b41f",
+        "6fb2d679-8178-4ffa-b85c-274d8d75ca7d",
+        "5364d486-b07a-48b5-a380-673b9597967c",
+        "5d897ddd-fd98-41e2-9acd-9139e321df77",
+        "b2312ffe-779d-43b2-92f7-210efd8e8645",
+        "c411d7b0-4f45-4b57-9fa5-93ad15567056",
+        "161c67e4-f983-4291-a4e5-f348f6e76c68",
+        "710ff64f-f568-400a-893e-76b0dfabe102",
+        "95476de3-f793-4c72-8020-c057e3d5c519",
+        "5f99a05f-73d7-47cc-b8d1-b7a45a7d7aec"
+      ]
+    },
+    {
+      "batchId": "4ce70f71-3d75-4ea3-bd05-01c674d6d175",
+      "routeGroupingKey": "2358b37a-bae2-415c-ae9d-a1e5f3f7debf-NORMAL-CMB_CENTRAL-cluster-1",
+      "assignedOrderIds": [
+        "8c7a510f-baba-4165-9784-7b571477db8e",
+        "f260d2ad-7d69-41fd-b319-921940f4d3d1",
+        "22c1279b-9997-427f-9476-03cf33d12998",
+        "10e6118e-1b0c-426e-a0e8-f4fdcc71651e",
+        "512e2ccc-fd81-4368-b1a6-43512b7b4fff",
+        "2215258e-ec89-420a-9c05-49bc89e4fe6a",
+        "0745c244-68b1-4300-b9db-4c6cc49975a0",
+        "31776a15-66fd-4279-a83c-721b59d1dabd",
+        "52d66aa4-d282-460d-a46d-388e97d25aad",
+        "ed09305c-1098-43f8-8c14-68abf1fc7b74",
+        "3a22011a-20d0-48c8-a9b1-6fb0c4280fb8",
+        "cf5bf3f7-010c-4b99-87a1-e1b24016b00d",
+        "4def10cb-fb90-4f40-a36e-9d6f062b3db8",
+        "93d64763-4fc5-45ca-bfa1-6a3df24cb7fb"
+      ]
+    },
+    {
+      "batchId": "e5d77bd4-a59e-419f-b1f5-e281937d80fb",
+      "routeGroupingKey": "ea2ba564-846f-476f-a4c2-3b04777d2407-NORMAL-CMB_SOUTH-cluster-1",
+      "assignedOrderIds": [
+        "787ecce7-c248-412f-8776-1683b6518cd3",
+        "3c255199-b988-4284-a6dd-9e0e626d9bf6",
+        "1dbfcd85-14fa-4e4c-98cb-bf598a4ad60a",
+        "853a8a5e-2a39-4a5f-869e-e19eb103e0bd",
+        "5ced7bc3-2930-4617-a930-c4ecb064736b",
+        "6d9d6395-4c1a-4ee1-8cc1-cb0f17808404",
+        "1f11856b-13ee-4c4a-817d-06ae7e170d2f",
+        "e86b90df-ae44-4c68-8418-21a6fe4076a2",
+        "580b891a-9ec3-49ec-9694-42a830f3d6e1",
+        "ba053dec-311d-4b43-95aa-673e87a9e34e",
+        "b45600ed-4200-4970-b906-e875dc842717",
+        "6f00dee5-028b-42a7-b162-52967d1450d7",
+        "599e79af-7e5c-457b-aa4d-ad8190c9b910",
+        "66c129a5-52e3-41f5-bf96-10e8d89331e5",
+        "0bdedf8f-789b-40e2-9cf1-d276e519c082",
+        "5d0fb928-024e-452e-91b1-7ff5a0fdc741"
+      ]
+    },
+    {
+      "batchId": "b6234d5a-dd8a-463a-bb6d-f4ce02b32e9a",
+      "routeGroupingKey": "2358b37a-bae2-415c-ae9d-a1e5f3f7debf-COLD-CMB_CENTRAL-cluster-1",
+      "assignedOrderIds": [
+        "df1f5969-c858-49c7-a173-82603e304398",
+        "71daaed2-ed8d-4042-a9f8-08ec31023371",
+        "fb3201d7-1916-4f57-9d07-0383445a26aa",
+        "a279dac6-862b-4f1a-b0a3-f58699a868e5",
+        "0e86b868-5320-4171-8898-5cb788b28d59"
+      ]
+    }
+  ],
+  "supplierSelections": [
+    {
+      "orderNumber": "SIM-ORD-001",
+      "sellerId": "4a11a058-102a-4a0c-9253-5a66934a95bf",
+      "sellerName": "North Valley Farms",
+      "productName": "Demo Product 1"
+    },
+    {
+      "orderNumber": "SIM-ORD-002",
+      "sellerId": "3a1a5b12-c3dc-4ffb-8154-decb21a3ad3b",
+      "sellerName": "Southern Greens Cooperative",
+      "productName": "Demo Product 2"
+    },
+    {
+      "orderNumber": "SIM-ORD-003",
+      "sellerId": "99e7e9b3-c591-46d2-a23d-2f65d9fc4154",
+      "sellerName": "Central Harvest Hub",
+      "productName": "Demo Product 3"
+    },
+    {
+      "orderNumber": "SIM-ORD-004",
+      "sellerId": "4a11a058-102a-4a0c-9253-5a66934a95bf",
+      "sellerName": "North Valley Farms",
+      "productName": "Demo Product 1"
+    },
+    {
+      "orderNumber": "SIM-ORD-005",
+      "sellerId": "3a1a5b12-c3dc-4ffb-8154-decb21a3ad3b",
+      "sellerName": "Southern Greens Cooperative",
+      "productName": "Demo Product 2"
+    },
+    {
+      "orderNumber": "SIM-ORD-006",
+      "sellerId": "99e7e9b3-c591-46d2-a23d-2f65d9fc4154",
+      "sellerName": "Central Harvest Hub",
+      "productName": "Demo Product 3"
+    },
+    {
+      "orderNumber": "SIM-ORD-007",
+      "sellerId": "4a11a058-102a-4a0c-9253-5a66934a95bf",
+      "sellerName": "North Valley Farms",
+      "productName": "Demo Product 1"
+    },
+    {
+      "orderNumber": "SIM-ORD-008",
+      "sellerId": "3a1a5b12-c3dc-4ffb-8154-decb21a3ad3b",
+      "sellerName": "Southern Greens Cooperative",
+      "productName": "Demo Product 2"
+    },
+    {
+      "orderNumber": "SIM-ORD-009",
+      "sellerId": "99e7e9b3-c591-46d2-a23d-2f65d9fc4154",
+      "sellerName": "Central Harvest Hub",
+      "productName": "Demo Product 3"
+    },
+    {
+      "orderNumber": "SIM-ORD-010",
+      "sellerId": "4a11a058-102a-4a0c-9253-5a66934a95bf",
+      "sellerName": "North Valley Farms",
+      "productName": "Demo Product 1"
+    },
+    {
+      "orderNumber": "SIM-ORD-011",
+      "sellerId": "3a1a5b12-c3dc-4ffb-8154-decb21a3ad3b",
+      "sellerName": "Southern Greens Cooperative",
+      "productName": "Demo Product 2"
+    },
+    {
+      "orderNumber": "SIM-ORD-012",
+      "sellerId": "99e7e9b3-c591-46d2-a23d-2f65d9fc4154",
+      "sellerName": "Central Harvest Hub",
+      "productName": "Demo Product 3"
+    },
+    {
+      "orderNumber": "SIM-ORD-013",
+      "sellerId": "4a11a058-102a-4a0c-9253-5a66934a95bf",
+      "sellerName": "North Valley Farms",
+      "productName": "Demo Product 1"
+    },
+    {
+      "orderNumber": "SIM-ORD-014",
+      "sellerId": "3a1a5b12-c3dc-4ffb-8154-decb21a3ad3b",
+      "sellerName": "Southern Greens Cooperative",
+      "productName": "Demo Product 2"
+    },
+    {
+      "orderNumber": "SIM-ORD-015",
+      "sellerId": "99e7e9b3-c591-46d2-a23d-2f65d9fc4154",
+      "sellerName": "Central Harvest Hub",
+      "productName": "Demo Product 3"
+    },
+    {
+      "orderNumber": "SIM-ORD-016",
+      "sellerId": "4a11a058-102a-4a0c-9253-5a66934a95bf",
+      "sellerName": "North Valley Farms",
+      "productName": "Demo Product 1"
+    },
+    {
+      "orderNumber": "SIM-ORD-017",
+      "sellerId": "3a1a5b12-c3dc-4ffb-8154-decb21a3ad3b",
+      "sellerName": "Southern Greens Cooperative",
+      "productName": "Demo Product 2"
+    },
+    {
+      "orderNumber": "SIM-ORD-018",
+      "sellerId": "99e7e9b3-c591-46d2-a23d-2f65d9fc4154",
+      "sellerName": "Central Harvest Hub",
+      "productName": "Demo Product 3"
+    },
+    {
+      "orderNumber": "SIM-ORD-019",
+      "sellerId": "4a11a058-102a-4a0c-9253-5a66934a95bf",
+      "sellerName": "North Valley Farms",
+      "productName": "Demo Product 1"
+    },
+    {
+      "orderNumber": "SIM-ORD-020",
+      "sellerId": "3a1a5b12-c3dc-4ffb-8154-decb21a3ad3b",
+      "sellerName": "Southern Greens Cooperative",
+      "productName": "Demo Product 2"
+    },
+    {
+      "orderNumber": "SIM-ORD-021",
+      "sellerId": "99e7e9b3-c591-46d2-a23d-2f65d9fc4154",
+      "sellerName": "Central Harvest Hub",
+      "productName": "Demo Product 3"
+    },
+    {
+      "orderNumber": "SIM-ORD-022",
+      "sellerId": "4a11a058-102a-4a0c-9253-5a66934a95bf",
+      "sellerName": "North Valley Farms",
+      "productName": "Demo Product 1"
+    },
+    {
+      "orderNumber": "SIM-ORD-023",
+      "sellerId": "3a1a5b12-c3dc-4ffb-8154-decb21a3ad3b",
+      "sellerName": "Southern Greens Cooperative",
+      "productName": "Demo Product 2"
+    },
+    {
+      "orderNumber": "SIM-ORD-024",
+      "sellerId": "99e7e9b3-c591-46d2-a23d-2f65d9fc4154",
+      "sellerName": "Central Harvest Hub",
+      "productName": "Demo Product 3"
+    },
+    {
+      "orderNumber": "SIM-ORD-025",
+      "sellerId": "4a11a058-102a-4a0c-9253-5a66934a95bf",
+      "sellerName": "North Valley Farms",
+      "productName": "Demo Product 1"
+    },
+    {
+      "orderNumber": "SIM-ORD-026",
+      "sellerId": "3a1a5b12-c3dc-4ffb-8154-decb21a3ad3b",
+      "sellerName": "Southern Greens Cooperative",
+      "productName": "Demo Product 2"
+    },
+    {
+      "orderNumber": "SIM-ORD-027",
+      "sellerId": "99e7e9b3-c591-46d2-a23d-2f65d9fc4154",
+      "sellerName": "Central Harvest Hub",
+      "productName": "Demo Product 3"
+    },
+    {
+      "orderNumber": "SIM-ORD-028",
+      "sellerId": "4a11a058-102a-4a0c-9253-5a66934a95bf",
+      "sellerName": "North Valley Farms",
+      "productName": "Demo Product 1"
+    },
+    {
+      "orderNumber": "SIM-ORD-029",
+      "sellerId": "3a1a5b12-c3dc-4ffb-8154-decb21a3ad3b",
+      "sellerName": "Southern Greens Cooperative",
+      "productName": "Demo Product 2"
+    },
+    {
+      "orderNumber": "SIM-ORD-030",
+      "sellerId": "99e7e9b3-c591-46d2-a23d-2f65d9fc4154",
+      "sellerName": "Central Harvest Hub",
+      "productName": "Demo Product 3"
+    },
+    {
+      "orderNumber": "SIM-ORD-031",
+      "sellerId": "4a11a058-102a-4a0c-9253-5a66934a95bf",
+      "sellerName": "North Valley Farms",
+      "productName": "Demo Product 1"
+    },
+    {
+      "orderNumber": "SIM-ORD-032",
+      "sellerId": "3a1a5b12-c3dc-4ffb-8154-decb21a3ad3b",
+      "sellerName": "Southern Greens Cooperative",
+      "productName": "Demo Product 2"
+    },
+    {
+      "orderNumber": "SIM-ORD-033",
+      "sellerId": "99e7e9b3-c591-46d2-a23d-2f65d9fc4154",
+      "sellerName": "Central Harvest Hub",
+      "productName": "Demo Product 3"
+    },
+    {
+      "orderNumber": "SIM-ORD-034",
+      "sellerId": "4a11a058-102a-4a0c-9253-5a66934a95bf",
+      "sellerName": "North Valley Farms",
+      "productName": "Demo Product 1"
+    },
+    {
+      "orderNumber": "SIM-ORD-035",
+      "sellerId": "3a1a5b12-c3dc-4ffb-8154-decb21a3ad3b",
+      "sellerName": "Southern Greens Cooperative",
+      "productName": "Demo Product 2"
+    },
+    {
+      "orderNumber": "SIM-ORD-036",
+      "sellerId": "99e7e9b3-c591-46d2-a23d-2f65d9fc4154",
+      "sellerName": "Central Harvest Hub",
+      "productName": "Demo Product 3"
+    },
+    {
+      "orderNumber": "SIM-ORD-037",
+      "sellerId": "4a11a058-102a-4a0c-9253-5a66934a95bf",
+      "sellerName": "North Valley Farms",
+      "productName": "Demo Product 1"
+    },
+    {
+      "orderNumber": "SIM-ORD-038",
+      "sellerId": "3a1a5b12-c3dc-4ffb-8154-decb21a3ad3b",
+      "sellerName": "Southern Greens Cooperative",
+      "productName": "Demo Product 2"
+    },
+    {
+      "orderNumber": "SIM-ORD-039",
+      "sellerId": "99e7e9b3-c591-46d2-a23d-2f65d9fc4154",
+      "sellerName": "Central Harvest Hub",
+      "productName": "Demo Product 3"
+    },
+    {
+      "orderNumber": "SIM-ORD-040",
+      "sellerId": "4a11a058-102a-4a0c-9253-5a66934a95bf",
+      "sellerName": "North Valley Farms",
+      "productName": "Demo Product 1"
+    },
+    {
+      "orderNumber": "SIM-ORD-041",
+      "sellerId": "3a1a5b12-c3dc-4ffb-8154-decb21a3ad3b",
+      "sellerName": "Southern Greens Cooperative",
+      "productName": "Demo Product 2"
+    },
+    {
+      "orderNumber": "SIM-ORD-042",
+      "sellerId": "99e7e9b3-c591-46d2-a23d-2f65d9fc4154",
+      "sellerName": "Central Harvest Hub",
+      "productName": "Demo Product 3"
+    },
+    {
+      "orderNumber": "SIM-ORD-043",
+      "sellerId": "4a11a058-102a-4a0c-9253-5a66934a95bf",
+      "sellerName": "North Valley Farms",
+      "productName": "Demo Product 1"
+    },
+    {
+      "orderNumber": "SIM-ORD-044",
+      "sellerId": "3a1a5b12-c3dc-4ffb-8154-decb21a3ad3b",
+      "sellerName": "Southern Greens Cooperative",
+      "productName": "Demo Product 2"
+    },
+    {
+      "orderNumber": "SIM-ORD-045",
+      "sellerId": "99e7e9b3-c591-46d2-a23d-2f65d9fc4154",
+      "sellerName": "Central Harvest Hub",
+      "productName": "Demo Product 3"
+    },
+    {
+      "orderNumber": "SIM-ORD-046",
+      "sellerId": "4a11a058-102a-4a0c-9253-5a66934a95bf",
+      "sellerName": "North Valley Farms",
+      "productName": "Demo Product 1"
+    },
+    {
+      "orderNumber": "SIM-ORD-047",
+      "sellerId": "3a1a5b12-c3dc-4ffb-8154-decb21a3ad3b",
+      "sellerName": "Southern Greens Cooperative",
+      "productName": "Demo Product 2"
+    },
+    {
+      "orderNumber": "SIM-ORD-048",
+      "sellerId": "99e7e9b3-c591-46d2-a23d-2f65d9fc4154",
+      "sellerName": "Central Harvest Hub",
+      "productName": "Demo Product 3"
+    },
+    {
+      "orderNumber": "SIM-ORD-049",
+      "sellerId": "4a11a058-102a-4a0c-9253-5a66934a95bf",
+      "sellerName": "North Valley Farms",
+      "productName": "Demo Product 1"
+    },
+    {
+      "orderNumber": "SIM-ORD-050",
+      "sellerId": "3a1a5b12-c3dc-4ffb-8154-decb21a3ad3b",
+      "sellerName": "Southern Greens Cooperative",
+      "productName": "Demo Product 2"
+    },
+    {
+      "orderNumber": "SIM-ORD-051",
+      "sellerId": "99e7e9b3-c591-46d2-a23d-2f65d9fc4154",
+      "sellerName": "Central Harvest Hub",
+      "productName": "Demo Product 3"
+    },
+    {
+      "orderNumber": "SIM-ORD-052",
+      "sellerId": "4a11a058-102a-4a0c-9253-5a66934a95bf",
+      "sellerName": "North Valley Farms",
+      "productName": "Demo Product 1"
+    },
+    {
+      "orderNumber": "SIM-ORD-053",
+      "sellerId": "3a1a5b12-c3dc-4ffb-8154-decb21a3ad3b",
+      "sellerName": "Southern Greens Cooperative",
+      "productName": "Demo Product 2"
+    },
+    {
+      "orderNumber": "SIM-ORD-054",
+      "sellerId": "99e7e9b3-c591-46d2-a23d-2f65d9fc4154",
+      "sellerName": "Central Harvest Hub",
+      "productName": "Demo Product 3"
+    },
+    {
+      "orderNumber": "SIM-ORD-055",
+      "sellerId": "4a11a058-102a-4a0c-9253-5a66934a95bf",
+      "sellerName": "North Valley Farms",
+      "productName": "Demo Product 1"
+    },
+    {
+      "orderNumber": "SIM-ORD-056",
+      "sellerId": "3a1a5b12-c3dc-4ffb-8154-decb21a3ad3b",
+      "sellerName": "Southern Greens Cooperative",
+      "productName": "Demo Product 2"
+    },
+    {
+      "orderNumber": "SIM-ORD-057",
+      "sellerId": "99e7e9b3-c591-46d2-a23d-2f65d9fc4154",
+      "sellerName": "Central Harvest Hub",
+      "productName": "Demo Product 3"
+    },
+    {
+      "orderNumber": "SIM-ORD-058",
+      "sellerId": "4a11a058-102a-4a0c-9253-5a66934a95bf",
+      "sellerName": "North Valley Farms",
+      "productName": "Demo Product 1"
+    },
+    {
+      "orderNumber": "SIM-ORD-059",
+      "sellerId": "3a1a5b12-c3dc-4ffb-8154-decb21a3ad3b",
+      "sellerName": "Southern Greens Cooperative",
+      "productName": "Demo Product 2"
+    },
+    {
+      "orderNumber": "SIM-ORD-060",
+      "sellerId": "99e7e9b3-c591-46d2-a23d-2f65d9fc4154",
+      "sellerName": "Central Harvest Hub",
+      "productName": "Demo Product 3"
+    },
+    {
+      "orderNumber": "SIM-ORD-061",
+      "sellerId": "4a11a058-102a-4a0c-9253-5a66934a95bf",
+      "sellerName": "North Valley Farms",
+      "productName": "Demo Product 1"
+    },
+    {
+      "orderNumber": "SIM-ORD-062",
+      "sellerId": "3a1a5b12-c3dc-4ffb-8154-decb21a3ad3b",
+      "sellerName": "Southern Greens Cooperative",
+      "productName": "Demo Product 2"
+    },
+    {
+      "orderNumber": "SIM-ORD-063",
+      "sellerId": "99e7e9b3-c591-46d2-a23d-2f65d9fc4154",
+      "sellerName": "Central Harvest Hub",
+      "productName": "Demo Product 3"
+    },
+    {
+      "orderNumber": "SIM-ORD-064",
+      "sellerId": "4a11a058-102a-4a0c-9253-5a66934a95bf",
+      "sellerName": "North Valley Farms",
+      "productName": "Demo Product 1"
+    },
+    {
+      "orderNumber": "SIM-ORD-065",
+      "sellerId": "3a1a5b12-c3dc-4ffb-8154-decb21a3ad3b",
+      "sellerName": "Southern Greens Cooperative",
+      "productName": "Demo Product 2"
+    },
+    {
+      "orderNumber": "SIM-ORD-066",
+      "sellerId": "99e7e9b3-c591-46d2-a23d-2f65d9fc4154",
+      "sellerName": "Central Harvest Hub",
+      "productName": "Demo Product 3"
+    },
+    {
+      "orderNumber": "SIM-ORD-067",
+      "sellerId": "4a11a058-102a-4a0c-9253-5a66934a95bf",
+      "sellerName": "North Valley Farms",
+      "productName": "Demo Product 1"
+    },
+    {
+      "orderNumber": "SIM-ORD-068",
+      "sellerId": "3a1a5b12-c3dc-4ffb-8154-decb21a3ad3b",
+      "sellerName": "Southern Greens Cooperative",
+      "productName": "Demo Product 2"
+    }
+  ],
+  "executionMetrics": {
+    "totalOrdersInInputSnapshot": 68,
+    "totalCandidatesFetched": 68,
+    "totalEligible": 59,
+    "totalRejected": 17,
+    "totalBatchesCreated": 4,
+    "totalOrdersBatched": 51,
+    "totalRoutesAutoAssigned": 4,
+    "runStatus": "COMPLETED_WITH_REJECTIONS",
+    "failureReason": null
+  },
+  "allocationReasoning": [
+    {
+      "batchId": "a5e558e5-728f-4d3f-9179-42d2ac2bb847",
+      "batchNumber": "BATCH-20260508074855-574",
+      "reasoning": [
+        "Cluster key af58d909-15a4-4d10-8a3d-e43ae8dd45b7-NORMAL-CMB_NORTH-cluster-1 passed geo-clustering and packing.",
+        "Pickup hub af58d909-15a4-4d10-8a3d-e43ae8dd45b7 and storage type NORMAL constrained allocation.",
+        "Truck fit validated for totalWeight=429.5, totalVolume=47.2, orders=16."
+      ]
+    },
+    {
+      "batchId": "4ce70f71-3d75-4ea3-bd05-01c674d6d175",
+      "batchNumber": "BATCH-20260508074855-900",
+      "reasoning": [
+        "Cluster key 2358b37a-bae2-415c-ae9d-a1e5f3f7debf-NORMAL-CMB_CENTRAL-cluster-1 passed geo-clustering and packing.",
+        "Pickup hub 2358b37a-bae2-415c-ae9d-a1e5f3f7debf and storage type NORMAL constrained allocation.",
+        "Truck fit validated for totalWeight=427, totalVolume=51.2, orders=14."
+      ]
+    },
+    {
+      "batchId": "e5d77bd4-a59e-419f-b1f5-e281937d80fb",
+      "batchNumber": "BATCH-20260508074855-922",
+      "reasoning": [
+        "Cluster key ea2ba564-846f-476f-a4c2-3b04777d2407-NORMAL-CMB_SOUTH-cluster-1 passed geo-clustering and packing.",
+        "Pickup hub ea2ba564-846f-476f-a4c2-3b04777d2407 and storage type NORMAL constrained allocation.",
+        "Truck fit validated for totalWeight=317, totalVolume=61.6, orders=16."
+      ]
+    },
+    {
+      "batchId": "b6234d5a-dd8a-463a-bb6d-f4ce02b32e9a",
+      "batchNumber": "BATCH-20260508074855-620",
+      "reasoning": [
+        "Cluster key 2358b37a-bae2-415c-ae9d-a1e5f3f7debf-COLD-CMB_CENTRAL-cluster-1 passed geo-clustering and packing.",
+        "Pickup hub 2358b37a-bae2-415c-ae9d-a1e5f3f7debf and storage type COLD constrained allocation.",
+        "Truck fit validated for totalWeight=139, totalVolume=17.2, orders=5."
+      ]
+    }
+  ]
+}

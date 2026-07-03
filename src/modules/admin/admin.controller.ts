@@ -4,19 +4,163 @@ import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
 import { findAdminByEmail } from './admin.service.js';
 import {
-  getAllOrders,          
+  getAllOrders,
+  listBatches,
+  getBatchById,
+  listFleetOptions,
+  assignRouteFleet,
 } from "./admin.service.js";
-import { getLockedUsers, grantAccountAccess, approveUser, rejectUser, getPendingUsers } from "../auth/auth.service.js";
-import { createNotification } from "../notifications/notification.service.js";
+import { approveUser, rejectUser, getPendingUsers } from "../auth/auth.service.js";
 import { sendApprovalEmail, sendRejectionEmail } from "../../utils/mailer.js";
+import {
+  getAdminRefundById,
+  getAdminRefundQueue,
+  updateRefundStatus,
+} from "../field_admin/fieldadmin.service.js";
+import { getBatchRoutingHandoffBundle } from "../Order_Aggregator/aggregator.service.js";
 
-export const listAllOrders: RequestHandler = async (_req, res) => {
+export const listAllOrders: RequestHandler = async (req, res) => {
   try {
-    const data = await getAllOrders();
+    const since = typeof req.query.since === "string" ? req.query.since : undefined;
+    const until = typeof req.query.until === "string" ? req.query.until : undefined;
+    const data = await getAllOrders({ since, until });
     res.json(data);
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Error";
     res.status(500).json({ message });
+  }
+};
+
+export const listBatchesController: RequestHandler = async (req, res) => {
+  try {
+    const status = typeof req.query.status === "string" ? req.query.status : undefined;
+    const scheduledDate = typeof req.query.scheduledDate === "string" ? req.query.scheduledDate : undefined;
+    const fieldAdminId = typeof req.query.fieldAdminId === "string" ? req.query.fieldAdminId : undefined;
+    const dropClusterKey = typeof req.query.dropClusterKey === "string" ? req.query.dropClusterKey : undefined;
+    const since = typeof req.query.since === "string" ? req.query.since : undefined;
+    const until = typeof req.query.until === "string" ? req.query.until : undefined;
+    const limit = typeof req.query.limit === "string" ? Number(req.query.limit) : undefined;
+    const offset = typeof req.query.offset === "string" ? Number(req.query.offset) : undefined;
+    const data = await listBatches({ status, scheduledDate, fieldAdminId, dropClusterKey, since, until, limit, offset });
+    res.json(data);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Error";
+    res.status(500).json({ message });
+  }
+};
+
+export const getBatchDetailController: RequestHandler<{ batchId: string }> = async (req, res) => {
+  try {
+    const batchId = Array.isArray(req.params.batchId) ? req.params.batchId[0] : req.params.batchId;
+    if (!batchId) {
+      res.status(400).json({ message: "Batch id is required" });
+      return;
+    }
+    const data = await getBatchById(batchId);
+    res.json(data);
+  } catch (error: unknown) {
+    console.error("[getBatchDetailController] error:", error);
+    const message = error instanceof Error ? error.message : "Error";
+    const status = message.includes("not found") ? 404 : 500;
+    res.status(status).json({ message });
+  }
+};
+
+export const getBatchRoutingHandoffController: RequestHandler<{ batchId: string }> = async (req, res) => {
+  try {
+    const batchId = Array.isArray(req.params.batchId) ? req.params.batchId[0] : req.params.batchId;
+    if (!batchId) {
+      res.status(400).json({ message: "Batch id is required" });
+      return;
+    }
+    const data = await getBatchRoutingHandoffBundle(batchId);
+    res.json(data);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Error";
+    const status = message.includes("not found") ? 404 : 400;
+    res.status(status).json({ message });
+  }
+};
+
+export const listFleetOptionsController: RequestHandler = async (_req, res) => {
+  try {
+    const data = await listFleetOptions();
+    res.json(data);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Error";
+    res.status(500).json({ message });
+  }
+};
+
+export const assignRouteFleetController: RequestHandler<{ routeId: string }> = async (req, res) => {
+  try {
+    const routeId = Array.isArray(req.params.routeId) ? req.params.routeId[0] : req.params.routeId;
+    if (!routeId) {
+      res.status(400).json({ message: "Route id is required" });
+      return;
+    }
+    const { truckId, fieldAdminId } = req.body as { truckId?: string; fieldAdminId?: string };
+    if (!truckId?.trim() || !fieldAdminId?.trim()) {
+      res.status(400).json({ message: "truckId and fieldAdminId are required" });
+      return;
+    }
+    const data = await assignRouteFleet(routeId, { truckId, fieldAdminId });
+    res.json(data);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Error";
+    const status = message.includes("not found") ? 404 : 400;
+    res.status(status).json({ message });
+  }
+};
+
+export const listRefundsController: RequestHandler = async (req, res) => {
+  try {
+    const status = typeof req.query.status === "string" ? req.query.status : undefined;
+    const fieldAdminId = typeof req.query.fieldAdminId === "string" ? req.query.fieldAdminId : undefined;
+    const routeId = typeof req.query.routeId === "string" ? req.query.routeId : undefined;
+    const since = typeof req.query.since === "string" ? req.query.since : undefined;
+    const until = typeof req.query.until === "string" ? req.query.until : undefined;
+    const data = await getAdminRefundQueue({ status, fieldAdminId, routeId, since, until });
+    res.json(data);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Error";
+    res.status(400).json({ message });
+  }
+};
+
+export const getRefundDetailController: RequestHandler<{ id: string }> = async (req, res) => {
+  try {
+    const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+    if (!id) {
+      res.status(400).json({ message: "Refund id is required" });
+      return;
+    }
+    const data = await getAdminRefundById(id);
+    res.json(data);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Error";
+    const status = message.includes("not found") ? 404 : 400;
+    res.status(status).json({ message });
+  }
+};
+
+export const updateRefundController: RequestHandler<{ id: string }> = async (req, res) => {
+  try {
+    const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+    if (!id) {
+      res.status(400).json({ message: "Refund id is required" });
+      return;
+    }
+    const { status } = req.body as { status: "PROCESSING" | "COMPLETED" | "FAILED" };
+    if (!status || !["PROCESSING", "COMPLETED", "FAILED"].includes(status)) {
+      res.status(400).json({ message: "status must be PROCESSING, COMPLETED, or FAILED" });
+      return;
+    }
+    const data = await updateRefundStatus(id, status);
+    res.json(data);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Error";
+    res.status(400).json({ message });
   }
 };
 
@@ -34,7 +178,7 @@ export const loginAdmin = async (req: Request, res: Response) => {
 
     // Create a 7-day token with the admin's id, role, and token version inside it
     const token = jwt.sign(
-      { userId: admin.id, role: 'admin', tokenVersion: admin.tokenVersion },
+      { userId: admin.id, role: 'ADMIN', tokenVersion: admin.tokenVersion },
       process.env.JWT_SECRET!,
       { expiresIn: '7d' }
     );

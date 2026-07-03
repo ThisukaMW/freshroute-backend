@@ -5,13 +5,12 @@
 import type { Request, Response } from "express";
 import { loginUser } from "./auth.service.js";
 import bcrypt from "bcrypt";
-import jwt from "jsonwebtoken";
 import { findCustomerByEmail, createCustomer } from "./auth.service.js";
 import { createVendor, findVendorByEmail } from "./auth.service.js";
 import { forgotPassword, resetPassword, secureAccount } from "./auth.service.js";
 import { sendPasswordChangedEmail } from "../../utils/mailer.js";
 import { loginSeller, loginBuyer } from "./auth.service.js";
-import { notifyAdminsSellerRegistered } from "../notifications/notification.events.js";
+import { notifyAdminsSellerRegistered, notifyAdminsBuyerRegistered } from "../notifications/notification.events.js";
 import prisma from "../../config/database.js";
 
 // ─── Validation helpers ────────────────────────────────────────────
@@ -108,8 +107,6 @@ export const registerCustomer = async (req: Request, res: Response) => {
       phone:   normalizePhone(phone),
       city,
       address,
-      latitude:  latitude  !== undefined ? Number(latitude)  : undefined,
-      longitude: longitude !== undefined ? Number(longitude) : undefined,
     });
 
     // Buyers auto-login — no admin approval needed

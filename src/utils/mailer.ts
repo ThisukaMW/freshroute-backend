@@ -22,6 +22,10 @@ transporter.verify((error) => {
   }
 });
 
+export const closeTransporter = (): void => {
+  transporter.close();
+};
+
 // The "from" name and address shown in every email
 const FROM = `"FreshRoute" <${process.env.EMAIL_USER}>`;
 

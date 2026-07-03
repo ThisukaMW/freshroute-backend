@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { protect } from "../../middlewares/auth.middleware.js";
+import { requireOrderingPortalOpen } from "../../middlewares/orderingPortal.middleware.js";
 import {
   addToCart,
   removeFromCart,
@@ -19,16 +20,16 @@ router.use(protect);
 router.get("/", getCart);
 
 // POST /api/v1/cart/add - Add item to cart
-router.post("/add", addToCart);
+router.post("/add", requireOrderingPortalOpen, addToCart);
 
 // DELETE /api/v1/cart/:productId - Remove item from cart
 router.delete("/:productId", removeFromCart);
 
 // PATCH /api/v1/cart - Update item quantity
-router.patch("/", updateQuantity);
+router.patch("/", requireOrderingPortalOpen, updateQuantity);
 
 // POST /api/v1/cart/apply-promo - Apply promo code
-router.post("/apply-promo", applyPromo);
+router.post("/apply-promo", requireOrderingPortalOpen, applyPromo);
 
 // GET /api/v1/cart/total - Get cart total
 router.get("/total", totalCart);

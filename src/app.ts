@@ -3,9 +3,13 @@ import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
-dotenv.config({ override: true });
 import authRoutes from "./modules/auth/auth.routes.js";
 import driverRoutes from "./modules/driver/driver.routes.js";
+import plannerRoutes from "./modules/planner/planner.routes.js";
+import plannerMetricsRoutes from "./modules/planner/planner.metrics.routes.js";
+import routeDispatchRoutes from "./modules/planner/routes.routes.js";
+import fieldAdminRoutes from "./modules/field_admin/fieldadmin.routes.js";
+import aggregatorRoutes from "./modules/Order_Aggregator/aggregator.routes.js";
 import productRoutes from "./modules/product/product.routes.js";
 import cartRoutes from "./modules/cart/cart.routes.js";
 import paymentRoutes from "./modules/payment/payment.route.js";
@@ -20,15 +24,26 @@ import ratingRouter from "./modules/rating/rating.routes.js";
 import inventoryRoutes from "./modules/inventory/inventory.routes.js";
 import dashboardRoutes from "./modules/dashboard/dashboard.routes.js";
 import analyticsRouter from "./modules/analytics/analytics.routes.js";
+import systemRoutes from "./modules/system/system.routes.js";
+
+dotenv.config({ override: true });
 
 const app = express();
 
-app.use(cors());
+const isProduction = process.env.NODE_ENV === "production";
 
-app.get("/", (req, res) => {
-  res.send("Server is running 🚀");
-});
+app.use(
+  cors({
+    origin: isProduction
+      ? (process.env.CORS_ORIGINS ?? process.env.CLIENT_URL ?? false)
+      : true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  })
+);
+app.use(express.json());
 
+// Health check
 app.get("/api/v1/health", (_req, res) => {
   res.json({ status: "FreshRoute backend running 🚀" });
 });
@@ -41,6 +56,11 @@ app.use((req, res, next) => {
 
 app.use("/api/v1/auth", authRoutes);
 app.use("/api/v1/driver", driverRoutes);
+app.use("/api/v1/batches", plannerRoutes);
+app.use("/api/v1/routes", routeDispatchRoutes);
+app.use("/api/v1/planner", plannerMetricsRoutes);
+app.use("/api/v1/fieldadmin", fieldAdminRoutes);
+app.use("/api/v1/aggregator", aggregatorRoutes);
 app.use("/api/v1/products", productRoutes);
 app.use("/api/v1/cart", cartRoutes);
 app.use("/api/v1/inventory", inventoryRoutes);
@@ -55,5 +75,6 @@ app.use("/api/v1/notifications", notificationRoutes);
 app.use("/api/v1/trucks", truckRoutes);
 app.use("/api/v1/ratings", ratingRouter);
 app.use("/api/v1/analytics", analyticsRouter);
+app.use("/api/v1/system", systemRoutes);
 
 export default app;

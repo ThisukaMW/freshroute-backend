@@ -1,5 +1,6 @@
 import express, { Router, type RequestHandler } from "express";
 import { protect } from "../../middlewares/auth.middleware.js";
+import { requireOrderingPortalOpen } from "../../middlewares/orderingPortal.middleware.js";
 import {
   createPayment,
   listPayments,
@@ -19,7 +20,7 @@ router.post(
 // All other payment routes require authentication
 router.use(protect as RequestHandler);
 
-router.post("/", createPayment as RequestHandler);
+router.post("/", requireOrderingPortalOpen, createPayment as RequestHandler);
 router.get("/", listPayments as RequestHandler);
 router.get("/:id", paymentById as RequestHandler);
 

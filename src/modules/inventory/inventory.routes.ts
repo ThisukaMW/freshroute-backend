@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { protect } from "../../middlewares/auth.middleware.js";
+import { requireOrderingPortalOpen } from "../../middlewares/orderingPortal.middleware.js";
 import {
   getSellerInventoryController,
   getProductStockController,
