@@ -211,6 +211,7 @@ export const addItemToCart = async (
         productId,
         quantity,
         sellerId,
+        price: sellerProduct.price,
       },
       include: { product: true, seller: true },
     });
