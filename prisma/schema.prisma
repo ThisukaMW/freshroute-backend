@@ -191,7 +191,6 @@ model User {
   sellerProfile     Seller?
   buyerProfile      Buyer?
   fieldAdminProfile FieldAdmin? 
-  fieldAdminProfile FieldAdmin?
   notifications     Notification[]
   notificationPrefs Json?
 
@@ -349,21 +348,6 @@ model DeliveryZone {
   orders      Order[]
 
   @@index([isActive])
-}
-
-model FieldAdmin {
-  id              String    @id @default(uuid())
-  userId          String    @unique
-  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  vehicleNumber   String
-  vehicleType     String
-  isActive        Boolean   @default(true)
-
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-
-  @@index([userId])
 }
 
 // ============= PRODUCTS & ORDERS =============
