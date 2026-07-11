@@ -1,3 +1,4 @@
+import net from "node:net";
 import {
   PrismaClient,
   TruckStorageSupport,
@@ -11,6 +12,9 @@ import {
 } from "../src/modules/Order_Aggregator/aggregator.colombo.js";
 
 dotenv.config();
+
+// See src/config/database.ts for why this is required on this network.
+net.setDefaultAutoSelectFamily(false);
 
 /** `placedAt` inside [placementDayStart, placementDayEnd] for aggregator intake day (Asia/Colombo). */
 const placedAtOnPlacementDay = (
@@ -26,8 +30,14 @@ const placedAtOnPlacementDay = (
   return t;
 };
 
-const connectionString = process.env.DATABASE_URL!;
-const adapter = new PrismaPg({ connectionString });
+const adapter = new PrismaPg({
+  connectionString: process.env.DATABASE_URL!,
+  max: 1,
+  connectionTimeoutMillis: 30000,
+  idleTimeoutMillis: 30000,
+  keepAlive: true,
+  keepAliveInitialDelayMillis: 5000,
+});
 const prisma = new PrismaClient({ adapter });
 
 const seedMode = process.env.SEED_MODE?.trim().toLowerCase() ?? "default";

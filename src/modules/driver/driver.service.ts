@@ -35,12 +35,14 @@ export const getDriverStats = async (driverId: string) => {
   const tomorrow = new Date(today);
   tomorrow.setDate(tomorrow.getDate() + 1);
 
-  // Get ALL of today's routes for this driver
+  // Active routes take priority; fall back to today's scheduled routes
   const routes = await prisma.route.findMany({
     where: {
       driverId,
-      scheduledStart: { gte: today, lt: tomorrow },
-      status: { in: ["ASSIGNED", "STARTED", "IN_PROGRESS", "COMPLETED"] },
+      OR: [
+        { status: { in: ["STARTED", "IN_PROGRESS"] } },
+        { status: { in: ["ASSIGNED", "COMPLETED"] }, scheduledStart: { gte: today, lt: tomorrow } },
+      ],
     },
     include: {
       stops: {
