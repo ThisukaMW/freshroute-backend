@@ -18,6 +18,12 @@ const loadScheduledAggregation = async () => {
   const { runScheduledAggregationIfDue } = await import(modulePath);
   return runScheduledAggregationIfDue;
 };
+
+const loadCartReminder = async () => {
+  const modulePath = "./jobs/cartReminder.job." + "js";
+  const { runCartReminderIfDue } = await import(modulePath);
+  return runCartReminderIfDue;
+};
 import { setPlannerRealtimeIo } from "./modules/planner/planner.realtime.js";
 import { startRouteRerouteWorker } from "./modules/planner/route-reroute.worker.js";
 
@@ -69,6 +75,7 @@ setupSocketHandlers(io);
 
 let cartExpiryInterval: NodeJS.Timeout | null = null;
 let aggregationInterval: NodeJS.Timeout | null = null;
+let cartReminderInterval: NodeJS.Timeout | null = null;
 let isShuttingDown = false;
 
 const shutdown = (signal: string) => {
@@ -79,6 +86,7 @@ const shutdown = (signal: string) => {
 
   if (cartExpiryInterval) clearInterval(cartExpiryInterval);
   if (aggregationInterval) clearInterval(aggregationInterval);
+  if (cartReminderInterval) clearInterval(cartReminderInterval);
 
   try {
     io.disconnectSockets(true);
@@ -103,7 +111,14 @@ httpServer.listen(PORT, async () => {
 
   const clearExpiredCarts = await loadClearExpiredCarts();
   const runScheduledAggregationIfDue = await loadScheduledAggregation();
+  const runCartReminderIfDue = await loadCartReminder();
 
+  // Catch up if the server was down during the reminder hour
+  try {
+    await runCartReminderIfDue();
+  } catch (error) {
+    console.error("Cart reminder check failed on startup:", error);
+  }
   // Run once immediately on boot to catch any carts that expired while the server was down
   try {
     await clearExpiredCarts();
@@ -138,3 +153,13 @@ httpServer.listen(PORT, async () => {
     }
   }, 60 * 1000);
 });
+
+// Poll every minute during the reminder hour
+  cartReminderInterval = setInterval(async () => {
+    try {
+      const runCartReminderIfDue = await loadCartReminder();
+      await runCartReminderIfDue();
+    } catch (error) {
+      console.error("Cart reminder check failed:", error);
+    }
+  }, 60 * 1000);

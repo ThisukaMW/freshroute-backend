@@ -15,6 +15,7 @@ import {
   editRating,
   flagRating,
 } from './rating.service.js';
+import { createDriverRating, checkDriverRating } from './rating.service.js';
 
 // Extracts the first value from a param that may be a string or string array
 const getParam = (param: string | string[]): string =>
@@ -23,11 +24,28 @@ const getParam = (param: string | string[]): string =>
 // POST /api/v1/rating
 export const submitRating = async (req: AuthRequest, res: Response) => {
   try {
-    const { orderId, productId, sellerId, driverId, buyerId, ratings, comment } = req.body;
+    const { orderId, productId, sellerId, driverId, buyerId, comment } = req.body;
+
+    const ratings =
+      typeof req.body.ratings === 'string' ? JSON.parse(req.body.ratings) : req.body.ratings;
+
     if (!orderId || !productId || !sellerId || !driverId || !buyerId || !ratings) {
       return res.status(400).json({ message: 'Missing required fields' });
     }
-    const rating = await createRating({ orderId, productId, sellerId, driverId, buyerId, ratings, comment });
+
+    const files = (req as AuthRequest & { files?: Express.Multer.File[] }).files ?? [];
+    const imageUrls = files.map((file) => file.path);
+
+    const rating = await createRating({
+      orderId,
+      productId,
+      sellerId,
+      driverId,
+      buyerId,
+      ratings,
+      comment,
+      images: imageUrls,
+    });
     return res.status(201).json({ message: 'Rating submitted', rating });
   } catch (err: any) {
     return res.status(400).json({ message: err.message ?? 'Failed to submit rating' });
@@ -206,5 +224,51 @@ export const flagRatingController = async (req: Request, res: Response) => {
     return res.json(result);
   } catch (err: any) {
     return res.status(400).json({ message: err.message ?? 'Failed to flag rating' });
+  }
+};
+
+// POST /api/v1/rating/driver-rating
+export const submitDriverRating = async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.userId;
+    if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+
+    const db = await import('../../config/database.js').then(m => m.default);
+    const buyer = await db.buyer.findUnique({ where: { userId }, select: { id: true } });
+    if (!buyer) return res.status(404).json({ message: 'Buyer profile not found' });
+
+    const { orderId, driverId, rating, comment } = req.body;
+    if (!orderId || !driverId || !rating) {
+      return res.status(400).json({ message: 'orderId, driverId, and rating are required' });
+    }
+
+    const driverRating = await createDriverRating({
+      orderId, driverId, buyerId: buyer.id, rating, comment,
+    });
+    return res.status(201).json({ message: 'Driver rating submitted', driverRating });
+  } catch (err: any) {
+    return res.status(400).json({ message: err.message ?? 'Failed to submit driver rating' });
+  }
+};
+
+// GET /api/v1/rating/driver-rating/check?orderId=:orderId
+export const checkDriverRatingController = async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.userId;
+    if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+
+    const { orderId } = req.query;
+    if (!orderId || typeof orderId !== 'string') {
+      return res.status(400).json({ message: 'orderId query param is required' });
+    }
+
+    const db = await import('../../config/database.js').then(m => m.default);
+    const buyer = await db.buyer.findUnique({ where: { userId }, select: { id: true } });
+    if (!buyer) return res.status(404).json({ message: 'Buyer profile not found' });
+
+    const alreadyRated = await checkDriverRating(orderId, buyer.id);
+    return res.json({ alreadyRated });
+  } catch (err) {
+    return res.status(500).json({ message: 'Failed to check driver rating status' });
   }
 };

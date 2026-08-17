@@ -379,6 +379,9 @@ export const getApprovedProducts = async () => {
           status: { in: ["ACTIVE", "CONFIRMED"] }, // Count soft + hard reserved
         },
       },
+      ratings: {                 // ← add this
+        select: { rating: true },
+      },
     },
     orderBy: { createdAt: "desc" },
   });
@@ -400,6 +403,12 @@ export const getApprovedProducts = async () => {
     // Available = Total - Reserved
     const availableStock = Math.max(0, totalStock - reservedQuantity);
 
+    // ← add these two lines
+    const totalRatings = product.ratings.length;
+    const averageRating = totalRatings
+      ? Math.round((product.ratings.reduce((s, r) => s + r.rating, 0) / totalRatings) * 10) / 10
+      : 0;
+
     return {
       id: product.id,
       name: product.name,
@@ -414,6 +423,8 @@ export const getApprovedProducts = async () => {
       status: product.status,
       seller: product.seller,
       sellerCount: product.sellerProducts.length,
+      averageRating,      // ← add
+      totalRatings,       // ← add
       createdAt: product.createdAt,
       updatedAt: product.updatedAt,
     };
@@ -465,7 +476,11 @@ export const getSellersByProductName = async (productId: string) => {
     where: { productId },
     include: {
       seller: {
-        include: {
+        select: {
+          id: true,
+          businessName: true,
+          averageRating: true,
+          totalRatings: true,
           user: {
             select: { name: true, email: true },
           },
@@ -480,32 +495,40 @@ export const getSellersByProductName = async (productId: string) => {
 // GET ALL PRODUCTS (ROLE BASED)
 // ===============================
 export const getAllProducts = async (role: string) => {
-  if (role === "SELLER" || role === "ADMIN") {
-    return prisma.product.findMany({
+  const baseInclude = {
+    seller: {
       include: {
-        seller: {
-          include: {
-            user: {
-              select: { name: true },
-            },
-          },
-        },
-      },
-      orderBy: { createdAt: "desc" },
-    });
-  }
-
-  return prisma.product.findMany({
-    where: { status: "APPROVED" },
-    include: {
-      seller: {
-        include: {
-          user: {
-            select: { name: true },
-          },
-        },
+        user: { select: { name: true } },
       },
     },
-    orderBy: { createdAt: "desc" },
+    ratings: {
+      select: { rating: true },
+    },
+  };
+
+  const products =
+    role === "SELLER" || role === "ADMIN"
+      ? await prisma.product.findMany({
+          include: baseInclude,
+          orderBy: { createdAt: "desc" },
+        })
+      : await prisma.product.findMany({
+          where: { status: "APPROVED" },
+          include: baseInclude,
+          orderBy: { createdAt: "desc" },
+        });
+
+  // Collapse the raw ratings array into an average + count, same pattern
+  // as getSellerProductsWithRatings in rating.service.ts
+  return products.map((p) => {
+    const totalRatings = p.ratings.length;
+    const averageRating = totalRatings
+      ? Math.round(
+          (p.ratings.reduce((sum, r) => sum + r.rating, 0) / totalRatings) * 10
+        ) / 10
+      : 0;
+
+    const { ratings, ...rest } = p;
+    return { ...rest, averageRating, totalRatings };
   });
 };

@@ -208,3 +208,42 @@ export const notifySellerLowStock = async (
     console.error("[notifySellerLowStock] failed:", err);
   }
 };
+
+// ─────────────────────────────────────────────
+// 🛒 BUYER: Reminds the buyer once per delivery day, covering their whole
+// ─────────────────────────────────────────────
+export const notifyBuyerCartReminder = async (
+  buyerUserId: string,
+  itemCount: number
+) => {
+  try {
+    await createNotification({
+      userId: buyerUserId,
+      title: "⏰ Your cart is waiting",
+      body: `You still have ${itemCount} item(s) in your cart. Complete checkout before ordering closes for today.`,
+      data: { type: "CART_REMINDER" },
+    });
+  } catch (err) {
+    console.error("[notifyBuyerCartReminder] failed:", err);
+  }
+};
+
+// ─────────────────────────────────────────────
+// 🛒 BUYER: Notifies the buyer when an item is added to cart
+// ─────────────────────────────────────────────
+export const notifyBuyerItemAdded = async (
+  buyerUserId: string,
+  productName: string,
+  quantity: number
+) => {
+  try {
+    await createNotification({
+      userId: buyerUserId,
+      title: "🛒 Item added to cart",
+      body: `${productName} (x${quantity}) was added to your cart.`,
+      data: { type: "ITEM_ADDED_TO_CART", productName },
+    });
+  } catch (err) {
+    console.error("[notifyBuyerItemAdded] failed:", err);
+  }
+};

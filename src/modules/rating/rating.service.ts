@@ -14,6 +14,7 @@ interface RatingInput {
     packaging?: number;
   };
   comment?: string;
+  images?: string[];   // ← add
 }
 
 // ---------------- SUBMIT RATING (per product) ----------------
@@ -51,6 +52,7 @@ export const createRating = async (input: RatingInput) => {
       productQualityRating: input.ratings.quality,
       packagingRating:      input.ratings.packaging ?? null,
       comment:              input.comment,
+      images:               input.images && input.images.length ? input.images : undefined,  // ← add
       isVerifiedPurchase:   true,
     },
     include: {
@@ -59,18 +61,6 @@ export const createRating = async (input: RatingInput) => {
       buyer:   { include: { user: true } },
       product: true,
     },
-  });
-
-  // ---- update driver average rating ----
-  const driverRatings = await prisma.rating.findMany({
-    where: { driverId: input.driverId },
-    select: { deliveryRating: true },
-  });
-  const driverTotal = driverRatings.length;
-  const driverAvg   = driverRatings.reduce((sum, r) => sum + (r.deliveryRating ?? 0), 0) / driverTotal;
-  await prisma.driver.update({
-    where: { id: input.driverId },
-    data:  { averageRating: driverAvg, totalRatings: driverTotal },
   });
 
   // ---- update seller average rating ----
@@ -333,4 +323,58 @@ export const flagRating = async (ratingId: string) => {
   if (!rating) throw new Error('Rating not found');
   await prisma.rating.update({ where: { id: ratingId }, data: { isFlagged: true } });
   return { message: 'Rating flagged for review' };
+};
+
+// ---------------- SUBMIT DRIVER RATING (once per order) ----------------
+export const createDriverRating = async (input: {
+  orderId: string;
+  driverId: string;
+  buyerId: string;
+  rating: number;
+  comment?: string;
+}) => {
+  const existing = await prisma.driverRating.findUnique({
+    where: { orderId: input.orderId },
+  });
+  if (existing) throw new Error('You have already rated the driver for this order');
+
+  const order = await prisma.order.findUnique({
+    where: { id: input.orderId },
+    select: { buyerId: true },
+  });
+  if (!order) throw new Error('Order not found');
+  if (order.buyerId !== input.buyerId) throw new Error('This order does not belong to you');
+
+  const driverRating = await prisma.driverRating.create({
+    data: {
+      orderId: input.orderId,
+      driverId: input.driverId,
+      buyerId: input.buyerId,
+      rating: input.rating,
+      comment: input.comment,
+    },
+  });
+
+  // Recalculate the driver's average from DriverRating only — one entry per trip
+  const allRatings = await prisma.driverRating.findMany({
+    where: { driverId: input.driverId },
+    select: { rating: true },
+  });
+  const total = allRatings.length;
+  const avg = allRatings.reduce((sum, r) => sum + r.rating, 0) / total;
+  await prisma.driver.update({
+    where: { id: input.driverId },
+    data: { averageRating: avg, totalRatings: total },
+  });
+
+  return driverRating;
+};
+
+// ---------------- CHECK IF BUYER ALREADY RATED THE DRIVER FOR THIS ORDER ----------------
+export const checkDriverRating = async (orderId: string, buyerId: string): Promise<boolean> => {
+  const existing = await prisma.driverRating.findFirst({
+    where: { orderId, buyerId },
+    select: { id: true },
+  });
+  return !!existing;
 };

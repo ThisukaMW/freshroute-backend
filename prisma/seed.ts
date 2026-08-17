@@ -78,7 +78,7 @@ const seedSimulationScenario = async () => {
 
   const passwordHash = await bcrypt.hash("demo123", 10);
   const buyerHash = await bcrypt.hash("buyer123", 10);
-  const adminHash = await bcrypt.hash("admin123", 10);
+  const adminHash = await bcrypt.hash("Admin@1234", 10);
 
   await prisma.user.create({
     data: {
@@ -384,7 +384,7 @@ async function main() {
   const passwordHash = await bcrypt.hash("driver123", 10);
 
   // ─── Platform Admin (for /auth/admin/login + aggregator manual override) ───
-  const adminPasswordHash = await bcrypt.hash("admin123", 10);
+  const adminPasswordHash = await bcrypt.hash("Admin@1234", 10);
   await prisma.user.create({
     data: {
       email: "admin@freshroute.com",
@@ -1484,7 +1484,7 @@ async function main() {
   console.log("─────────────────────────────────");
   console.log("Admin login (for aggregator manual override):");
   console.log("  Email:    admin@freshroute.com");
-  console.log("  Password: admin123");
+  console.log("  Password: Admin@1234");
   console.log("─────────────────────────────────");
   console.log("Field Admin login:");
   console.log("  Email:    fieldadmin@freshroute.com");

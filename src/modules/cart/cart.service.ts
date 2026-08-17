@@ -1,5 +1,6 @@
 import prisma from "../../config/database.js";
 import * as inventoryService from "../inventory/inventory.service.js";
+import { notifyBuyerItemAdded } from "../notifications/notification.events.js";
 
 // ============= HELPER FUNCTIONS =============
 
@@ -256,6 +257,9 @@ export const addItemToCart = async (
       expiresAt: expiresAt,
     },
   });
+
+  // ✅ NEW: notify buyer that item was added
+  await notifyBuyerItemAdded(userId, cartItem.product.name, quantity);
 
   console.log(
     `\n✅ [CART] addItemToCart COMPLETE - Returning item with sellerId: ${cartItem.sellerId}\n`,
