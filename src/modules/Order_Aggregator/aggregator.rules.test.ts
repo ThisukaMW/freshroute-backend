@@ -48,11 +48,8 @@ test("eligibility allows valid paid order", () => {
   assert.equal(getEligibilityFailureReason(baseOrder), null);
 });
 
-test("eligibility rejects order without delivery time slot", () => {
-  assert.equal(
-    getEligibilityFailureReason({ ...baseOrder, deliveryTimeSlot: null }),
-    "Delivery time slot missing"
-  );
+test("eligibility allows paid order without delivery time slot", () => {
+  assert.equal(getEligibilityFailureReason({ ...baseOrder, deliveryTimeSlot: null }), null);
 });
 
 test("eligibility rejects order without delivery address", () => {

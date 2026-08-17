@@ -14,9 +14,10 @@ export const getEligibilityFailureReason = (order: CandidateOrder): string | nul
   if ((order.totalWeight ?? 0) <= 0 && (order.totalVolume ?? 0) <= 0) {
     return "Order weight/volume not defined";
   }
-  if (!order.deliveryTimeSlot) {
-    return "Delivery time slot missing";
-  }
+  // Timeslot required for overnight/deferral batching (disabled for latest-20 runs).
+  // if (!order.deliveryTimeSlot) {
+  //   return "Delivery time slot missing";
+  // }
   if (!order.sellers || order.sellers.length === 0) {
     return "Seller pickup location missing";
   }

@@ -1,6 +1,6 @@
 import prisma from "../../config/database.js";
 import { clusterByDeliveryGeo } from "./aggregator.clustering.js";
-import { splitByCapacity } from "./aggregator.packing.js";
+import { ensureAtLeastTwoSlices, splitByCapacity } from "./aggregator.packing.js";
 import {
   canTruckCarrySlice,
   getEligibilityFailureReason,
@@ -15,7 +15,7 @@ import type {
 import {
   getDeliveryDayBoundsColombo,
   getDeliverySlotBoundsColombo,
-  getOrderPlacementDayBoundsColombo,
+  // getOrderPlacementDayBoundsColombo,
 } from "./aggregator.colombo.js";
 import { buildCatchupCandidateWhere, classifyRejectedOrders } from "./aggregator.deferral.js";
 import { assignNearestHub, batchNumber } from "./aggregator.utils.js";
@@ -234,7 +234,7 @@ const mapCandidateOrder = (order: {
     isCancelled: order.isCancelled,
     batchId: order.batchId,
     deliveryDate: order.deliveryDate,
-    deliveryTimeSlot: order.deliveryTimeSlot,
+    deliveryTimeSlot: order.deliveryTimeSlot ?? "MORNING",
     deliveryAddress: order.deliveryAddress,
     deliveryLat: order.deliveryLat,
     deliveryLng: order.deliveryLng,
@@ -302,6 +302,69 @@ const getCatchupCandidates = async (
   });
 
   return orders.map(mapCandidateOrder);
+};
+
+const RECENT_CANDIDATE_LIMIT = 20;
+
+const paidUnbatchedWhere = {
+  status: "PAID" as const,
+  isCancelled: false,
+  batchId: null,
+  OR: [{ totalWeight: { gt: 0 } }, { totalVolume: { gt: 0 } }],
+};
+
+// Latest 20 paid unbatched orders, plus any still-paid leftovers from a prior rejection.
+const getRecentCandidates = async (limit = RECENT_CANDIDATE_LIMIT): Promise<CandidateOrder[]> => {
+  let recent = await prisma.order.findMany({
+    where: paidUnbatchedWhere,
+    include: candidateInclude,
+    orderBy: { placedAt: "desc" },
+    take: limit,
+  });
+
+  if (recent.length === 0) {
+    recent = await prisma.order.findMany({
+      where: { status: "PAID", isCancelled: false, batchId: null },
+      include: candidateInclude,
+      orderBy: { placedAt: "desc" },
+      take: limit,
+    });
+  }
+
+  let previouslyRejected: typeof recent = [];
+  try {
+    const rejectedRows = await prisma.aggregationRunRejection.findMany({
+      select: { orderId: true },
+      distinct: ["orderId"],
+    });
+    const rejectedOrderIds = rejectedRows.map((row) => row.orderId);
+    if (rejectedOrderIds.length > 0) {
+      previouslyRejected = await prisma.order.findMany({
+        where: {
+          status: "PAID",
+          isCancelled: false,
+          batchId: null,
+          id: { in: rejectedOrderIds },
+        },
+        include: candidateInclude,
+      });
+    }
+  } catch (error) {
+    console.error(
+      "[aggregator] previously-rejected lookup failed:",
+      error instanceof Error ? error.message : error
+    );
+  }
+
+  const byId = new Map<string, (typeof recent)[number]>();
+  for (const order of [...previouslyRejected, ...recent]) {
+    byId.set(order.id, order);
+  }
+
+  console.log(
+    `[aggregator] candidates: recent=${recent.length}, previouslyRejected=${previouslyRejected.length}, merged=${byId.size}`
+  );
+  return [...byId.values()].map(mapCandidateOrder);
 };
 
 //assign a delivery zone to an order.
@@ -473,8 +536,9 @@ const notifyCatchupBatchedOrders = async (
 
 //persist the geo assignments of orders.
 const persistGeoAssignments = async (orders: CandidateOrder[], dryRun: boolean) => {
-  if (dryRun) return;
-  await prisma.$transaction(
+  if (dryRun || orders.length === 0) return;
+  // Neon pooled connections time out Prisma $transaction(array) on order.update.
+  await Promise.all(
     orders.map((order) =>
       prisma.order.update({
         where: { id: order.id },
@@ -520,7 +584,8 @@ const createBatchesOnly = async (
     );
 
     try {
-      const createdSlice = await prisma.$transaction(async (tx) => {
+      const createdSlice = await prisma.$transaction(
+        async (tx) => {
         const orderDetails = await tx.order.findMany({
           where: { id: { in: slice.orders.map((order) => order.id) } },
           include: {
@@ -604,7 +669,9 @@ const createBatchesOnly = async (
           totalVolume: slice.totalVolume,
           truckId: selectedTruck.id,
         };
-      });
+      },
+      { timeout: 20000, maxWait: 15000 }
+    );
       created.push(createdSlice);
       reserveResourceById(availableTrucks, selectedTruck.id);
     } catch (error) {
@@ -659,22 +726,25 @@ export const runOrderAggregation = async (input: AggregationRunInput): Promise<A
     },
   });
   try {
-    const { deliveryDayStart, deliveryDayEnd } = getDeliveryDayBoundsColombo(
+    const { deliveryDayStart } = getDeliveryDayBoundsColombo(
       input.targetDeliveryDay ?? input.windowStart
     );
-    const { placementDayStart, placementDayEnd } = getOrderPlacementDayBoundsColombo(deliveryDayStart);
+    // Overnight / catch-up placement-day windows (disabled — latest 20 paid orders only).
+    // const { deliveryDayEnd } = getDeliveryDayBoundsColombo(input.targetDeliveryDay ?? input.windowStart);
+    // const { placementDayStart, placementDayEnd } = getOrderPlacementDayBoundsColombo(deliveryDayStart);
     const trucks = await getAvailableTrucks();
     const hubs = await ensureHubs();
     const zones = await getDeliveryZones();
-    const fetchedCandidates =
-      config.runMode === "catchup" && config.targetDeliverySlot
-        ? await getCatchupCandidates(
-            deliveryDayStart,
-            deliveryDayEnd,
-            config.targetDeliverySlot,
-            input.includeDeferredFromSlots ?? []
-          )
-        : await getOvernightCandidates(placementDayStart, placementDayEnd);
+    // const fetchedCandidates =
+    //   config.runMode === "catchup" && config.targetDeliverySlot
+    //     ? await getCatchupCandidates(
+    //         deliveryDayStart,
+    //         deliveryDayEnd,
+    //         config.targetDeliverySlot,
+    //         input.includeDeferredFromSlots ?? []
+    //       )
+    //     : await getOvernightCandidates(placementDayStart, placementDayEnd);
+    const fetchedCandidates = await getRecentCandidates();
     const { eligible, rejected } = evaluateEligibility(fetchedCandidates);
 
     const withGeo = eligible.map((order) => {
@@ -695,7 +765,9 @@ export const runOrderAggregation = async (input: AggregationRunInput): Promise<A
       maxWeightPerBatch: config.maxWeightPerBatch,
       maxVolumePerBatch: config.maxVolumePerBatch,
     });
-    const truckFeasibleSlices = makeTruckFeasibleSlices(slices, trucks, rejected);
+    const truckFeasibleSlices = ensureAtLeastTwoSlices(
+      makeTruckFeasibleSlices(slices, trucks, rejected)
+    );
 
     if (dryRun) {
       for (const slice of truckFeasibleSlices) {
@@ -722,22 +794,24 @@ export const runOrderAggregation = async (input: AggregationRunInput): Promise<A
           deliveryDayStart
         );
 
-    const slotByOrderId = new Map(
-      fetchedCandidates.map((order) => [order.id, order.deliveryTimeSlot])
-    );
-    const { deferredOrders, terminalRejections } = await processAggregationRejections(
-      rejected,
-      slotByOrderId,
-      deliveryDayStart,
-      dryRun
-    );
-
-    if (!dryRun && config.runMode === "catchup") {
-      await notifyCatchupBatchedOrders(
-        batchesCreated.flatMap((batch) => batch.orderIds),
-        slotByOrderId
-      );
-    }
+    // Timeslot deferral + catch-up success notifications (disabled).
+    // const slotByOrderId = new Map(
+    //   fetchedCandidates.map((order) => [order.id, order.deliveryTimeSlot])
+    // );
+    // const { deferredOrders, terminalRejections } = await processAggregationRejections(
+    //   rejected,
+    //   slotByOrderId,
+    //   deliveryDayStart,
+    //   dryRun
+    // );
+    // if (!dryRun && config.runMode === "catchup") {
+    //   await notifyCatchupBatchedOrders(
+    //     batchesCreated.flatMap((batch) => batch.orderIds),
+    //     slotByOrderId
+    //   );
+    // }
+    const deferredOrders: AggregationSummary["deferredOrders"] = [];
+    const terminalRejections: AggregationSummary["terminalRejections"] = [];
 
     const summary: AggregationSummary = {
       runId: run.id,
