@@ -2,6 +2,7 @@ import "dotenv/config";
 
 import express from "express";
 import cors from "cors";
+import path from "path";
 import dotenv from "dotenv";
 dotenv.config({ override: true });
 import authRoutes from "./modules/auth/auth.routes.js";
@@ -24,6 +25,9 @@ import analyticsRouter from "./modules/analytics/analytics.routes.js";
 const app = express();
 
 app.use(cors());
+
+// Serve uploaded files (images) from /uploads
+app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
 app.get("/", (req, res) => {
   res.send("Server is running 🚀");
