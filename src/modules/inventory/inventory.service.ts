@@ -122,8 +122,11 @@ export const getSellerInventory = async (sellerId: string) => {
   return sellerProducts.map((sp) => ({
     id: sp.product.id,
     sellerProductId: sp.id,
-    name: sp.product.name,
+    name: sp.name,                    // seller's own label
+    productType: sp.product.name,     // catalog type — locked
     category: sp.product.category,
+    unit: sp.product.unit,            // was missing entirely
+    lowStockThreshold: sp.product.lowStock,
     description: sp.product.description,
     sellerPrice: sp.price,
     sellerStock: sp.stock,

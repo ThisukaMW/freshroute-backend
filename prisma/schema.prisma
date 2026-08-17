@@ -391,6 +391,7 @@ model SellerProduct {
   productId String
   sellerId  String
 
+  name  String   
   price Float
   stock Float
 
@@ -508,7 +509,7 @@ model CartItem {
   seller    Seller    @relation(fields: [sellerId], references: [id], onDelete: Cascade)
 
   quantity  Float
-  price     Float     // snapshot of SellerProduct.price at time of add/update
+  price     Decimal?  @db.Decimal(10, 2)   // snapshot of SellerProduct.price at time of add/update
   savedForLater Boolean @default(false)
 
   createdAt DateTime  @default(now())

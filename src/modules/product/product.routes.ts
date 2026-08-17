@@ -10,6 +10,7 @@ import {
   getAllProductsController,
   getProductByIdController,
   getSellersByProductNameController,
+  getSellerProductsController,
 } from "./product.controller.js";
 
 import multer from "multer";
@@ -25,6 +26,7 @@ const router = Router();
 router.get("/", getAllProductsController);
 router.get("/approved", getApprovedProductsController);
 router.get("/pending", protect, getPendingProductsController); // admin fetches this
+router.get("/seller/my-products", protect, getSellerProductsController); // seller fetches their own listings
 
 router.post("/add", protect, upload.array("images"), addProduct); // seller creates product
 
