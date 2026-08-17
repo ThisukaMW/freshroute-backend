@@ -3,9 +3,11 @@ import assert from "node:assert/strict";
 import {
   colomboCivilDayStartUtc,
   computeOrderDeliveryDateColombo,
+  getCatchupRunWindowColombo,
   getColomboYmd,
   getDeliverySlotBoundsColombo,
   getOrderPlacementDayBoundsColombo,
+  isWithinCatchupHourColombo,
 } from "./aggregator.colombo.js";
 
 test("2026-05-10T18:30:00.000Z is 2026-05-11 in Colombo", () => {
@@ -36,4 +38,13 @@ test("computeOrderDeliveryDateColombo uses next day and slot start", () => {
   const paidAt = new Date("2026-05-10T12:00:00.000Z");
   const deliveryDate = computeOrderDeliveryDateColombo(paidAt, "EVENING");
   assert.equal(deliveryDate.toISOString(), "2026-05-11T12:30:00.000Z");
+});
+
+test("catch-up afternoon window is 11:00-12:00 Colombo", () => {
+  const now = new Date("2026-05-11T05:30:00.000Z");
+  const { windowStart, windowEnd } = getCatchupRunWindowColombo(now, 11);
+  assert.equal(windowStart.toISOString(), "2026-05-11T05:30:00.000Z");
+  assert.equal(windowEnd.toISOString(), "2026-05-11T06:30:00.000Z");
+  assert.equal(isWithinCatchupHourColombo(now, 11), true);
+  assert.equal(isWithinCatchupHourColombo(now, 17), false);
 });

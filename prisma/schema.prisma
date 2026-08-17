@@ -306,6 +306,7 @@ model FieldAdmin {
 
   // relationships to tasks
   routes                Route[]
+  batches               Batch[]
   inspections           ProductInspection[]
   deliveryVerifications DeliveryVerification[]
   damageReports         DamageReport[]
@@ -422,6 +423,11 @@ model Order {
   deliveryDate    DateTime?
   specialInstructions String?
 
+  deferredFromSlot     DeliveryTimeSlot?
+  aggregationDeferCount Int              @default(0)
+  lastAggregationRejectionReason String?
+  lastAggregationNoticeAt DateTime?
+
   pickupHubId     String?
   pickupHub       Hub?            @relation(fields: [pickupHubId], references: [id], onDelete: SetNull)
 
@@ -455,6 +461,7 @@ model Order {
   @@index([status, isCancelled, batchId, deliveryDate])
   @@index([pickupHubId, storageType])
   @@index([deliveryZoneId])
+  @@index([status, batchId, deliveryTimeSlot, deferredFromSlot])
 }
 
 model OrderItem {
@@ -725,6 +732,12 @@ model Batch {
   pickupHubId     String?
   pickupHub       Hub?            @relation(fields: [pickupHubId], references: [id], onDelete: SetNull)
 
+  truckId         String?
+  truck           Truck?          @relation(fields: [truckId], references: [id], onDelete: SetNull)
+
+  fieldAdminId    String?
+  fieldAdmin      FieldAdmin?     @relation(fields: [fieldAdminId], references: [id], onDelete: SetNull)
+
   scheduledDate   DateTime        // Target delivery date
   timeWindowStart DateTime        // e.g., 10:00 AM
   timeWindowEnd   DateTime        // e.g., 2:00 PM
@@ -750,6 +763,8 @@ model Batch {
   @@index([scheduledDate, timeWindowStart])
   @@index([pickupHubId, storageType])
   @@index([dropClusterKey])
+  @@index([truckId])
+  @@index([fieldAdminId])
 }
 
 // ============= ROUTING SYSTEM =============
@@ -895,6 +910,7 @@ model AggregationRunRejection {
   orderId         String
   orderNumber     String
   reason          String
+  action          String?
   createdAt       DateTime       @default(now())
 
   @@index([runId])
@@ -1047,6 +1063,7 @@ model Truck {
   isAvailable   Boolean      @default(true)
 
   routes        Route[]
+  batches       Batch[]
 
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt

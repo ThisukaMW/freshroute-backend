@@ -1,4 +1,4 @@
-import type { ClusteredOrderGroup, PackedBatchSlice } from "./aggregator.types.js";
+import type { CandidateOrder, ClusteredOrderGroup, PackedBatchSlice } from "./aggregator.types.js";
 
 //split the clusters into slices based on the capacity limits until one of the limits is exceeded.
 export const splitByCapacity = (
@@ -64,4 +64,35 @@ export const splitByCapacity = (
   }
 
   return slices;
+};
+
+const sliceTotals = (orders: CandidateOrder[]) => ({
+  totalWeight: parseFloat(orders.reduce((sum, order) => sum + (order.totalWeight ?? 0), 0).toFixed(2)),
+  totalVolume: parseFloat(orders.reduce((sum, order) => sum + (order.totalVolume ?? 0), 0).toFixed(2)),
+});
+
+/** If packing produced a single slice with 2+ orders, split it in half so a run creates at least 2 batches. */
+export const ensureAtLeastTwoSlices = (slices: PackedBatchSlice[]): PackedBatchSlice[] => {
+  if (slices.length !== 1) return slices;
+  const only = slices[0]!;
+  if (only.orders.length < 2) return slices;
+
+  const mid = Math.ceil(only.orders.length / 2);
+  const firstOrders = only.orders.slice(0, mid);
+  const secondOrders = only.orders.slice(mid);
+
+  return [
+    {
+      ...only,
+      clusterKey: `${only.clusterKey}-a`,
+      orders: firstOrders,
+      ...sliceTotals(firstOrders),
+    },
+    {
+      ...only,
+      clusterKey: `${only.clusterKey}-b`,
+      orders: secondOrders,
+      ...sliceTotals(secondOrders),
+    },
+  ];
 };

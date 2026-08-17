@@ -39,7 +39,7 @@ test("getFieldAdminProfile returns mapped field admin details", async () => {
   restoreFind();
 });
 
-test("getOrdersByStatus filters scheduled orders to active route assignments", async () => {
+test("getOrdersByStatus filters scheduled orders to the assigned field admin batch", async () => {
   const restoreFieldAdmin = withMock(prisma.fieldAdmin, "findUnique", ((async () => ({
     id: "fa-1",
     userId: "u1",
@@ -50,11 +50,9 @@ test("getOrdersByStatus filters scheduled orders to active route assignments", a
     "findMany",
     ((async (args: any) => {
       assert.deepEqual(args.where.status, { in: ["BATCHED", "ASSIGNED"] });
-      assert.deepEqual(args.where.batch.routes.some, { fieldAdminId: "fa-1" });
-      assert.deepEqual(args.where.OR, [
-        { status: { notIn: ["BATCHED", "ASSIGNED", "IN_TRANSIT"] } },
-        { batch: { routes: { some: { fieldAdminId: "fa-1", status: { in: ["ASSIGNED", "STARTED", "IN_PROGRESS"] } } } } },
-      ]);
+      assert.deepEqual(args.where.batch, {
+        OR: [{ fieldAdminId: "fa-1" }, { routes: { some: { fieldAdminId: "fa-1" } } }],
+      });
       return [];
     }) as unknown) as typeof prisma.order.findMany
   );
@@ -65,7 +63,7 @@ test("getOrdersByStatus filters scheduled orders to active route assignments", a
   restoreFieldAdmin();
 });
 
-test("getAllOrders hides stale batched orders when the route is no longer active", async () => {
+test("getAllOrders loads orders from batches assigned to the field admin", async () => {
   const restoreFieldAdmin = withMock(prisma.fieldAdmin, "findUnique", ((async () => ({
     id: "fa-1",
     userId: "u1",
@@ -75,11 +73,9 @@ test("getAllOrders hides stale batched orders when the route is no longer active
     prisma.order,
     "findMany",
     ((async (args: any) => {
-      assert.deepEqual(args.where.batch.routes.some, { fieldAdminId: "fa-1" });
-      assert.deepEqual(args.where.OR, [
-        { status: { notIn: ["BATCHED", "ASSIGNED", "IN_TRANSIT"] } },
-        { batch: { routes: { some: { fieldAdminId: "fa-1", status: { in: ["ASSIGNED", "STARTED", "IN_PROGRESS"] } } } } },
-      ]);
+      assert.deepEqual(args.where.batch, {
+        OR: [{ fieldAdminId: "fa-1" }, { routes: { some: { fieldAdminId: "fa-1" } } }],
+      });
       return [];
     }) as unknown) as typeof prisma.order.findMany
   );
@@ -156,14 +152,24 @@ test("getDashboardOverview counts only active assigned/in-transit orders", async
     ((async (args: any) => {
       assert.deepEqual(args.where, {
         status: { in: ["BATCHED", "ASSIGNED", "IN_TRANSIT"] },
-        batch: { routes: { some: { fieldAdminId: "fa-1", status: { in: ["ASSIGNED", "STARTED", "IN_PROGRESS"] } } } },
+        batch: {
+          OR: [{ fieldAdminId: "fa-1" }, { routes: { some: { fieldAdminId: "fa-1" } } }],
+        },
       });
       return 4;
     }) as unknown) as typeof prisma.order.count
   );
   const restoreAssessmentCount = withMock(prisma.assessment, "count", ((async () => 2) as unknown) as typeof prisma.assessment.count);
   const restoreStopCount = withMock(prisma.stop, "count", ((async () => 5) as unknown) as typeof prisma.stop.count);
-  const restoreRouteCount = withMock(prisma.route, "count", ((async () => 1) as unknown) as typeof prisma.route.count);
+  const restoreBatchCount = withMock(
+    prisma.batch,
+    "count",
+    ((async (args: any) => {
+      assert.equal(args.where.fieldAdminId, "fa-1");
+      assert.deepEqual(args.where.status, { in: ["CLOSED", "ROUTED", "IN_PROGRESS"] });
+      return 1;
+    }) as unknown) as typeof prisma.batch.count
+  );
 
   const { assignedOrders, assessments, pendingQuality, routesToday } = await getDashboardOverview("fa-1");
 
@@ -172,7 +178,7 @@ test("getDashboardOverview counts only active assigned/in-transit orders", async
   assert.equal(pendingQuality, 5);
   assert.equal(routesToday, 1);
 
-  restoreRouteCount();
+  restoreBatchCount();
   restoreStopCount();
   restoreAssessmentCount();
   restoreOrderCount();

@@ -120,8 +120,8 @@ router.get("/payment/history", paymentHistory);
 router.get("/payment/invoices", paymentInvoices);
 router.get("/payment/methods", paymentMethods);
 router.get("/payment/refunds", paymentRefunds);
-router.get("/payment/refunds/:id", paymentRefundDetail);
 router.get("/payment/refunds/eligible-orders", paymentRefundEligibleOrders);
+router.get("/payment/refunds/:id", paymentRefundDetail);
 // NOTE: added refund initiation endpoint used by refund screen action flow.
 router.post("/payment/refunds/initiate", paymentRefundInitiate);
 

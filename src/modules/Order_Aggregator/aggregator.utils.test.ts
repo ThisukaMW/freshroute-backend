@@ -24,6 +24,8 @@ const makeOrder = (id: string, lat: number, lng: number): CandidateOrder => ({
   sellerLat: null,
   sellerLng: null,
   sellerIds: [],
+  deferredFromSlot: null,
+  sellers: [],
 });
 
 test("sequenceOrdersNearestNeighbor starts from hub and chains nearest stops", () => {

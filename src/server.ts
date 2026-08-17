@@ -13,11 +13,19 @@ const loadClearExpiredCarts = async () => {
   return clearExpiredCarts;
 };
 
-const loadScheduledAggregation = async () => {
-  const modulePath = "./jobs/aggregatorScheduled.job." + "js";
-  const { runScheduledAggregationIfDue } = await import(modulePath);
-  return runScheduledAggregationIfDue;
-};
+// Midnight overnight + catch-up aggregation jobs are disabled.
+// NOTE: a later auto-trigger can be wired here (e.g. poll when 20+ paid unbatched orders exist).
+// const loadScheduledAggregation = async () => {
+//   const modulePath = "./jobs/aggregatorScheduled.job." + "js";
+//   const { runScheduledAggregationIfDue } = await import(modulePath);
+//   return runScheduledAggregationIfDue;
+// };
+//
+// const loadCatchupAggregation = async () => {
+//   const modulePath = "./jobs/aggregatorCatchup.job." + "js";
+//   const { runDueCatchupAggregations } = await import(modulePath);
+//   return runDueCatchupAggregations;
+// };
 import { setPlannerRealtimeIo } from "./modules/planner/planner.realtime.js";
 import { startRouteRerouteWorker } from "./modules/planner/route-reroute.worker.js";
 
@@ -102,7 +110,10 @@ httpServer.listen(PORT, async () => {
   console.log(`Server running on port ${PORT}`);
 
   const clearExpiredCarts = await loadClearExpiredCarts();
-  const runScheduledAggregationIfDue = await loadScheduledAggregation();
+  // NOTE: midnight overnight + catch-up aggregation jobs are disabled.
+  // A later auto-trigger can be wired here (e.g. poll when 20+ paid unbatched orders exist).
+  // const runScheduledAggregationIfDue = await loadScheduledAggregation();
+  // const runDueCatchupAggregations = await loadCatchupAggregation();
 
   // Run once immediately on boot to catch any carts that expired while the server was down
   try {
@@ -112,11 +123,17 @@ httpServer.listen(PORT, async () => {
   }
 
   // Catch up overnight batching if the server was down during 00:00–04:00 Colombo
-  try {
-    await runScheduledAggregationIfDue();
-  } catch (error) {
-    console.error("Scheduled aggregation check failed on startup:", error);
-  }
+  // try {
+  //   await runScheduledAggregationIfDue();
+  // } catch (error) {
+  //   console.error("Scheduled aggregation check failed on startup:", error);
+  // }
+  //
+  // try {
+  //   await runDueCatchupAggregations();
+  // } catch (error) {
+  //   console.error("Catch-up aggregation check failed on startup:", error);
+  // }
 
   // Then repeat every 30 minutes
   cartExpiryInterval = setInterval(async () => {
@@ -129,12 +146,20 @@ httpServer.listen(PORT, async () => {
   }, 30 * 60 * 1000);
 
   // Poll every minute during the overnight window for scheduled aggregation
-  aggregationInterval = setInterval(async () => {
-    try {
-      const runScheduledAggregationIfDue = await loadScheduledAggregation();
-      await runScheduledAggregationIfDue();
-    } catch (error) {
-      console.error("Scheduled aggregation check failed:", error);
-    }
-  }, 60 * 1000);
+  // NOTE: disabled — aggregation is manual (latest 20 paid orders). Re-enable or replace
+  // with a later auto-trigger (e.g. when 20+ paid unbatched orders exist).
+  // aggregationInterval = setInterval(async () => {
+  //   try {
+  //     const runScheduledAggregationIfDue = await loadScheduledAggregation();
+  //     await runScheduledAggregationIfDue();
+  //   } catch (error) {
+  //     console.error("Scheduled aggregation check failed:", error);
+  //   }
+  //   try {
+  //     const runDueCatchupAggregations = await loadCatchupAggregation();
+  //     await runDueCatchupAggregations();
+  //   } catch (error) {
+  //     console.error("Catch-up aggregation check failed:", error);
+  //   }
+  // }, 60 * 1000);
 });
