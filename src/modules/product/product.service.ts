@@ -9,7 +9,8 @@ import prisma from "../../config/database.js";
 import { notifySellerLowStock } from "../notifications/notification.events.js";
 
 export type CreateProductInput = {
-  name: string;
+  name: string;         // seller's own label — stored on SellerProduct.name
+  productType: string;  // catalog matching key — drives the if/else
   description?: string | null;
   category: string;
   price: number;
@@ -19,7 +20,7 @@ export type CreateProductInput = {
 };
 
 export type UpdateProductInput = {
-  name?: string;
+  name?: string;         // NEW — seller's own label, lives on SellerProduct
   description?: string | null;
   category?: string;
   price?: number;
@@ -27,7 +28,6 @@ export type UpdateProductInput = {
   stock?: number;
   imageUrl?: string | null;
 };
-
 // ===============================
 // CREATE PRODUCT (SELLER)
 // ===============================
@@ -85,19 +85,19 @@ export const createProduct = async (
   });
   if (!seller) throw new Error("Seller profile not found");
 
-  // ✅ Check if this product already exists (by name + category)
+  // Match on productType + category (case-insensitive)
   let product = await prisma.product.findFirst({
     where: {
-      name: { equals: data.name, mode: "insensitive" },
+      name: { equals: data.productType.trim(), mode: "insensitive" },
       category: { equals: data.category, mode: "insensitive" },
     },
   });
 
   if (!product) {
-    // First time this product is being listed — create catalog entry
+    // New type — create catalog entry, goes to admin for approval
     product = await prisma.product.create({
       data: {
-        name: data.name,
+        name: data.productType.trim(),
         description: data.description ?? null,
         category: data.category,
         price: data.price,
@@ -109,7 +109,7 @@ export const createProduct = async (
       },
     });
   } else {
-    // ✅ Make sure this seller doesn't already have a listing for this product
+    // Existing type — just add this seller's listing, no approval needed
     const existingSellerProduct = await prisma.sellerProduct.findUnique({
       where: {
         productId_sellerId: {
@@ -128,6 +128,7 @@ export const createProduct = async (
     data: {
       productId: product.id,
       sellerId: seller.id,
+      name: data.name.trim(),
       price: data.price,
       stock: data.stock,
     },
@@ -142,22 +143,36 @@ export const createProduct = async (
         : "Your listing has been added to this product.",
   };
 };
-
 // ===============================
 // GET SELLER'S PRODUCTS (SELLER)
 // ===============================
-export const getSellerProducts = async (sellerId: string) => {
-  return prisma.product.findMany({
-    where: { sellerId },
-    orderBy: { createdAt: "desc" },
-    include: {
-      seller: {
-        select: {
-          user: { select: { name: true } },
-        },
-      },
-    },
+// ===============================
+// GET SELLER'S OWN PRODUCT LISTINGS (SELLER)
+// ===============================
+export const getSellerProducts = async (userId: string) => {
+  const seller = await prisma.seller.findUnique({ where: { userId } });
+  if (!seller) throw new Error("Seller profile not found");
+
+  const sellerProducts = await prisma.sellerProduct.findMany({
+    where: { sellerId: seller.id },
+    include: { product: true },
+    orderBy: { id: "desc" },
   });
+
+  return sellerProducts.map((sp) => ({
+    id: sp.product.id,                 // Product ID — used for edit/status routes
+    name: sp.name,                     // seller's own label
+    productType: sp.product.name,      // catalog type (locked)
+    category: sp.product.category,
+    unit: sp.product.unit,
+    description: sp.product.description,
+    sellerPrice: sp.price,
+    sellerStock: sp.stock,
+    lowStockThreshold: sp.product.lowStock,
+    aggregateStock: sp.product.stock,
+    status: sp.product.status,
+    imageUrl: sp.product.imageUrl,
+  }));
 };
 
 // ===============================
@@ -292,7 +307,7 @@ export const updateProduct = async (
     });
   }
 
-  // 2️⃣ Update SellerProduct entry - price & stock are editable
+  // 2️⃣ Update SellerProduct entry - price, stock, and name are editable
   // Build update object with only provided fields
   const sellerProductUpdateData: any = {};
   if (data.price !== undefined) {
@@ -300,6 +315,9 @@ export const updateProduct = async (
   }
   if (data.stock !== undefined) {
     sellerProductUpdateData.stock = data.stock;
+  }
+  if (data.name !== undefined) {
+    sellerProductUpdateData.name = data.name;
   }
 
   let updatedSellerProduct = sellerProduct;
