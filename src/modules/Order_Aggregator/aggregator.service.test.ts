@@ -43,6 +43,11 @@ test("runOrderAggregation marks run as FAILED when no hubs exist", async () => {
     "findMany",
     ((async () => []) as unknown) as typeof prisma.truck.findMany
   );
+  const restoreFieldAdmins = withMock(
+    prisma.fieldAdmin,
+    "findMany",
+    ((async () => [{ id: "fa-1" }]) as unknown) as typeof prisma.fieldAdmin.findMany
+  );
   const restoreHubs = withMock(
     prisma.hub,
     "findMany",
@@ -60,6 +65,7 @@ test("runOrderAggregation marks run as FAILED when no hubs exist", async () => {
   );
 
   restoreHubs();
+  restoreFieldAdmins();
   restoreTrucks();
   restoreUpdate();
   restoreCreate();
@@ -79,6 +85,7 @@ const mockBatchHandoffData = () => ({
   totalVolume: 8,
   maxStopsApplied: 3,
   storageType: "NORMAL",
+  fieldAdminId: "fa-1",
   pickupHub: {
     id: "hub-1",
     name: "Main Hub",
@@ -192,6 +199,28 @@ test("getBatchHandoffBundle rejects field admin without assignment", async () =>
   restoreBatchFind();
 });
 
+test("getBatchHandoffBundle loads a field-admin batch without a route", async () => {
+  const restoreBatchFind = withMock(
+    prisma.batch,
+    "findUnique",
+    ((async () => ({
+      ...mockBatchHandoffData(),
+      routes: [],
+      fieldAdminId: "fa-1",
+      truckId: "truck-1",
+    })) as unknown) as typeof prisma.batch.findUnique
+  );
+
+  const payload = await getBatchHandoffBundle("batch-1", { fieldAdminId: "fa-1" });
+  assert.equal(payload.batch.id, "batch-1");
+  assert.equal(payload.route.fieldAdminId, "fa-1");
+  assert.equal(payload.route.routeNumber, "BATCH-1");
+  assert.equal(payload.route.currentPhase, "PICKUP");
+  assert.equal(payload.orders.length, 1);
+
+  restoreBatchFind();
+});
+
 const mockEligibleOrder = {
   id: "o1",
   orderNumber: "ORD-1",
@@ -274,6 +303,11 @@ test("runOrderAggregation creates batches only and allocates a truck", async () 
         storageSupport: "BOTH",
       },
     ]) as unknown) as typeof prisma.truck.findMany
+  );
+  restore(
+    prisma.fieldAdmin,
+    "findMany",
+    ((async () => [{ id: "fa-1" }]) as unknown) as typeof prisma.fieldAdmin.findMany
   );
   restore(
     prisma.hub,
@@ -394,8 +428,10 @@ test("runOrderAggregation creates batches only and allocates a truck", async () 
       undefined
     );
     assert.equal(summary.batchesCreated[0]?.truckId, "truck-1");
+    assert.equal(summary.batchesCreated[0]?.fieldAdminId, "fa-1");
     assert.equal(summary.batchesCreated[0]?.batchId, "batch-1");
     assert.equal(capturedBatchCreate?.truckId, "truck-1");
+    assert.equal(capturedBatchCreate?.fieldAdminId, "fa-1");
     assert.equal(capturedBatchCreate?.status, "CLOSED");
     assert.equal((capturedOrderUpdate?.data as { status?: string })?.status, "BATCHED");
     assert.equal((capturedOrderUpdate?.data as { batchId?: string })?.batchId, "batch-1");
@@ -520,6 +556,11 @@ test("dry-run capacity rejection stays rejected without slot deferral", async ()
     ((async () => []) as unknown) as typeof prisma.aggregationRunRejection.findMany
   );
   restore(prisma.truck, "findMany", ((async () => []) as unknown) as typeof prisma.truck.findMany);
+  restore(
+    prisma.fieldAdmin,
+    "findMany",
+    ((async () => [{ id: "fa-1" }]) as unknown) as typeof prisma.fieldAdmin.findMany
+  );
   restore(
     prisma.hub,
     "findMany",
@@ -657,6 +698,11 @@ test("runOrderAggregation splits four clustered orders into two batches", async 
     ]) as unknown) as typeof prisma.truck.findMany
   );
   restore(
+    prisma.fieldAdmin,
+    "findMany",
+    ((async () => [{ id: "fa-1" }, { id: "fa-2" }]) as unknown) as typeof prisma.fieldAdmin.findMany
+  );
+  restore(
     prisma.hub,
     "findMany",
     ((async () => [{ id: "hub-1", latitude: 6.9, longitude: 79.85 }]) as unknown) as typeof prisma.hub.findMany
@@ -718,6 +764,9 @@ test("runOrderAggregation splits four clustered orders into two batches", async 
     assert.equal(summary.totalOrdersBatched, 4);
     assert.equal(summary.batchesCreated[0]?.orderIds.length, 2);
     assert.equal(summary.batchesCreated[1]?.orderIds.length, 2);
+    assert.equal(summary.batchesCreated[0]?.fieldAdminId, "fa-1");
+    assert.equal(summary.batchesCreated[1]?.fieldAdminId, "fa-2");
+    assert.equal(summary.batchesCreated[1]?.fieldAdminId, "fa-2");
     assert.equal(createdBatchIds.length, 2);
   } finally {
     restores.reverse().forEach((fn) => fn());
@@ -764,6 +813,11 @@ test("runOrderAggregation includes previously rejected paid orders with the late
       { id: "truck-1", maxWeight: 500, maxVolume: 100, maxStops: 20, storageSupport: "BOTH" },
       { id: "truck-2", maxWeight: 500, maxVolume: 100, maxStops: 20, storageSupport: "BOTH" },
     ]) as unknown) as typeof prisma.truck.findMany
+  );
+  restore(
+    prisma.fieldAdmin,
+    "findMany",
+    ((async () => [{ id: "fa-1" }]) as unknown) as typeof prisma.fieldAdmin.findMany
   );
   restore(
     prisma.hub,

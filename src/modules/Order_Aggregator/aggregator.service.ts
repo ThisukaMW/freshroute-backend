@@ -4,6 +4,7 @@ import { ensureAtLeastTwoSlices, splitByCapacity } from "./aggregator.packing.js
 import {
   canTruckCarrySlice,
   getEligibilityFailureReason,
+  pickRoundRobin,
   reserveResourceById,
 } from "./aggregator.rules.js";
 import type {
@@ -75,6 +76,13 @@ const getAvailableTrucks = async () =>
       storageSupport: true,
     },
     orderBy: { maxWeight: "asc" },
+  });
+
+const getAvailableFieldAdmins = async () =>
+  prisma.fieldAdmin.findMany({
+    where: { isActive: true },
+    select: { id: true },
+    orderBy: { createdAt: "asc" },
   });
 
 //select a truck that can carry a given slice.
@@ -555,6 +563,7 @@ const persistGeoAssignments = async (orders: CandidateOrder[], dryRun: boolean) 
 const createBatchesOnly = async (
   slices: ReturnType<typeof splitByCapacity>,
   trucks: Awaited<ReturnType<typeof getAvailableTrucks>>,
+  fieldAdmins: Awaited<ReturnType<typeof getAvailableFieldAdmins>>,
   rejected: RejectedOrderReason[],
   triggerMode: "manual" | "payment_event" | "scheduled",
   deliveryDayStart: Date
@@ -562,6 +571,7 @@ const createBatchesOnly = async (
   const created: AggregationSummary["batchesCreated"] = [];
   const availableTrucks = [...trucks];
   const batchTrigger = triggerMode === "scheduled" ? "SCHEDULED" : "MANUAL";
+  let fieldAdminCursor = 0;
 
   for (const slice of slices) {
     if (slice.orders.length === 0) continue;
@@ -572,6 +582,20 @@ const createBatchesOnly = async (
           orderId: order.id,
           orderNumber: order.orderNumber,
           reason: "No available truck can carry this clustered slice",
+        });
+      }
+      continue;
+    }
+
+    const pickedAdmin = pickRoundRobin(fieldAdmins, fieldAdminCursor);
+    fieldAdminCursor = pickedAdmin.nextCursor;
+    const selectedFieldAdmin = pickedAdmin.item;
+    if (!selectedFieldAdmin) {
+      for (const order of slice.orders) {
+        rejected.push({
+          orderId: order.id,
+          orderNumber: order.orderNumber,
+          reason: "No active field admin available to assign this batch",
         });
       }
       continue;
@@ -636,6 +660,7 @@ const createBatchesOnly = async (
             dropClusterKey: slice.clusterKey,
             pickupHubId: slice.pickupHubId,
             truckId: selectedTruck.id,
+            fieldAdminId: selectedFieldAdmin.id,
             scheduledDate: deliveryDayStart,
             timeWindowStart: slotWindowStart,
             timeWindowEnd: slotWindowEnd,
@@ -668,6 +693,7 @@ const createBatchesOnly = async (
           totalWeight: slice.totalWeight,
           totalVolume: slice.totalVolume,
           truckId: selectedTruck.id,
+          fieldAdminId: selectedFieldAdmin.id,
         };
       },
       { timeout: 20000, maxWait: 15000 }
@@ -733,6 +759,7 @@ export const runOrderAggregation = async (input: AggregationRunInput): Promise<A
     // const { deliveryDayEnd } = getDeliveryDayBoundsColombo(input.targetDeliveryDay ?? input.windowStart);
     // const { placementDayStart, placementDayEnd } = getOrderPlacementDayBoundsColombo(deliveryDayStart);
     const trucks = await getAvailableTrucks();
+    const fieldAdmins = await getAvailableFieldAdmins();
     const hubs = await ensureHubs();
     const zones = await getDeliveryZones();
     // const fetchedCandidates =
@@ -789,6 +816,7 @@ export const runOrderAggregation = async (input: AggregationRunInput): Promise<A
       : await createBatchesOnly(
           truckFeasibleSlices,
           trucks,
+          fieldAdmins,
           rejected,
           triggerMode,
           deliveryDayStart
@@ -976,14 +1004,13 @@ export const getBatchHandoffBundle = async (
   });
 
   if (!batch) throw new Error("Batch not found");
-  const route = batch.routes[0];
-  if (!route) throw new Error("Batch route not found");
-
-  if (options?.fieldAdminId && route.fieldAdminId !== options.fieldAdminId) {
+  const route = batch.routes[0] ?? null;
+  const assignedFieldAdminId = batch.fieldAdminId ?? route?.fieldAdminId ?? null;
+  if (options?.fieldAdminId && assignedFieldAdminId !== options.fieldAdminId) {
     throw new Error("Batch not assigned to this field admin");
   }
 
-  const allStops = route.stops;
+  const allStops = route?.stops ?? [];
   const sellerPickups = allStops.filter((stop) => stop.type === "PICKUP" && stop.sellerId);
   const hubPickup = allStops.find((stop) => stop.type === "PICKUP" && !stop.sellerId) ?? null;
   const deliveries = allStops.filter((stop) => stop.type === "DELIVERY");
@@ -1173,7 +1200,7 @@ export const getBatchHandoffBundle = async (
   };
 
   const routePhase: "PICKUP" | "DROPOFF" | "COMPLETED" =
-    deliveries.every((stop) => stop.status === "COMPLETED")
+    deliveries.length > 0 && deliveries.every((stop) => stop.status === "COMPLETED")
       ? "COMPLETED"
       : hubComplete
         ? "DROPOFF"
@@ -1187,6 +1214,7 @@ export const getBatchHandoffBundle = async (
       scheduledDate: batch.scheduledDate,
       timeWindowStart: batch.timeWindowStart,
       timeWindowEnd: batch.timeWindowEnd,
+      fieldAdminId: assignedFieldAdminId,
       pickupHub: batch.pickupHub
         ? {
             id: batch.pickupHub.id,
@@ -1197,12 +1225,12 @@ export const getBatchHandoffBundle = async (
         : null,
     },
     route: {
-      id: route.id,
-      routeNumber: route.routeNumber,
-      status: route.status,
-      fieldAdminId: route.fieldAdminId,
-      driverId: route.driverId,
-      truckId: route.truckId,
+      id: route?.id ?? batch.id,
+      routeNumber: route?.routeNumber ?? batch.batchNumber,
+      status: route?.status ?? "ASSIGNED",
+      fieldAdminId: assignedFieldAdminId,
+      driverId: route?.driverId ?? null,
+      truckId: route?.truckId ?? batch.truckId ?? null,
       currentPhase: routePhase,
     },
     phases: {

@@ -114,6 +114,7 @@ export interface AggregationSummary {
     totalWeight: number;
     totalVolume: number;
     truckId: string;
+    fieldAdminId: string | null;
   }>;
   rejectedOrders: RejectedOrderReason[];
   deferredOrders: Array<{

@@ -308,6 +308,7 @@ model FieldAdmin {
 
   // relationships to tasks
   routes                Route[]
+  batches               Batch[]
   inspections           ProductInspection[]
   deliveryVerifications DeliveryVerification[]
   damageReports         DamageReport[]
@@ -734,6 +735,9 @@ model Batch {
   truckId         String?
   truck           Truck?          @relation(fields: [truckId], references: [id], onDelete: SetNull)
 
+  fieldAdminId    String?
+  fieldAdmin      FieldAdmin?     @relation(fields: [fieldAdminId], references: [id], onDelete: SetNull)
+
   scheduledDate   DateTime        // Target delivery date
   timeWindowStart DateTime        // e.g., 10:00 AM
   timeWindowEnd   DateTime        // e.g., 2:00 PM
@@ -760,6 +764,7 @@ model Batch {
   @@index([pickupHubId, storageType])
   @@index([dropClusterKey])
   @@index([truckId])
+  @@index([fieldAdminId])
 }
 
 // ============= ROUTING SYSTEM =============
