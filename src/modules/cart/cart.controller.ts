@@ -31,7 +31,8 @@ export const getCart = async (req: AuthRequest, res: Response) => {
     res.json(data);
 
   } catch (error: unknown) {
-    console.error("❌ Get cart error:", error);
+    // Log full stack trace for easier debugging (server-only)
+    console.error("❌ Get cart error:", error instanceof Error ? error.stack : error);
     const message = error instanceof Error ? error.message : "Failed to fetch cart";
     
     // Check for specific error types

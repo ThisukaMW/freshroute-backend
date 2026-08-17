@@ -162,7 +162,7 @@ export const addItemToCart = async (
     `${existingItem ? "✅ Found existing item" : "⭕ No existing item found"} - existingItem: ${existingItem?.id || "null"}`,
   );
 
-  let cartItem;
+  let cartItem: any;
 
   if (existingItem) {
     console.log(
@@ -397,8 +397,7 @@ export const getCartWithTotals = async (userId: string) => {
 
   return formattedResponse;
 };
-
-/*
+/**
  * Remove Item from Cart
  * PROPERLY DELETES: CartItem + cascades to StockReservation
  */

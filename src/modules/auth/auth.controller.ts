@@ -3,6 +3,7 @@
 // Checks data, validates inputs, calls the right service, and sends back the result.
 
 import type { Request, Response } from "express";
+import jwt from "jsonwebtoken";
 import { loginUser } from "./auth.service.js";
 import bcrypt from "bcrypt";
 import { findCustomerByEmail, createCustomer } from "./auth.service.js";

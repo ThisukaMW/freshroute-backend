@@ -1,4 +1,3 @@
-
 import type { Response } from "express";
 import "express"; // Import for type augmentation with @types/multer
 import type { AuthRequest } from "../../middlewares/auth.middleware.js";
@@ -12,6 +11,7 @@ import {
   getAllProducts,
   getProductById,
   getSellersByProductName,
+  getSellerProducts,
 } from "./product.service.js"
 import { log } from "console";
 import prisma from "../../config/database.js";
@@ -29,7 +29,7 @@ export const addProduct = async (req: AuthRequest, res: Response) => {
       });
     }
 
-    const { name, description, category, price, unit, stock } = req.body;
+    const { name, description, category, price, unit, stock, productType } = req.body;
     const imageUrl = typeof req.body.imageUrl === "string" ? req.body.imageUrl.trim() : undefined;
 
     // files (images)
@@ -41,7 +41,7 @@ export const addProduct = async (req: AuthRequest, res: Response) => {
     const pricingMode = req.body.pricingMode;
     const taxPercent = Number(req.body.taxPercent || 0);
 
-    if (!name || !category || price == null || !unit || stock == null) {
+    if (!name || !category || price == null || !unit || stock == null || !productType) {
       return res.status(400).json({
         message: "Missing required fields",
       });
@@ -49,6 +49,7 @@ export const addProduct = async (req: AuthRequest, res: Response) => {
 
     const productData: CreateProductInput = {
       name: name.trim(),
+      productType: productType.trim(),
       description: description ?? null,
       category: category.trim(),
       price: Number(price),
@@ -84,6 +85,27 @@ export const addProduct = async (req: AuthRequest, res: Response) => {
 };
 
 // =====================================
+// SELLER - GET OWN PRODUCT LISTINGS
+// =====================================
+export const getSellerProductsController = async (
+  req: AuthRequest,
+  res: Response
+) => {
+  try {
+    if (req.role !== "SELLER") {
+      return res.status(403).json({
+        message: "Only sellers can view their own products",
+      });
+    }
+
+    const products = await getSellerProducts(req.userId!);
+    res.json({ data: products });
+  } catch (error: any) {
+    res.status(500).json({ message: error.message || "Failed to fetch your products" });
+  }
+};
+
+// =====================================
 // SELLER - EDIT PRODUCT
 // =====================================
 export const editProductController = async (
@@ -111,6 +133,10 @@ export const editProductController = async (
     const imageUrl = typeof req.body.imageUrl === "string" ? req.body.imageUrl.trim() : undefined;
     const updateBody: Record<string, any> = {};
 
+    if (req.body.name !== undefined) {
+      updateBody.name = String(req.body.name).trim();
+    }
+
     if (req.body.price !== undefined) {
       updateBody.price = Number(req.body.price);
     }
@@ -136,7 +162,8 @@ export const editProductController = async (
       message: "Product updated successfully",
       data: {
         id: updateResult.product.id,
-        name: updateResult.product.name,
+        name: updateResult.sellerProduct.name,       // seller's own label
+        productType: updateResult.product.name,      // catalog type (locked)
         category: updateResult.product.category,
         description: updateResult.product.description,
         sellerPrice: updateResult.sellerProduct.price,
