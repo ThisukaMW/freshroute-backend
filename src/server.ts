@@ -19,6 +19,12 @@ const loadScheduledAggregation = async () => {
   return runScheduledAggregationIfDue;
 };
 
+const loadCatchupAggregation = async () => {
+  const modulePath = "./jobs/aggregatorCatchup.job." + "js";
+  const { runDueCatchupAggregations } = await import(modulePath);
+  return runDueCatchupAggregations;
+};
+
 const PORT = process.env.PORT || 5000;
 
 const httpServer = createServer(app);
@@ -68,6 +74,7 @@ httpServer.listen(PORT, async () => {
 
   const clearExpiredCarts = await loadClearExpiredCarts();
   const runScheduledAggregationIfDue = await loadScheduledAggregation();
+  const runDueCatchupAggregations = await loadCatchupAggregation();
 
   // Run once immediately on boot to catch any carts that
   // expired while the server was down
@@ -82,6 +89,12 @@ httpServer.listen(PORT, async () => {
     await runScheduledAggregationIfDue();
   } catch (error) {
     console.error("Scheduled aggregation check failed on startup:", error);
+  }
+
+  try {
+    await runDueCatchupAggregations();
+  } catch (error) {
+    console.error("Catch-up aggregation check failed on startup:", error);
   }
 
   // Then repeat every 30 minutes
@@ -101,6 +114,12 @@ httpServer.listen(PORT, async () => {
       await runScheduledAggregationIfDue();
     } catch (error) {
       console.error("Scheduled aggregation check failed:", error);
+    }
+    try {
+      const runDueCatchupAggregations = await loadCatchupAggregation();
+      await runDueCatchupAggregations();
+    } catch (error) {
+      console.error("Catch-up aggregation check failed:", error);
     }
   }, 60 * 1000);
 });

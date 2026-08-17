@@ -29,6 +29,15 @@ const baseOrder: CandidateOrder = {
   sellerLat: 6.8,
   sellerLng: 79.8,
   sellerIds: ["seller-1"],
+  deferredFromSlot: null,
+  sellers: [
+    {
+      id: "seller-1",
+      address: "123 Seller Street",
+      lat: 6.8,
+      lng: 79.8,
+    },
+  ],
 };
 
 test("eligibility rejects non-paid order", () => {
@@ -43,6 +52,33 @@ test("eligibility rejects order without delivery time slot", () => {
   assert.equal(
     getEligibilityFailureReason({ ...baseOrder, deliveryTimeSlot: null }),
     "Delivery time slot missing"
+  );
+});
+
+test("eligibility rejects order without delivery address", () => {
+  assert.equal(
+    getEligibilityFailureReason({ ...baseOrder, deliveryAddress: "  " }),
+    "Delivery address missing"
+  );
+});
+
+test("eligibility rejects order without seller pickup coordinates", () => {
+  assert.equal(
+    getEligibilityFailureReason({
+      ...baseOrder,
+      sellers: [{ id: "seller-1", address: "123 Seller Street", lat: null, lng: null }],
+    }),
+    "Seller pickup location missing"
+  );
+});
+
+test("eligibility rejects order without seller pickup address", () => {
+  assert.equal(
+    getEligibilityFailureReason({
+      ...baseOrder,
+      sellers: [{ id: "seller-1", address: "", lat: 6.8, lng: 79.8 }],
+    }),
+    "Seller pickup address missing"
   );
 });
 

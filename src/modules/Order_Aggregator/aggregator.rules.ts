@@ -5,6 +5,9 @@ export const getEligibilityFailureReason = (order: CandidateOrder): string | nul
   if (order.status !== "PAID") return "Order status is not PAID";
   if (order.isCancelled) return "Order is cancelled";
   if (order.batchId) return "Order is already batched";
+  if (!order.deliveryAddress?.trim()) {
+    return "Delivery address missing";
+  }
   if (!Number.isFinite(order.deliveryLat) || !Number.isFinite(order.deliveryLng)) {
     return "Delivery coordinates missing";
   }
@@ -13,6 +16,17 @@ export const getEligibilityFailureReason = (order: CandidateOrder): string | nul
   }
   if (!order.deliveryTimeSlot) {
     return "Delivery time slot missing";
+  }
+  if (!order.sellers || order.sellers.length === 0) {
+    return "Seller pickup location missing";
+  }
+  for (const seller of order.sellers) {
+    if (!Number.isFinite(seller.lat) || !Number.isFinite(seller.lng)) {
+      return "Seller pickup location missing";
+    }
+    if (!seller.address?.trim()) {
+      return "Seller pickup address missing";
+    }
   }
   return null;
 };

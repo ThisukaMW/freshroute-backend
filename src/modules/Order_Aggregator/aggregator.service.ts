@@ -4,7 +4,6 @@ import { splitByCapacity } from "./aggregator.packing.js";
 import {
   canTruckCarrySlice,
   getEligibilityFailureReason,
-  pickRoundRobin,
   reserveResourceById,
 } from "./aggregator.rules.js";
 import type {
@@ -18,12 +17,22 @@ import {
   getDeliverySlotBoundsColombo,
   getOrderPlacementDayBoundsColombo,
 } from "./aggregator.colombo.js";
-import { assignNearestHub, batchNumber, routeNumber, sequenceOrdersNearestNeighbor } from "./aggregator.utils.js";
+import { buildCatchupCandidateWhere, classifyRejectedOrders } from "./aggregator.deferral.js";
+import { assignNearestHub, batchNumber } from "./aggregator.utils.js";
 import {
   buildSellerPickupGroups,
   countRouteStops,
   sequenceSellerPickups,
 } from "./aggregator.pickup-stops.js";
+import {
+  notifyBuyerAggregationFailed,
+  notifyBuyerDeliveryDeferred,
+  notifyBuyerOrderBatched,
+  notifySellerAggregationFailed,
+  notifySellerPickupDeferred,
+  notifySellerPickupScheduled,
+} from "../notifications/notification.events.js";
+import type { DeliveryTimeSlot } from "./aggregator.types.js";
 
 const configDefault = {
   clusterRadiusKm: Number(process.env.AGGREGATOR_CLUSTER_RADIUS_KM ?? 8),
@@ -31,13 +40,10 @@ const configDefault = {
   maxStopsPerBatch: Number(process.env.AGGREGATOR_MAX_STOPS_PER_BATCH ?? 20),
   maxWeightPerBatch: Number(process.env.AGGREGATOR_MAX_WEIGHT_PER_BATCH ?? 500),
   maxVolumePerBatch: Number(process.env.AGGREGATOR_MAX_VOLUME_PER_BATCH ?? 100),
-  /** @deprecated use autoAssignFleet — kept for backward compatibility */
-  autoAssignRoutes: (process.env.AGGREGATOR_AUTO_ASSIGN_ROUTES ?? "false") === "true",
-  autoAssignFleet:
-    process.env.AGGREGATOR_AUTO_ASSIGN_FLEET !== undefined
-      ? process.env.AGGREGATOR_AUTO_ASSIGN_FLEET === "true"
-      : (process.env.AGGREGATOR_AUTO_ASSIGN_ROUTES ?? "false") === "true",
-  autoAssignDriver: (process.env.AGGREGATOR_AUTO_ASSIGN_DRIVER ?? "false") === "true",
+  /** @deprecated aggregator no longer assigns fleet; kept for API compatibility */
+  autoAssignRoutes: false,
+  autoAssignFleet: false,
+  autoAssignDriver: false,
 };
 
 const ensureHubs = async () => {
@@ -70,52 +76,6 @@ const getAvailableTrucks = async () =>
     },
     orderBy: { maxWeight: "asc" },
   });
-
-//get all active drivers that are available.
-const getAvailableDrivers = async () =>
-  prisma.driver.findMany({
-    where: { isActive: true, isAvailable: true },
-    select: { id: true },
-    orderBy: { createdAt: "asc" },
-  });
-
-//get all active field admins.
-const getActiveFieldAdmins = async () =>
-  prisma.fieldAdmin.findMany({
-    where: { isActive: true },
-    select: { id: true },
-    orderBy: { createdAt: "asc" },
-  });
-
-//recalculate the live load of a truck.
-const recalculateTruckLiveLoad = async (
-  tx: Pick<typeof prisma, "order" | "truck">,
-  truckId: string
-) => {
-  const activeOrders = await tx.order.findMany({
-    where: {
-      status: { in: ["BATCHED", "ASSIGNED", "IN_TRANSIT"] },
-      batch: { routes: { some: { truckId } } },
-    },
-    select: { totalWeight: true, totalVolume: true },
-  });
-
-  const currentLoadWeight = activeOrders.reduce((sum, order) => sum + (order.totalWeight ?? 0), 0);
-  const currentLoadVolume = activeOrders.reduce((sum, order) => sum + (order.totalVolume ?? 0), 0);
-  const currentLoadStops = activeOrders.length;
-
-  await tx.truck.update({
-    where: { id: truckId },
-    data: {
-      currentLoadWeight,
-      currentLoadVolume,
-      currentLoadStops,
-      isAvailable: currentLoadStops === 0,
-    },
-  });
-
-  return { currentLoadWeight, currentLoadVolume, currentLoadStops };
-};
 
 //select a truck that can carry a given slice.
 const selectTruckForSlice = (
@@ -222,8 +182,92 @@ const makeTruckFeasibleSlices = (
   return feasible;
 };
 
+const mapCandidateOrder = (order: {
+  id: string;
+  orderNumber: string;
+  status: string;
+  isCancelled: boolean;
+  batchId: string | null;
+  deliveryDate: Date | null;
+  deliveryTimeSlot: DeliveryTimeSlot | null;
+  deliveryAddress: string;
+  deliveryLat: number;
+  deliveryLng: number;
+  storageType: "NORMAL" | "COLD";
+  totalWeight: number | null;
+  totalVolume: number | null;
+  placedAt: Date;
+  pickupHubId: string | null;
+  deliveryZoneId: string | null;
+  deferredFromSlot: DeliveryTimeSlot | null;
+  items: Array<{
+    product: {
+      seller: {
+        id: string;
+        businessAddress: string;
+        latitude: number | null;
+        longitude: number | null;
+      } | null;
+    };
+  }>;
+}): CandidateOrder => {
+  const sellerById = new Map<
+    string,
+    { id: string; address: string; lat: number | null; lng: number | null }
+  >();
+  for (const item of order.items) {
+    const seller = item.product.seller;
+    if (!seller?.id || sellerById.has(seller.id)) continue;
+    sellerById.set(seller.id, {
+      id: seller.id,
+      address: seller.businessAddress ?? "",
+      lat: seller.latitude ?? null,
+      lng: seller.longitude ?? null,
+    });
+  }
+  const sellers = Array.from(sellerById.values());
+  const firstSeller = sellers[0];
+  return {
+    id: order.id,
+    orderNumber: order.orderNumber,
+    status: order.status,
+    isCancelled: order.isCancelled,
+    batchId: order.batchId,
+    deliveryDate: order.deliveryDate,
+    deliveryTimeSlot: order.deliveryTimeSlot,
+    deliveryAddress: order.deliveryAddress,
+    deliveryLat: order.deliveryLat,
+    deliveryLng: order.deliveryLng,
+    storageType: order.storageType,
+    totalWeight: order.totalWeight,
+    totalVolume: order.totalVolume,
+    placedAt: order.placedAt,
+    pickupHubId: order.pickupHubId,
+    deliveryZoneId: order.deliveryZoneId,
+    deliveryZoneCode: null,
+    sellerLat: firstSeller?.lat ?? null,
+    sellerLng: firstSeller?.lng ?? null,
+    sellerIds: sellers.map((seller) => seller.id),
+    deferredFromSlot: order.deferredFromSlot,
+    sellers,
+  };
+};
+
+const candidateInclude = {
+  items: {
+    include: {
+      product: {
+        include: { seller: true },
+      },
+    },
+  },
+} as const;
+
 //get all orders that are eligible for aggregation (by placedAt window only — no deliveryDate filter).
-const getCandidates = async (placementDayStart: Date, placementDayEnd: Date): Promise<CandidateOrder[]> => {
+const getOvernightCandidates = async (
+  placementDayStart: Date,
+  placementDayEnd: Date
+): Promise<CandidateOrder[]> => {
   const orders = await prisma.order.findMany({
     where: {
       status: "PAID",
@@ -235,45 +279,29 @@ const getCandidates = async (placementDayStart: Date, placementDayEnd: Date): Pr
       },
       OR: [{ totalWeight: { gt: 0 } }, { totalVolume: { gt: 0 } }],
     },
-    include: {
-      items: {
-        include: {
-          product: {
-            include: { seller: true },
-          },
-        },
-      },
-    },
+    include: candidateInclude,
   });
 
-  return orders.map((order) => {
-    const sellerIds = Array.from(
-      new Set(order.items.map((item) => item.product.seller?.id).filter(Boolean) as string[])
-    );
-    const firstSeller = order.items[0]?.product.seller;
-    return {
-      id: order.id,
-      orderNumber: order.orderNumber,
-      status: order.status,
-      isCancelled: order.isCancelled,
-      batchId: order.batchId,
-      deliveryDate: order.deliveryDate,
-      deliveryTimeSlot: order.deliveryTimeSlot,
-      deliveryAddress: order.deliveryAddress,
-      deliveryLat: order.deliveryLat,
-      deliveryLng: order.deliveryLng,
-      storageType: order.storageType,
-      totalWeight: order.totalWeight,
-      totalVolume: order.totalVolume,
-      placedAt: order.placedAt,
-      pickupHubId: order.pickupHubId,
-      deliveryZoneId: order.deliveryZoneId,
-      deliveryZoneCode: null,
-      sellerLat: firstSeller?.latitude ?? null,
-      sellerLng: firstSeller?.longitude ?? null,
-      sellerIds,
-    };
+  return orders.map(mapCandidateOrder);
+};
+
+const getCatchupCandidates = async (
+  deliveryDayStart: Date,
+  deliveryDayEnd: Date,
+  targetSlot: DeliveryTimeSlot,
+  includeDeferredFromSlots: DeliveryTimeSlot[]
+): Promise<CandidateOrder[]> => {
+  const orders = await prisma.order.findMany({
+    where: buildCatchupCandidateWhere(
+      deliveryDayStart,
+      deliveryDayEnd,
+      targetSlot,
+      includeDeferredFromSlots
+    ),
+    include: candidateInclude,
   });
+
+  return orders.map(mapCandidateOrder);
 };
 
 //assign a delivery zone to an order.
@@ -311,6 +339,138 @@ const evaluateEligibility = (candidates: CandidateOrder[]) => {
   return { eligible, rejected };
 };
 
+const loadOrderNotifyTargets = async (orderIds: string[]) => {
+  if (orderIds.length === 0) return new Map<string, { buyerUserId: string; sellerUserIds: string[] }>();
+  const orders = await prisma.order.findMany({
+    where: { id: { in: orderIds } },
+    select: {
+      id: true,
+      buyer: { select: { userId: true } },
+      items: {
+        select: {
+          product: { select: { seller: { select: { userId: true } } } },
+        },
+      },
+    },
+  });
+  return new Map(
+    orders.map((order) => [
+      order.id,
+      {
+        buyerUserId: order.buyer.userId,
+        sellerUserIds: Array.from(
+          new Set(order.items.map((item) => item.product.seller.userId).filter(Boolean))
+        ),
+      },
+    ])
+  );
+};
+
+const processAggregationRejections = async (
+  rejected: RejectedOrderReason[],
+  slotByOrderId: Map<string, DeliveryTimeSlot | null>,
+  deliveryDayStart: Date,
+  dryRun: boolean
+) => {
+  const classified = classifyRejectedOrders(rejected, slotByOrderId);
+  if (dryRun) {
+    return {
+      deferredOrders: classified.deferred.map(({ orderId, orderNumber, fromSlot, toSlot }) => ({
+        orderId,
+        orderNumber,
+        fromSlot,
+        toSlot,
+      })),
+      terminalRejections: classified.terminal,
+    };
+  }
+
+  const notifyTargets = await loadOrderNotifyTargets([
+    ...classified.deferred.map((item) => item.orderId),
+    ...classified.terminal.map((item) => item.orderId),
+  ]);
+  const now = new Date();
+
+  for (const item of classified.deferred) {
+    const { windowStart } = getDeliverySlotBoundsColombo(deliveryDayStart, item.toSlot);
+    await prisma.order.update({
+      where: { id: item.orderId },
+      data: {
+        deliveryTimeSlot: item.toSlot,
+        deliveryDate: windowStart,
+        deferredFromSlot: item.fromSlot,
+        aggregationDeferCount: { increment: 1 },
+        lastAggregationRejectionReason: item.reason,
+        lastAggregationNoticeAt: now,
+      },
+    });
+    const targets = notifyTargets.get(item.orderId);
+    if (!targets) continue;
+    await notifyBuyerDeliveryDeferred(targets.buyerUserId, item.orderNumber, item.fromSlot, item.toSlot);
+    await Promise.all(
+      targets.sellerUserIds.map((sellerUserId) =>
+        notifySellerPickupDeferred(sellerUserId, item.orderNumber, item.fromSlot, item.toSlot)
+      )
+    );
+  }
+
+  for (const item of classified.terminal) {
+    await prisma.order.update({
+      where: { id: item.orderId },
+      data: {
+        lastAggregationRejectionReason: item.reason,
+        lastAggregationNoticeAt: now,
+      },
+    });
+    const targets = notifyTargets.get(item.orderId);
+    if (!targets) continue;
+    await notifyBuyerAggregationFailed(targets.buyerUserId, item.orderNumber, item.reason);
+    await Promise.all(
+      targets.sellerUserIds.map((sellerUserId) =>
+        notifySellerAggregationFailed(sellerUserId, item.orderNumber, item.reason)
+      )
+    );
+  }
+
+  return {
+    deferredOrders: classified.deferred.map(({ orderId, orderNumber, fromSlot, toSlot }) => ({
+      orderId,
+      orderNumber,
+      fromSlot,
+      toSlot,
+    })),
+    terminalRejections: classified.terminal,
+  };
+};
+
+const notifyCatchupBatchedOrders = async (
+  orderIds: string[],
+  slotByOrderId: Map<string, DeliveryTimeSlot | null>
+) => {
+  if (orderIds.length === 0) return;
+  const deferredOrders = await prisma.order.findMany({
+    where: {
+      id: { in: orderIds },
+      deferredFromSlot: { not: null },
+    },
+    select: { id: true, orderNumber: true, deliveryTimeSlot: true },
+  });
+  if (deferredOrders.length === 0) return;
+
+  const targets = await loadOrderNotifyTargets(deferredOrders.map((order) => order.id));
+  for (const order of deferredOrders) {
+    const slot = order.deliveryTimeSlot ?? slotByOrderId.get(order.id) ?? "AFTERNOON";
+    const notify = targets.get(order.id);
+    if (!notify) continue;
+    await notifyBuyerOrderBatched(notify.buyerUserId, order.orderNumber, slot);
+    await Promise.all(
+      notify.sellerUserIds.map((sellerUserId) =>
+        notifySellerPickupScheduled(sellerUserId, order.orderNumber, slot)
+      )
+    );
+  }
+};
+
 //persist the geo assignments of orders.
 const persistGeoAssignments = async (orders: CandidateOrder[], dryRun: boolean) => {
   if (dryRun) return;
@@ -327,21 +487,16 @@ const persistGeoAssignments = async (orders: CandidateOrder[], dryRun: boolean) 
   );
 };
 
-//create batches and routes for a given set of slices.
-const createBatchesAndRoutes = async (
+// Create batches only — route/stop creation is owned by the route planner module.
+const createBatchesOnly = async (
   slices: ReturnType<typeof splitByCapacity>,
   trucks: Awaited<ReturnType<typeof getAvailableTrucks>>,
   rejected: RejectedOrderReason[],
-  fleetOptions: { autoAssignFleet: boolean; autoAssignDriver: boolean },
   triggerMode: "manual" | "payment_event" | "scheduled",
   deliveryDayStart: Date
 ) => {
   const created: AggregationSummary["batchesCreated"] = [];
   const availableTrucks = [...trucks];
-  const availableDrivers = fleetOptions.autoAssignDriver ? await getAvailableDrivers() : [];
-  const activeFieldAdmins = fleetOptions.autoAssignFleet ? await getActiveFieldAdmins() : [];
-  let fieldAdminCursor = 0;
-
   const batchTrigger = triggerMode === "scheduled" ? "SCHEDULED" : "MANUAL";
 
   for (const slice of slices) {
@@ -357,12 +512,7 @@ const createBatchesAndRoutes = async (
       }
       continue;
     }
-    const driverCandidate = fleetOptions.autoAssignDriver ? availableDrivers.shift() : undefined;
-    const fieldAdminPick = fleetOptions.autoAssignFleet ? pickRoundRobin(activeFieldAdmins, fieldAdminCursor) : null;
-    if (fieldAdminPick) {
-      fieldAdminCursor = fieldAdminPick.nextCursor;
-    }
-    const fieldAdminCandidate = fieldAdminPick?.item ?? undefined;
+
     const deliveryTimeSlot = slice.deliveryTimeSlot;
     const { windowStart: slotWindowStart, windowEnd: slotWindowEnd } = getDeliverySlotBoundsColombo(
       deliveryDayStart,
@@ -371,43 +521,6 @@ const createBatchesAndRoutes = async (
 
     try {
       const createdSlice = await prisma.$transaction(async (tx) => {
-        const batch = await tx.batch.create({
-          data: {
-            batchNumber: batchNumber(),
-            status: "OPEN",
-            trigger: batchTrigger,
-            storageType: slice.storageType,
-            dropClusterKey: slice.clusterKey,
-            pickupHubId: slice.pickupHubId,
-            scheduledDate: deliveryDayStart,
-            timeWindowStart: slotWindowStart,
-            timeWindowEnd: slotWindowEnd,
-            orderCount: slice.orders.length,
-            totalVolume: slice.totalVolume,
-            capacityUsedWeight: slice.totalWeight,
-            capacityUsedVolume: slice.totalVolume,
-            maxStopsApplied: slice.orders.length,
-          },
-        });
-
-        const existingRouteCount = await tx.route.count({ where: { batchId: batch.id } });
-        if (existingRouteCount > 0) {
-          throw new Error("SINGLE_ROUTE policy violated: route already exists for batch");
-        }
-
-        const route = await tx.route.create({
-          data: {
-            routeNumber: routeNumber(),
-            batchId: batch.id,
-            truckId: selectedTruck.id,
-            status: "PLANNED",
-            scheduledStart: slotWindowStart,
-            scheduledEnd: slotWindowEnd,
-          },
-        });
-
-        const pickupHub = await tx.hub.findUniqueOrThrow({ where: { id: slice.pickupHubId } });
-
         const orderDetails = await tx.order.findMany({
           where: { id: { in: slice.orders.map((order) => order.id) } },
           include: {
@@ -447,154 +560,36 @@ const createBatchesAndRoutes = async (
         }));
 
         const sellerPickupGroups = sequenceSellerPickups(buildSellerPickupGroups(ordersForPickup));
-        const routeStopCount = countRouteStops(sellerPickupGroups.length, slice.orders.length);
+        const estimatedStopCount = countRouteStops(sellerPickupGroups.length, slice.orders.length);
 
-        await tx.batch.update({
-          where: { id: batch.id },
+        const batch = await tx.batch.create({
           data: {
-            status: "ROUTED",
-            maxStopsApplied: routeStopCount,
+            batchNumber: batchNumber(),
+            status: "CLOSED",
+            trigger: batchTrigger,
+            storageType: slice.storageType,
+            dropClusterKey: slice.clusterKey,
+            pickupHubId: slice.pickupHubId,
+            truckId: selectedTruck.id,
+            scheduledDate: deliveryDayStart,
+            timeWindowStart: slotWindowStart,
+            timeWindowEnd: slotWindowEnd,
+            orderCount: slice.orders.length,
+            totalVolume: slice.totalVolume,
+            capacityUsedWeight: slice.totalWeight,
+            capacityUsedVolume: slice.totalVolume,
+            maxStopsApplied: estimatedStopCount,
           },
         });
 
-        let sequenceOrder = 1;
-
-        for (const sellerGroup of sellerPickupGroups) {
-          await tx.stop.create({
-            data: {
-              routeId: route.id,
-              type: "PICKUP",
-              sequenceOrder,
-              sellerId: sellerGroup.sellerId,
-              address: sellerGroup.address,
-              latitude: sellerGroup.latitude,
-              longitude: sellerGroup.longitude,
-              status: "PENDING",
-              itemsSummary: sellerGroup.itemsSummary,
-            },
-          });
-          sequenceOrder += 1;
-        }
-
-        await tx.stop.create({
+        await tx.order.updateMany({
+          where: { id: { in: slice.orders.map((order) => order.id) } },
           data: {
-            routeId: route.id,
-            type: "PICKUP",
-            sequenceOrder,
-            address: pickupHub.name,
-            latitude: pickupHub.latitude,
-            longitude: pickupHub.longitude,
-            status: "PENDING",
-            itemsSummary: ordersForPickup.map((order) => ({
-              orderId: order.id,
-              orderNumber: order.orderNumber,
-              itemCount: order.items.length,
-            })),
+            batchId: batch.id,
+            status: "BATCHED",
+            stopId: null,
           },
         });
-        sequenceOrder += 1;
-
-        const orderedDeliveries = sequenceOrdersNearestNeighbor(
-          pickupHub.latitude,
-          pickupHub.longitude,
-          slice.orders
-        );
-
-        const buyerByOrderId = new Map(orderDetails.map((order) => [order.id, order.buyerId]));
-
-        for (const order of orderedDeliveries) {
-          const stop = await tx.stop.create({
-            data: {
-              routeId: route.id,
-              type: "DELIVERY",
-              sequenceOrder,
-              buyerId: buyerByOrderId.get(order.id) ?? null,
-              address: order.deliveryAddress ?? "Delivery Address",
-              latitude: order.deliveryLat,
-              longitude: order.deliveryLng,
-              status: "PENDING",
-              itemsSummary: ordersForPickup
-                .find((entry) => entry.id === order.id)
-                ?.items.map((item) => ({
-                  orderItemId: item.id,
-                  productId: item.product.id,
-                  productName: item.product.name,
-                  quantity: item.quantity,
-                  unit: item.product.unit,
-                  sellerId: item.sellerId,
-                })),
-            },
-          });
-          await tx.order.update({
-            where: { id: order.id },
-            data: { batchId: batch.id, stopId: stop.id, status: "BATCHED" },
-          });
-          sequenceOrder += 1;
-        }
-
-        if (fleetOptions.autoAssignFleet || fleetOptions.autoAssignDriver) {
-          const fieldAdmin = fieldAdminCandidate
-            ? await tx.fieldAdmin.findUnique({ where: { id: fieldAdminCandidate.id } })
-            : null;
-          const truck = await tx.truck.findUnique({ where: { id: selectedTruck.id } });
-          const driver = driverCandidate
-            ? await tx.driver.findUnique({ where: { id: driverCandidate.id } })
-            : null;
-
-          if (fleetOptions.autoAssignFleet) {
-            if (!fieldAdminCandidate || !fieldAdmin || !fieldAdmin.isActive) {
-              throw new Error("Auto fleet assignment failed: field admin unavailable");
-            }
-            if (!truck || !truck.isActive || !truck.isAvailable) {
-              throw new Error("Auto fleet assignment failed: truck unavailable");
-            }
-            if (
-              !canTruckCarrySlice(truck, {
-                storageType: slice.storageType,
-                totalWeight: slice.totalWeight,
-                totalVolume: slice.totalVolume,
-                orderCount: slice.orders.length,
-                routeStopCount,
-              })
-            ) {
-              throw new Error("Auto fleet assignment failed: truck not compatible for slice");
-            }
-
-            await tx.route.update({
-              where: { id: route.id },
-              data: {
-                fieldAdminId: fieldAdmin.id,
-                truckId: truck.id,
-                status: "ASSIGNED",
-              },
-            });
-            await tx.order.updateMany({
-              where: { batchId: batch.id, status: "BATCHED" },
-              data: { status: "ASSIGNED" },
-            });
-
-            const liveLoad = await recalculateTruckLiveLoad(tx, truck.id);
-            const freshTruck = await tx.truck.findUniqueOrThrow({ where: { id: truck.id } });
-            if (
-              liveLoad.currentLoadWeight > freshTruck.maxWeight ||
-              liveLoad.currentLoadVolume > freshTruck.maxVolume ||
-              liveLoad.currentLoadStops > (freshTruck.maxStops ?? Number.MAX_SAFE_INTEGER)
-            ) {
-              throw new Error("Auto fleet assignment failed: truck live load exceeds capacity");
-            }
-          }
-
-          if (fleetOptions.autoAssignDriver) {
-            if (!driverCandidate || !driver || !driver.isActive || !driver.isAvailable) {
-              throw new Error("Auto driver assignment failed: driver unavailable");
-            }
-            await tx.route.update({
-              where: { id: route.id },
-              data: { driverId: driver.id },
-            });
-            await tx.driver.update({ where: { id: driver.id }, data: { isAvailable: false } });
-          }
-        }
 
         return {
           batchId: batch.id,
@@ -607,6 +602,7 @@ const createBatchesAndRoutes = async (
           orderNumbers: slice.orders.map((order) => order.orderNumber),
           totalWeight: slice.totalWeight,
           totalVolume: slice.totalVolume,
+          truckId: selectedTruck.id,
         };
       });
       created.push(createdSlice);
@@ -648,6 +644,8 @@ export const runOrderAggregation = async (input: AggregationRunInput): Promise<A
     autoAssignRoutes: autoAssignFleet || autoAssignDriver,
     autoAssignFleet,
     autoAssignDriver,
+    runMode: input.runMode ?? "overnight",
+    targetDeliverySlot: input.targetDeliverySlot,
   };
 
   const dryRun = Boolean(input.dryRun);
@@ -661,12 +659,22 @@ export const runOrderAggregation = async (input: AggregationRunInput): Promise<A
     },
   });
   try {
-    const { deliveryDayStart } = getDeliveryDayBoundsColombo(input.windowStart);
+    const { deliveryDayStart, deliveryDayEnd } = getDeliveryDayBoundsColombo(
+      input.targetDeliveryDay ?? input.windowStart
+    );
     const { placementDayStart, placementDayEnd } = getOrderPlacementDayBoundsColombo(deliveryDayStart);
     const trucks = await getAvailableTrucks();
     const hubs = await ensureHubs();
     const zones = await getDeliveryZones();
-    const fetchedCandidates = await getCandidates(placementDayStart, placementDayEnd);
+    const fetchedCandidates =
+      config.runMode === "catchup" && config.targetDeliverySlot
+        ? await getCatchupCandidates(
+            deliveryDayStart,
+            deliveryDayEnd,
+            config.targetDeliverySlot,
+            input.includeDeferredFromSlots ?? []
+          )
+        : await getOvernightCandidates(placementDayStart, placementDayEnd);
     const { eligible, rejected } = evaluateEligibility(fetchedCandidates);
 
     const withGeo = eligible.map((order) => {
@@ -706,14 +714,30 @@ export const runOrderAggregation = async (input: AggregationRunInput): Promise<A
 
     const batchesCreated = dryRun
       ? []
-      : await createBatchesAndRoutes(
+      : await createBatchesOnly(
           truckFeasibleSlices,
           trucks,
           rejected,
-          { autoAssignFleet: config.autoAssignFleet, autoAssignDriver: config.autoAssignDriver },
           triggerMode,
           deliveryDayStart
         );
+
+    const slotByOrderId = new Map(
+      fetchedCandidates.map((order) => [order.id, order.deliveryTimeSlot])
+    );
+    const { deferredOrders, terminalRejections } = await processAggregationRejections(
+      rejected,
+      slotByOrderId,
+      deliveryDayStart,
+      dryRun
+    );
+
+    if (!dryRun && config.runMode === "catchup") {
+      await notifyCatchupBatchedOrders(
+        batchesCreated.flatMap((batch) => batch.orderIds),
+        slotByOrderId
+      );
+    }
 
     const summary: AggregationSummary = {
       runId: run.id,
@@ -729,9 +753,11 @@ export const runOrderAggregation = async (input: AggregationRunInput): Promise<A
       totalPackedSlices: truckFeasibleSlices.length,
       totalBatchesCreated: batchesCreated.length,
       totalOrdersBatched: batchesCreated.reduce((sum, batch) => sum + batch.orderIds.length, 0),
-      totalRoutesAutoAssigned: config.autoAssignFleet ? batchesCreated.length : 0,
+      totalRoutesAutoAssigned: 0,
       batchesCreated,
       rejectedOrders: rejected,
+      deferredOrders,
+      terminalRejections,
     };
 
     await prisma.aggregationRun.update({
@@ -749,12 +775,17 @@ export const runOrderAggregation = async (input: AggregationRunInput): Promise<A
     });
 
     if (rejected.length > 0) {
+      const actionByOrderId = new Map<string, string>([
+        ...deferredOrders.map((item) => [item.orderId, "DEFERRED"] as const),
+        ...terminalRejections.map((item) => [item.orderId, "TERMINAL"] as const),
+      ]);
       await prisma.aggregationRunRejection.createMany({
         data: rejected.map((item) => ({
           runId: run.id,
           orderId: item.orderId,
           orderNumber: item.orderNumber,
           reason: item.reason,
+          action: actionByOrderId.get(item.orderId) ?? "TERMINAL",
         })),
       });
     }
@@ -1137,59 +1168,22 @@ export const getBatchHandoffBundle = async (
   };
 };
 
-// Routing-planner handoff: real pickup/dropoff locations, order + batch context, fleet assignment status.
-// No refund/inspection fulfillment data — intended for the route optimization team.
+// Routing-planner handoff: batch + truck + pickup/dropoff details from order data.
+// No Route/Stop records — intended for the route planning team.
 export const getBatchRoutingHandoffBundle = async (batchId: string) => {
   const batch = await prisma.batch.findUnique({
     where: { id: batchId },
     include: {
       pickupHub: true,
-      routes: {
-        include: {
-          fieldAdmin: { include: { user: { select: { name: true, email: true } } } },
-          truck: {
-            select: {
-              vehicleNumber: true,
-              vehicleType: true,
-              maxWeight: true,
-              maxVolume: true,
-              maxStops: true,
-            },
-          },
-          driver: { include: { user: { select: { name: true } } } },
-          stops: {
-            orderBy: { sequenceOrder: "asc" },
-            include: {
-              seller: {
-                select: {
-                  businessName: true,
-                  businessAddress: true,
-                  latitude: true,
-                  longitude: true,
-                  user: { select: { name: true } },
-                },
-              },
-              buyer: { include: { user: { select: { name: true } } } },
-              order: {
-                select: {
-                  orderNumber: true,
-                  deliveryAddress: true,
-                  deliveryLat: true,
-                  deliveryLng: true,
-                  deliveryTimeSlot: true,
-                  totalWeight: true,
-                  totalVolume: true,
-                  totalAmount: true,
-                  status: true,
-                  items: {
-                    include: {
-                      product: { select: { name: true, unit: true } },
-                    },
-                  },
-                },
-              },
-            },
-          },
+      truck: {
+        select: {
+          id: true,
+          vehicleNumber: true,
+          vehicleType: true,
+          maxWeight: true,
+          maxVolume: true,
+          maxStops: true,
+          storageSupport: true,
         },
       },
       orders: {
@@ -1199,10 +1193,12 @@ export const getBatchRoutingHandoffBundle = async (batchId: string) => {
             include: {
               product: {
                 select: {
+                  id: true,
                   name: true,
                   unit: true,
                   seller: {
                     select: {
+                      id: true,
                       businessName: true,
                       businessAddress: true,
                       latitude: true,
@@ -1221,135 +1217,148 @@ export const getBatchRoutingHandoffBundle = async (batchId: string) => {
   });
 
   if (!batch) throw new Error("Batch not found");
-  const route = batch.routes[0];
-  if (!route) throw new Error("Batch route not found");
 
-  const sellerPickups = route.stops.filter((s) => s.type === "PICKUP" && s.sellerId);
-  const hubPickup = route.stops.find((s) => s.type === "PICKUP" && !s.sellerId) ?? null;
-  const deliveries = route.stops.filter((s) => s.type === "DELIVERY");
-
-  const resolveSellerLocation = (stop: (typeof sellerPickups)[number]) => {
-    const seller = stop.seller;
-    return {
-      name: seller?.businessName || seller?.user?.name || "Seller",
-      address: seller?.businessAddress || stop.address,
-      latitude: seller?.latitude ?? stop.latitude,
-      longitude: seller?.longitude ?? stop.longitude,
-    };
-  };
-
-  const mapItemsSummary = (
-    summary: unknown
-  ): Array<{ orderNumber: string; productName: string; quantity: number; unit: string }> => {
-    const entries = (summary as Array<{
-      orderNumber?: string;
-      productName?: string;
-      quantity?: number;
-      unit?: string;
-      orderItemId?: string;
-    }> | null) ?? [];
-    return entries
-      .filter((e) => e.productName || e.orderNumber)
-      .map((e) => ({
-        orderNumber: e.orderNumber ?? "",
-        productName: e.productName ?? "Product",
-        quantity: e.quantity ?? 0,
-        unit: e.unit ?? "",
-      }));
-  };
-
-  const pickups = [
-    ...sellerPickups.map((stop) => {
-      const loc = resolveSellerLocation(stop);
-      return {
-        kind: "SELLER_PICKUP" as const,
-        sequenceOrder: stop.sequenceOrder,
-        sellerName: loc.name,
-        address: loc.address,
-        latitude: loc.latitude,
-        longitude: loc.longitude,
-        products: mapItemsSummary(stop.itemsSummary),
-      };
-    }),
-    ...(hubPickup
-      ? [
-          {
-            kind: "HUB_PICKUP" as const,
-            sequenceOrder: hubPickup.sequenceOrder,
-            hubName: batch.pickupHub?.name ?? hubPickup.address,
-            address: batch.pickupHub?.name ?? hubPickup.address,
-            latitude: hubPickup.latitude,
-            longitude: hubPickup.longitude,
-            orderCount: batch.orders.length,
-          },
-        ]
-      : []),
-  ];
-
-  const dropoffs = deliveries.map((stop) => ({
-    sequenceOrder: stop.sequenceOrder,
-    orderNumber: stop.order?.orderNumber ?? "",
-    buyerName: stop.buyer?.user?.name ?? null,
-    address: stop.address,
-    latitude: stop.latitude,
-    longitude: stop.longitude,
-    deliveryTimeSlot: stop.order?.deliveryTimeSlot ?? null,
-    products:
-      stop.order?.items.map((item) => ({
-        productName: item.product.name,
-        quantity: item.quantity,
+  const ordersForPickup = batch.orders.map((order) => ({
+    id: order.id,
+    orderNumber: order.orderNumber,
+    buyerId: order.buyerId,
+    items: order.items.map((item) => ({
+      id: item.id,
+      orderId: order.id,
+      orderNumber: order.orderNumber,
+      quantity: item.quantity,
+      sellerId: item.sellerId,
+      product: {
+        id: item.product.id,
+        name: item.product.name,
         unit: item.product.unit,
-      })) ?? mapItemsSummary(stop.itemsSummary),
+        seller: item.product.seller,
+      },
+    })),
+  }));
+
+  const sellerPickupGroups = sequenceSellerPickups(buildSellerPickupGroups(ordersForPickup));
+
+  const pickups = sellerPickupGroups.map((group) => ({
+    type: "PICKUP" as const,
+    sellerId: group.sellerId,
+    sellerName: group.sellerName,
+    address: group.address,
+    latitude: group.latitude,
+    longitude: group.longitude,
+    items: group.itemsSummary.map((item) => ({
+      orderId: item.orderId,
+      orderNumber: item.orderNumber,
+      orderItemId: item.orderItemId,
+      productId: item.productId,
+      productName: item.productName,
+      quantity: item.quantity,
+      unit: item.unit,
+    })),
+  }));
+
+  const dropoffs = batch.orders.map((order) => ({
+    type: "DROPOFF" as const,
+    orderId: order.id,
+    orderNumber: order.orderNumber,
+    buyer: {
+      name: order.buyer?.user?.name ?? null,
+      email: order.buyer?.user?.email ?? null,
+    },
+    address: order.deliveryAddress,
+    latitude: order.deliveryLat,
+    longitude: order.deliveryLng,
+    timeSlot: order.deliveryTimeSlot,
+    items: order.items.map((item) => ({
+      orderItemId: item.id,
+      productId: item.product.id,
+      productName: item.product.name,
+      quantity: item.quantity,
+      unit: item.product.unit,
+      sellerId: item.product.seller.id,
+      sellerName: item.product.seller.businessName || item.product.seller.user.name,
+    })),
   }));
 
   const orders = batch.orders.map((order) => {
-    const sellerLocations = new Map<
+    const sellersById = new Map<
       string,
-      { sellerName: string; address: string; latitude: number; longitude: number; products: string[] }
+      {
+        sellerId: string;
+        name: string;
+        address: string;
+        lat: number;
+        lng: number;
+        items: Array<{
+          orderItemId: string;
+          productId: string;
+          productName: string;
+          quantity: number;
+          unit: string;
+        }>;
+      }
     >();
+
     for (const item of order.items) {
       const seller = item.product.seller;
-      const key = seller.businessName || seller.user.name;
-      const existing = sellerLocations.get(key) ?? {
-        sellerName: seller.businessName || seller.user.name,
+      const existing = sellersById.get(seller.id) ?? {
+        sellerId: seller.id,
+        name: seller.businessName || seller.user.name,
         address: seller.businessAddress,
-        latitude: seller.latitude ?? 0,
-        longitude: seller.longitude ?? 0,
-        products: [],
+        lat: seller.latitude ?? 0,
+        lng: seller.longitude ?? 0,
+        items: [],
       };
-      existing.products.push(`${item.product.name} (${item.quantity} ${item.product.unit})`);
-      sellerLocations.set(key, existing);
+      existing.items.push({
+        orderItemId: item.id,
+        productId: item.product.id,
+        productName: item.product.name,
+        quantity: item.quantity,
+        unit: item.product.unit,
+      });
+      sellersById.set(seller.id, existing);
     }
 
     return {
+      id: order.id,
       orderNumber: order.orderNumber,
-      buyerName: order.buyer?.user?.name ?? "Buyer",
-      buyerEmail: order.buyer?.user?.email ?? null,
       status: order.status,
       totalAmount: order.totalAmount,
       totalWeight: order.totalWeight,
       totalVolume: order.totalVolume,
-      deliveryTimeSlot: order.deliveryTimeSlot,
-      pickupLocations: Array.from(sellerLocations.values()),
+      pickup: {
+        type: "PICKUP" as const,
+        sellers: Array.from(sellersById.values()),
+      },
       dropoff: {
+        type: "DROPOFF" as const,
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        buyer: {
+          name: order.buyer?.user?.name ?? null,
+          email: order.buyer?.user?.email ?? null,
+        },
         address: order.deliveryAddress,
         latitude: order.deliveryLat,
         longitude: order.deliveryLng,
+        timeSlot: order.deliveryTimeSlot,
+        items: order.items.map((item) => ({
+          orderItemId: item.id,
+          productId: item.product.id,
+          productName: item.product.name,
+          quantity: item.quantity,
+          unit: item.product.unit,
+          sellerId: item.product.seller.id,
+          sellerName: item.product.seller.businessName || item.product.seller.user.name,
+        })),
       },
-      items: order.items.map((item) => ({
-        productName: item.product.name,
-        quantity: item.quantity,
-        unit: item.product.unit,
-        sellerName: item.product.seller.businessName || item.product.seller.user.name,
-      })),
     };
   });
-
-  const fleetAssigned = Boolean(route.fieldAdminId && route.truckId);
 
   return {
     handoffType: "ROUTING_PLANNING" as const,
     batch: {
+      id: batch.id,
       batchNumber: batch.batchNumber,
       status: batch.status,
       scheduledDate: batch.scheduledDate,
@@ -1359,73 +1368,29 @@ export const getBatchRoutingHandoffBundle = async (batchId: string) => {
       totalWeight: batch.capacityUsedWeight ?? 0,
       totalVolume: batch.capacityUsedVolume ?? batch.totalVolume ?? 0,
       storageType: batch.storageType,
-      pickupHub: batch.pickupHub
-        ? {
-            name: batch.pickupHub.name,
-            latitude: batch.pickupHub.latitude,
-            longitude: batch.pickupHub.longitude,
-          }
-        : null,
     },
-    route: {
-      routeNumber: route.routeNumber,
-      status: route.status,
-    },
-    fleet: {
-      isAssigned: fleetAssigned,
-      fieldAdmin: route.fieldAdmin
-        ? { name: route.fieldAdmin.user.name, email: route.fieldAdmin.user.email }
-        : null,
-      truck: route.truck
-        ? {
-            vehicleNumber: route.truck.vehicleNumber,
-            vehicleType: route.truck.vehicleType,
-            maxWeight: route.truck.maxWeight,
-            maxVolume: route.truck.maxVolume,
-            maxStops: route.truck.maxStops,
-          }
-        : null,
-      driver: route.driver
-        ? { name: route.driver.user.name, status: "ASSIGNED" as const }
-        : { name: null, status: "PENDING_DISPATCH" as const },
-    },
+    allocatedTruck: batch.truck
+      ? {
+          id: batch.truck.id,
+          vehicleNumber: batch.truck.vehicleNumber,
+          vehicleType: batch.truck.vehicleType,
+          maxWeight: batch.truck.maxWeight,
+          maxVolume: batch.truck.maxVolume,
+          maxStops: batch.truck.maxStops,
+          storageSupport: batch.truck.storageSupport,
+        }
+      : null,
+    pickupHub: batch.pickupHub
+      ? {
+          id: batch.pickupHub.id,
+          name: batch.pickupHub.name,
+          latitude: batch.pickupHub.latitude,
+          longitude: batch.pickupHub.longitude,
+        }
+      : null,
     pickups,
     dropoffs,
     orders,
-    suggestedStopSequence: route.stops.map((stop) => {
-      if (stop.type === "DELIVERY") {
-        return {
-          sequenceOrder: stop.sequenceOrder,
-          phase: "DROPOFF" as const,
-          kind: "DELIVERY" as const,
-          label: stop.order?.orderNumber ? `Deliver #${stop.order.orderNumber}` : "Delivery",
-          address: stop.address,
-          latitude: stop.latitude,
-          longitude: stop.longitude,
-        };
-      }
-      if (stop.sellerId) {
-        const loc = resolveSellerLocation(stop as (typeof sellerPickups)[number]);
-        return {
-          sequenceOrder: stop.sequenceOrder,
-          phase: "PICKUP" as const,
-          kind: "SELLER_PICKUP" as const,
-          label: `Pickup — ${loc.name}`,
-          address: loc.address,
-          latitude: loc.latitude,
-          longitude: loc.longitude,
-        };
-      }
-      return {
-        sequenceOrder: stop.sequenceOrder,
-        phase: "PICKUP" as const,
-        kind: "HUB_PICKUP" as const,
-        label: `Hub — ${batch.pickupHub?.name ?? "Pickup hub"}`,
-        address: batch.pickupHub?.name ?? stop.address,
-        latitude: stop.latitude,
-        longitude: stop.longitude,
-      };
-    }),
   };
 };
 

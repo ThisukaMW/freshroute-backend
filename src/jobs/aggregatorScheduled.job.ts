@@ -42,6 +42,7 @@ export const runScheduledAggregationIfDue = async (): Promise<void> => {
       windowStart,
       windowEnd,
       triggerMode: "scheduled",
+      runMode: "overnight",
       dryRun: false,
     });
     console.log(
