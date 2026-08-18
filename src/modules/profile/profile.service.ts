@@ -397,7 +397,7 @@ export const setDefaultAddress = async (userId: string, addressId: string) => {
 const DEFAULT_PREFS: Record<string, Record<string, boolean>> = {
   BUYER:  { orderUpdates: true, lowStock: true },
   SELLER: { newOrders: true, payouts: true, lowStock: true },
-  ADMIN:  { vendorApprovals: true, productApprovals: true },
+  ADMIN:  { vendorApprovals: true, productApprovals: true, disputes: true, systemAlerts: true },
 };
 
 export const getNotificationPrefs = async (userId: string) => {

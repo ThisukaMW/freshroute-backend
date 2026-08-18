@@ -25,14 +25,14 @@ import {
   countRouteStops,
   sequenceSellerPickups,
 } from "./aggregator.pickup-stops.js";
-import {
+/*import {
   notifyBuyerAggregationFailed,
   notifyBuyerDeliveryDeferred,
   notifyBuyerOrderBatched,
   notifySellerAggregationFailed,
   notifySellerPickupDeferred,
   notifySellerPickupScheduled,
-} from "../notifications/notification.events.js";
+} from "../notifications/notification.events.js";*/
 import type { DeliveryTimeSlot } from "./aggregator.types.js";
 
 const configDefault = {
@@ -475,14 +475,14 @@ const processAggregationRejections = async (
         lastAggregationNoticeAt: now,
       },
     });
-    const targets = notifyTargets.get(item.orderId);
+    /*const targets = notifyTargets.get(item.orderId);
     if (!targets) continue;
     await notifyBuyerDeliveryDeferred(targets.buyerUserId, item.orderNumber, item.fromSlot, item.toSlot);
     await Promise.all(
       targets.sellerUserIds.map((sellerUserId) =>
         notifySellerPickupDeferred(sellerUserId, item.orderNumber, item.fromSlot, item.toSlot)
       )
-    );
+    );*/
   }
 
   for (const item of classified.terminal) {
@@ -493,14 +493,14 @@ const processAggregationRejections = async (
         lastAggregationNoticeAt: now,
       },
     });
-    const targets = notifyTargets.get(item.orderId);
+    /*const targets = notifyTargets.get(item.orderId);
     if (!targets) continue;
     await notifyBuyerAggregationFailed(targets.buyerUserId, item.orderNumber, item.reason);
     await Promise.all(
       targets.sellerUserIds.map((sellerUserId) =>
         notifySellerAggregationFailed(sellerUserId, item.orderNumber, item.reason)
       )
-    );
+    );*/
   }
 
   return {
@@ -528,7 +528,7 @@ const notifyCatchupBatchedOrders = async (
   });
   if (deferredOrders.length === 0) return;
 
-  const targets = await loadOrderNotifyTargets(deferredOrders.map((order) => order.id));
+ /* const targets = await loadOrderNotifyTargets(deferredOrders.map((order) => order.id));
   for (const order of deferredOrders) {
     const slot = order.deliveryTimeSlot ?? slotByOrderId.get(order.id) ?? "AFTERNOON";
     const notify = targets.get(order.id);
@@ -539,7 +539,7 @@ const notifyCatchupBatchedOrders = async (
         notifySellerPickupScheduled(sellerUserId, order.orderNumber, slot)
       )
     );
-  }
+  }*/
 };
 
 //persist the geo assignments of orders.

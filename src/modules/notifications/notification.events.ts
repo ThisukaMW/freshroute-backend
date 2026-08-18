@@ -1,6 +1,21 @@
 import { createNotification } from "./notification.service.js";
 import prisma from "../../config/database.js";
 
+// Returns false only if the user explicitly turned this notification type off.
+// Missing prefs / lookup failures default to "enabled" so nothing silently breaks.
+const isPrefEnabled = async (userId: string, prefKey: string): Promise<boolean> => {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { notificationPrefs: true },
+    });
+    const prefs = (user?.notificationPrefs as Record<string, boolean>) ?? {};
+    return prefs[prefKey] !== false;
+  } catch {
+    return true;
+  }
+};
+
 // ─────────────────────────────────────────────
 // 🛒 BUYER: Notifies the buyer when their order is placed successfully
 // ─────────────────────────────────────────────
@@ -10,6 +25,8 @@ export const notifyBuyerOrderPlaced = async (
   totalAmount: number
 ) => {
   try {
+    if (!(await isPrefEnabled(buyerUserId, "orderUpdates"))) return;
+
     await createNotification({
       userId: buyerUserId,
       title: "🛒 ORDER PLACED — One Step Away!",
@@ -30,7 +47,6 @@ export const notifySellerNewOrder = async (
   itemCount: number
 ) => {
   try {
-    // Look up the seller's userId so we can send them the notification
     const seller = await prisma.seller.findUnique({
       where: { id: sellerId },
       select: { userId: true },
@@ -40,6 +56,8 @@ export const notifySellerNewOrder = async (
       console.error("[notifySellerNewOrder] seller not found:", sellerId);
       return;
     }
+
+    if (!(await isPrefEnabled(seller.userId, "newOrders"))) return;
 
     await createNotification({
       userId: seller.userId,
@@ -71,10 +89,17 @@ export const notifyAdminsBuyerRegistered = async (
       return;
     }
 
-    console.log(`[notifyAdminsBuyerRegistered] notifying ${admins.length} admin(s)`);
+    const enabledFlags = await Promise.all(
+      admins.map((a) => isPrefEnabled(a.id, "vendorApprovals"))
+    );
+    const targets = admins.filter((_, i) => enabledFlags[i]);
+
+    if (targets.length === 0) return;
+
+    console.log(`[notifyAdminsBuyerRegistered] notifying ${targets.length} admin(s)`);
 
     await Promise.allSettled(
-      admins.map((admin) =>
+      targets.map((admin) =>
         createNotification({
           userId: admin.id,
           title: "🆕 New Buyer Registration",
@@ -97,7 +122,6 @@ export const notifyAdminsSellerRegistered = async (
   sellerId: string
 ) => {
   try {
-    // Find all admin users in the database
     const admins = await prisma.user.findMany({
       where: { role: "ADMIN" },
       select: { id: true },
@@ -108,12 +132,17 @@ export const notifyAdminsSellerRegistered = async (
       return;
     }
 
-    console.log(`[notifyAdminsSellerRegistered] notifying ${admins.length} admin(s)`);
+    const enabledFlags = await Promise.all(
+      admins.map((a) => isPrefEnabled(a.id, "vendorApprovals"))
+    );
+    const targets = admins.filter((_, i) => enabledFlags[i]);
 
-    // Send notification to every admin at the same time
-    // allSettled means one failure won't stop the others
+    if (targets.length === 0) return;
+
+    console.log(`[notifyAdminsSellerRegistered] notifying ${targets.length} admin(s)`);
+
     await Promise.allSettled(
-      admins.map((admin) =>
+      targets.map((admin) =>
         createNotification({
           userId: admin.id,
           title: "🆕 New Seller Registration",
@@ -142,8 +171,15 @@ export const notifyAdminsProductSubmitted = async (
     });
     if (admins.length === 0) return;
 
+    const enabledFlags = await Promise.all(
+      admins.map((a) => isPrefEnabled(a.id, "productApprovals"))
+    );
+    const targets = admins.filter((_, i) => enabledFlags[i]);
+
+    if (targets.length === 0) return;
+
     await Promise.allSettled(
-      admins.map((admin) =>
+      targets.map((admin) =>
         createNotification({
           userId: admin.id,
           title: "📦 New Product Pending Approval",
@@ -192,16 +228,18 @@ export const notifySellerLowStock = async (
   lowStockThreshold: number
 ) => {
   try {
+    if (!(await isPrefEnabled(sellerUserId, "lowStock"))) return;
+
     await createNotification({
       userId: sellerUserId,
       title: "⚠️ Low Stock Alert",
       body: `${productName} is running low: ${currentStock} ${unit} remaining. Reorder at ${lowStockThreshold} ${unit}.`,
-      data: { 
-        type: "LOW_STOCK", 
-        productName, 
+      data: {
+        type: "LOW_STOCK",
+        productName,
         currentStock: String(currentStock),
         unit,
-        lowStockThreshold: String(lowStockThreshold)
+        lowStockThreshold: String(lowStockThreshold),
       },
     });
   } catch (err) {
@@ -210,13 +248,15 @@ export const notifySellerLowStock = async (
 };
 
 // ─────────────────────────────────────────────
-// 🛒 BUYER: Reminds the buyer once per delivery day, covering their whole
+// 🛒 BUYER: Reminds the buyer once per delivery day, covering their whole cart
 // ─────────────────────────────────────────────
 export const notifyBuyerCartReminder = async (
   buyerUserId: string,
   itemCount: number
 ) => {
   try {
+    if (!(await isPrefEnabled(buyerUserId, "orderUpdates"))) return;
+
     await createNotification({
       userId: buyerUserId,
       title: "⏰ Your cart is waiting",
@@ -237,6 +277,8 @@ export const notifyBuyerItemAdded = async (
   quantity: number
 ) => {
   try {
+    if (!(await isPrefEnabled(buyerUserId, "orderUpdates"))) return;
+
     await createNotification({
       userId: buyerUserId,
       title: "🛒 Item added to cart",
