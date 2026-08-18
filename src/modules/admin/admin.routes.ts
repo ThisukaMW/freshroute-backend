@@ -15,6 +15,7 @@ import {
   approveUserController,
   rejectUserController,
   initiateRefundController,
+  createStaffAccountController,
 } from "./admin.controller.js";
 import { getUsers } from "../user/user.controller.js";
 
@@ -35,6 +36,9 @@ router.get("/users/pending", getPendingUsersController);
 // Say yes or no to a user's registration
 router.patch("/users/:userId/approve", approveUserController);
 router.patch("/users/:userId/reject", rejectUserController);
+
+// Create a driver or field admin account directly (they don't self-register)
+router.post("/staff", authorize("ADMIN"), createStaffAccountController);
 
 // See all orders ever placed
 router.get("/orders", listAllOrders);

@@ -11,7 +11,6 @@ import {
   toggleAvailability,
   getStopItems,
   reportIssue,
-  getDriverEarnings,
 } from "./driver.service.js";
 
 export const myProfile = async (req: AuthRequest, res: Response) => {
@@ -129,16 +128,6 @@ export const reportIssueHandler = async (req: AuthRequest, res: Response) => {
     }
     const data = await reportIssue(req.driverId!, { issueType, description, deliveryId, stopId });
     res.status(201).json(data);
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : "Error";
-    res.status(500).json({ message });
-  }
-};
-
-export const earningsHandler = async (req: AuthRequest, res: Response) => {
-  try {
-    const data = await getDriverEarnings(req.driverId!);
-    res.json(data);
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Error";
     res.status(500).json({ message });

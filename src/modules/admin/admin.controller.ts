@@ -10,6 +10,7 @@ import {
   listFleetOptions,
   assignRouteFleet,
   initiateRefund,
+  createStaffAccount,
 } from "./admin.service.js";
 import { approveUser, rejectUser, getPendingUsers } from "../auth/auth.service.js";
 import { sendApprovalEmail, sendRejectionEmail } from "../../utils/mailer.js";
@@ -270,4 +271,47 @@ async (req,res)=>{
 
     }
 
+};
+
+// ---------------- CREATE STAFF ACCOUNT (admin creates driver / field admin) ----------------
+export const createStaffAccountController: RequestHandler = async (req, res) => {
+  try {
+    const { role, name, email, password, phone, licenseNumber } = req.body;
+
+    if (role !== "DRIVER" && role !== "FIELD_ADMIN") {
+      res.status(400).json({ message: "role must be DRIVER or FIELD_ADMIN" });
+      return;
+    }
+    if (!name?.trim() || !email?.trim() || !password) {
+      res.status(400).json({ message: "Name, email, and password are required" });
+      return;
+    }
+    if (String(password).length < 8) {
+      res.status(400).json({ message: "Password must be at least 8 characters" });
+      return;
+    }
+
+    const result = await createStaffAccount({
+      role,
+      name,
+      email,
+      password,
+      phone,
+      licenseNumber,
+    });
+
+    res.status(201).json({
+      message: `${role === "DRIVER" ? "Driver" : "Field admin"} account created successfully.`,
+      user: {
+        id: result.user.id,
+        name: result.user.name,
+        email: result.user.email,
+        role: result.user.role,
+      },
+    });
+  } catch (error: any) {
+    res.status(error.statusCode ?? 500).json({
+      message: error.message ?? "Failed to create staff account",
+    });
+  }
 };

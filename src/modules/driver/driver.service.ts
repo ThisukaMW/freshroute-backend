@@ -47,15 +47,12 @@ export const getDriverStats = async (driverId: string) => {
     include: {
       stops: {
         where: { type: "DELIVERY" },
-        include: {
-          order: { select: { totalAmount: true } },
-        },
       },
     },
   });
 
   if (routes.length === 0) {
-    return { totalDeliveries: 0, completed: 0, remaining: 0, earnings: 0 };
+    return { totalDeliveries: 0, completed: 0, remaining: 0 };
   }
 
   const allDeliveryStops = routes.flatMap((r) => r.stops);
@@ -65,16 +62,7 @@ export const getDriverStats = async (driverId: string) => {
   const total = allDeliveryStops.length;
   const remaining = total - completed;
 
-  const earnings = allDeliveryStops
-    .filter((s) => s.status === "COMPLETED" && s.order)
-    .reduce((sum, s) => sum + (s.order?.totalAmount ?? 0), 0);
-
-  return {
-    totalDeliveries: total,
-    completed,
-    remaining,
-    earnings: parseFloat(earnings.toFixed(2)),
-  };
+  return { totalDeliveries: total, completed, remaining };
 };
 
 // GET /api/v1/driver/me/active-route
@@ -379,64 +367,6 @@ export const reportIssue = async (
   });
 
   return { id: notification.id, status: "received", reportedAt: notification.createdAt };
-};
-
-// GET /api/v1/driver/me/earnings
-export const getDriverEarnings = async (driverId: string) => {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  const sevenDaysAgo = new Date(today);
-  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
-
-  const stops = await prisma.stop.findMany({
-    where: {
-      type: "DELIVERY",
-      status: "COMPLETED",
-      route: { driverId },
-      completedAt: { gte: sevenDaysAgo },
-    },
-    select: {
-      completedAt: true,
-      order: { select: { totalAmount: true } },
-    },
-  });
-
-  const byDate: Record<string, { deliveries: number; earnings: number }> = {};
-  for (let i = 6; i >= 0; i--) {
-    const d = new Date(today);
-    d.setDate(d.getDate() - i);
-    const key = d.toISOString().split("T")[0]!;
-    byDate[key] = { deliveries: 0, earnings: 0 };
-  }
-
-  for (const stop of stops) {
-    if (!stop.completedAt) continue;
-    const key = stop.completedAt.toISOString().split("T")[0]!;
-    if (key in byDate) {
-      byDate[key]!.deliveries += 1;
-      byDate[key]!.earnings += stop.order?.totalAmount ?? 0;
-    }
-  }
-
-  const breakdown = Object.entries(byDate).map(([date, val]) => ({
-    date,
-    deliveries: val.deliveries,
-    earnings: parseFloat(val.earnings.toFixed(2)),
-  }));
-
-  const todayKey = today.toISOString().split("T")[0]!;
-  const todayData = byDate[todayKey] ?? { deliveries: 0, earnings: 0 };
-  const thisWeekEarnings = breakdown.reduce((sum, d) => sum + d.earnings, 0);
-  const thisWeekDeliveries = breakdown.reduce((sum, d) => sum + d.deliveries, 0);
-
-  return {
-    today: parseFloat(todayData.earnings.toFixed(2)),
-    todayDeliveries: todayData.deliveries,
-    thisWeek: parseFloat(thisWeekEarnings.toFixed(2)),
-    thisWeekDeliveries,
-    breakdown,
-  };
 };
 
 // GET /api/v1/driver/me/live-seed

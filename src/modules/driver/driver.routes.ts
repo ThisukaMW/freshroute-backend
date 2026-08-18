@@ -11,7 +11,6 @@ import {
   toggleAvailabilityHandler,
   stopItemsHandler,
   reportIssueHandler,
-  earningsHandler,
 } from "./driver.controller.js";
 
 const router = Router();
@@ -48,8 +47,5 @@ router.get("/me/stops/:stopId/items", stopItemsHandler);
 
 // POST /api/v1/driver/me/issues
 router.post("/me/issues", reportIssueHandler);
-
-// GET /api/v1/driver/me/earnings
-router.get("/me/earnings", earningsHandler);
 
 export default router;

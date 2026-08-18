@@ -209,9 +209,11 @@ model Driver {
   user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   licenseNumber   String          @unique
-  vehicleNumber   String
-  vehicleType     String
-  vehicleCapacity Float           // in kg or cubic meters
+  // Vehicle isn't declared at registration — trucks are matched to batches
+  // separately via the fleet assignment flow (see Truck model).
+  vehicleNumber   String?
+  vehicleType     String?
+  vehicleCapacity Float?          // in kg or cubic meters
 
   isActive        Boolean         @default(true)
   isAvailable     Boolean         @default(true)

@@ -1,7 +1,77 @@
 import Stripe from "stripe";
+import bcrypt from "bcrypt";
 import prisma from "../../config/database.js";
 import { canTruckCarrySlice } from "../Order_Aggregator/aggregator.rules.js";
 import { getStripe } from "../payment/payment.service.js";
+
+// ---------------- STAFF ACCOUNT CREATION (admin-only) ----------------
+// Drivers and field admins don't self-register — an admin creates their
+// account directly here, so it's ACTIVE immediately (no approval workflow).
+export interface CreateStaffAccountInput {
+  role: "DRIVER" | "FIELD_ADMIN";
+  name: string;
+  email: string;
+  password: string;
+  phone?: string;
+  // Driver-only, required for DRIVER role. Vehicle details are intentionally
+  // not collected here — trucks are matched to batches separately via the
+  // fleet assignment flow, not declared at staff-registration time.
+  licenseNumber?: string;
+}
+
+export const createStaffAccount = async (input: CreateStaffAccountInput) => {
+  const email = input.email.trim().toLowerCase();
+
+  const existing = await prisma.user.findUnique({ where: { email } });
+  if (existing) {
+    const err: any = new Error("A user with this email already exists");
+    err.statusCode = 409;
+    throw err;
+  }
+
+  const passwordHash = await bcrypt.hash(input.password, 10);
+
+  const user = await prisma.user.create({
+    data: {
+      name: input.name.trim(),
+      email,
+      phone: input.phone?.trim() || null,
+      role: input.role,
+      status: "ACTIVE",
+      passwordHash,
+    },
+  });
+
+  try {
+    if (input.role === "DRIVER") {
+      if (!input.licenseNumber?.trim()) {
+        const err: any = new Error("License number is required for drivers");
+        err.statusCode = 400;
+        throw err;
+      }
+
+      // Vehicle isn't declared at registration — trucks are matched to
+      // batches separately via the fleet assignment flow.
+      const driver = await prisma.driver.create({
+        data: {
+          userId: user.id,
+          licenseNumber: input.licenseNumber.trim(),
+        },
+      });
+      return { user, profile: driver };
+    }
+
+    const fieldAdmin = await prisma.fieldAdmin.create({
+      data: { userId: user.id },
+    });
+    return { user, profile: fieldAdmin };
+  } catch (err) {
+    // Profile creation failed (e.g. duplicate license number) — don't leave
+    // an orphaned User record with no matching Driver/FieldAdmin profile.
+    await prisma.user.delete({ where: { id: user.id } }).catch(() => {});
+    throw err;
+  }
+};
 
 // Get all orders, newest first, including buyer name, product details, and payment info
 export const getAllOrders = async (filters?: { since?: string; until?: string }) => {
