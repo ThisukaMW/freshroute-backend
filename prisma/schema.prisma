@@ -173,7 +173,7 @@ model User {
   role          UserRole
   status        UserStatus  @default(ACTIVE)
   city          String?
-  address       String?
+  address       String?  
   addresses Address[]
   passwordHash  String
   prevPasswordHash  String?   // stores old hash before a reset, cleared after secure-account
@@ -190,7 +190,7 @@ model User {
   driverProfile     Driver?
   sellerProfile     Seller?
   buyerProfile      Buyer?
-  fieldAdminProfile FieldAdmin?
+  fieldAdminProfile FieldAdmin? 
   notifications     Notification[]
   notificationPrefs Json?
 
@@ -231,6 +231,7 @@ model Driver {
   locations       DriverLocation[]
   sessions        DriverSession[]
   ratings         Rating[]
+  driverRatings   DriverRating[]  // ← add
 
   @@index([isActive, isAvailable])
   @@index([userId])
@@ -283,6 +284,7 @@ model Buyer {
   orders          Order[]
   deliveryStops   Stop[]      @relation("BuyerDeliveries")
   ratings         Rating[]
+  driverRatings   DriverRating[]  // ← add
   reservations    StockReservation[]
 
   cart            Cart?
@@ -451,6 +453,7 @@ model Order {
   items           OrderItem[]
   payment         Payment?
   ratings         Rating[]
+  driverRating    DriverRating?   // ← add
   reservations    StockReservation[]
   refunds         Refund[]
 
@@ -502,6 +505,7 @@ model Cart {
   promoCodeId String?
 
   expiresAt DateTime?
+  lastReminderSentAt DateTime?
 }
 
 model CartItem {
@@ -985,6 +989,7 @@ model Rating {
   productQualityRating  Int?     // Product condition on arrival
   packagingRating       Int?
   comment               String?
+  images                Json?    // ← add: array of image URLs/paths
   isVerifiedPurchase    Boolean  @default(false)
   isFlagged             Boolean  @default(false)
 
@@ -997,6 +1002,29 @@ model Rating {
   @@index([productId])
   @@index([driverId])
   @@index([orderId])
+  @@index([buyerId])
+}
+
+
+model DriverRating {
+  id String @id @default(uuid())
+
+  orderId String @unique   // one driver rating per order — enforced at the DB level
+  order   Order  @relation(fields: [orderId], references: [id])
+
+  driverId String
+  driver   Driver @relation(fields: [driverId], references: [id])
+
+  buyerId String
+  buyer   Buyer  @relation(fields: [buyerId], references: [id])
+
+  rating  Int
+  comment String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([driverId])
   @@index([buyerId])
 }
 

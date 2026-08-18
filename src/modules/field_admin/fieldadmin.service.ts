@@ -230,6 +230,7 @@ const orderSelect = {
     select: {
       id: true,
       quantity: true,
+      unitPrice: true,
       sellerId: true,
       product: { select: { id: true, name: true, unit: true } },
       inspections: {
@@ -282,6 +283,7 @@ const toFieldAdminOrderContract = (
     items: Array<{
       id: string;
       quantity: number;
+      unitPrice: number;
       sellerId: string;
       product: { id: string; name: string; unit: string };
       inspections: Array<{ result: string }>;
@@ -350,6 +352,7 @@ const toFieldAdminOrderContract = (
       items: order.items.map((item) => ({
         id: item.id,
         quantity: item.quantity,
+        unitPrice: item.unitPrice,
         name: item.product.name,
         unit: item.product.unit,
         sellerId: item.sellerId,
@@ -604,8 +607,8 @@ export const createInspection = async (
   await ensureFieldAdminExists(fieldAdminId);
   const orderItem = await ensureOrderItemOwnedByFieldAdmin(fieldAdminId, payload.orderItemId);
 
-  if (!["ASSIGNED", "BATCHED"].includes(orderItem.order.status)) {
-    throw new Error("Inspections are only allowed during the pickup phase (ASSIGNED or BATCHED orders)");
+  if (!["ASSIGNED", "BATCHED", "IN_TRANSIT"].includes(orderItem.order.status)) {
+    throw new Error("Inspections are only allowed for active pickup/delivery orders");
   }
 
   const sellerPickupStop = await prisma.stop.findFirst({
@@ -622,7 +625,7 @@ export const createInspection = async (
       where: { route: { fieldAdminId, batch: { orders: { some: { id: orderItem.orderId } } } } },
       select: { id: true },
     });
-    if (hasRouteStops) {
+    if (hasRouteStops && orderItem.order.status !== "IN_TRANSIT") {
       throw new Error("No pending seller pickup stop found for this order item");
     }
   }
@@ -733,6 +736,17 @@ const ensureOrderItemsInspected = async (
   if (orderItemIds.some((id) => !inspectedIds.has(id))) {
     throw new Error("All order items at this seller stop must be inspected before pickup confirmation");
   }
+};
+
+const ensureOrderFullyInspected = async (
+  tx: Pick<typeof prisma, "orderItem" | "productInspection">,
+  orderId: string
+) => {
+  const orderItems = await tx.orderItem.findMany({
+    where: { orderId },
+    select: { id: true },
+  });
+  await ensureOrderItemsInspected(tx, orderItems.map((item) => item.id));
 };
 
 //mark a stop complete with pickup/delivery phase gates.
@@ -894,6 +908,66 @@ export const markDeliveryComplete = async (
   fieldAdminId: string,
   payload: { stopId: string; notes?: string }
 ) => markStopComplete(fieldAdminId, payload);
+
+export const confirmOrderFulfillment = async (
+  fieldAdminId: string,
+  payload: { orderId: string; action: "pickup" | "delivery"; notes?: string }
+) => {
+  await ensureFieldAdminExists(fieldAdminId);
+  const order = await ensureOrderOwnedByFieldAdmin(fieldAdminId, payload.orderId);
+
+  if (order.status === "DELIVERED") {
+    throw new Error("This order is already delivered");
+  }
+  if (order.status === "CANCELLED" || order.status === "FAILED") {
+    throw new Error("This order cannot be fulfilled");
+  }
+
+  const matchingStop = await prisma.stop.findFirst({
+    where: {
+      type: payload.action === "pickup" ? "PICKUP" : "DELIVERY",
+      status: { not: "COMPLETED" },
+      ...(payload.action === "delivery" ? { orderId: order.id } : {}),
+      route: {
+        AND: [
+          { OR: [{ fieldAdminId }, { batch: { fieldAdminId } }] },
+          { batch: { orders: { some: { id: order.id } } } },
+        ],
+      },
+    },
+    orderBy: { sequenceOrder: "asc" },
+    select: { id: true },
+  });
+
+  if (matchingStop) {
+    return markStopComplete(fieldAdminId, { stopId: matchingStop.id, notes: payload.notes });
+  }
+
+  if (payload.action === "pickup") {
+    if (order.status === "IN_TRANSIT") {
+      throw new Error("Pickup is already completed for this order");
+    }
+    if (!["BATCHED", "ASSIGNED"].includes(order.status)) {
+      throw new Error("Pickup can only be confirmed for batched or assigned orders");
+    }
+    await ensureOrderFullyInspected(prisma, order.id);
+    const updated = await prisma.order.update({
+      where: { id: order.id },
+      data: { status: "IN_TRANSIT" },
+    });
+    return { id: updated.id, status: updated.status, action: "pickup" as const };
+  }
+
+  if (order.status !== "IN_TRANSIT") {
+    throw new Error("Complete pickup before marking delivery");
+  }
+
+  const updated = await prisma.order.update({
+    where: { id: order.id },
+    data: { status: "DELIVERED", actualDelivery: new Date() },
+  });
+  return { id: updated.id, status: updated.status, action: "delivery" as const };
+};
 
 //create an assessment for a target.
 export const createAssessment = async (

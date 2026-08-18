@@ -14,7 +14,6 @@ import { loginSeller, loginBuyer } from "./auth.service.js";
 import { notifyAdminsSellerRegistered, notifyAdminsBuyerRegistered } from "../notifications/notification.events.js";
 import prisma from "../../config/database.js";
 
-
 // ─── Validation helpers ────────────────────────────────────────────
 
 /** Password must have 8+ chars, one uppercase, one number, one special character. */

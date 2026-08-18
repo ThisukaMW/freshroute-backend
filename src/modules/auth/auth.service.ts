@@ -276,7 +276,7 @@ export const createVendor = async (input: VendorSignupInput) => {
   await prisma.address.create({
     data: {
       userId: vendor.id,
-      label: "Store",
+      label: "Address",
       address: input.businessAddress,
       city: input.city,
       latitude: input.latitude ?? 0,

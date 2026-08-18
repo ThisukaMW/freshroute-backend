@@ -271,7 +271,7 @@ export const createOrder = async (input: CreateOrderInput) => {
   // ─── NOTIFICATIONS ────────────────────────────────────────────────────────
 
   // Notify buyer their order was placed
-  await notifyBuyerOrderPlaced(buyer.userId, order.orderNumber, totalAmount);
+  //await notifyBuyerOrderPlaced(buyer.userId, order.orderNumber, totalAmount);
 
   // Notify each unique seller they have a new order
   const uniqueSellerIds = [...new Set(input.items.map((i) => i.sellerId))];
@@ -331,6 +331,11 @@ export const getOrderById = async (orderId: string, buyerId: string) => {
         },
       },
       payment: true,
+      deliveryStop: {              // ← add this
+        include: {
+          route: { select: { driverId: true } },
+        },
+      },
     },
   });
 

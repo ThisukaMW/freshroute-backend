@@ -1067,14 +1067,18 @@ export const getBatchHandoffBundle = async (
     const sellerPickupsForOrderComplete =
       sellerStopsForOrder.length === 0 ||
       sellerStopsForOrder.every((stop) => stop.status === "COMPLETED");
-    const pickupComplete = sellerPickupsForOrderComplete && itemsInspected;
     const deliveryComplete = order.deliveryStop?.status === "COMPLETED" || order.status === "DELIVERED";
-    const eligibleForDelivery = pickupComplete && hubComplete && !deliveryComplete;
+    const hasRouteStops = allStops.length > 0;
+    const pickupComplete = hasRouteStops
+      ? sellerPickupsForOrderComplete && itemsInspected
+      : order.status === "IN_TRANSIT" || deliveryComplete;
+    const hubCompleteForOrder = hasRouteStops ? hubComplete : pickupComplete;
+    const eligibleForDelivery = pickupComplete && hubCompleteForOrder && !deliveryComplete;
 
     let currentPhase: "PICKUP" | "DROPOFF" | "COMPLETED" = "PICKUP";
     if (deliveryComplete) {
       currentPhase = "COMPLETED";
-    } else if (pickupComplete && hubComplete) {
+    } else if (hasRouteStops ? pickupComplete && hubComplete : order.status === "IN_TRANSIT") {
       currentPhase = "DROPOFF";
     }
 
@@ -1138,6 +1142,15 @@ export const getBatchHandoffBundle = async (
           ? null
           : "Inspect all order products before hub pickup confirmation",
       };
+    } else if (!hasRouteStops && currentPhase === "PICKUP") {
+      pickupNextAction = {
+        stopId: order.id,
+        stopKind: "SELLER_PICKUP",
+        canComplete: itemsInspected,
+        blockedReason: itemsInspected
+          ? null
+          : "Inspect all order products before pickup confirmation",
+      };
     }
 
     return {
@@ -1145,6 +1158,9 @@ export const getBatchHandoffBundle = async (
       orderNumber: order.orderNumber,
       status: order.status,
       customer: order.buyer?.user?.name ?? null,
+      address: order.deliveryAddress ?? null,
+      deliveryAddress: order.deliveryAddress ?? null,
+      coords: { latitude: order.deliveryLat, longitude: order.deliveryLng },
       currentPhase,
       deliveryStopId: order.deliveryStop?.id ?? deliveryStop?.id ?? null,
       sellerPickupStopIds,
@@ -1183,10 +1199,20 @@ export const getBatchHandoffBundle = async (
                     ? "Complete seller pickups and inspections first"
                     : "Order not ready for delivery",
           }
-        : null,
+        : currentPhase === "DROPOFF"
+          ? {
+              id: order.id,
+              type: "DELIVERY" as const,
+              address: order.deliveryAddress ?? null,
+              latitude: order.deliveryLat ?? null,
+              longitude: order.deliveryLng ?? null,
+              canComplete: true,
+              blockedReason: null,
+            }
+          : null,
       fulfillment: {
         pickupComplete,
-        hubComplete,
+        hubComplete: hubCompleteForOrder,
         deliveryComplete,
         eligibleForDelivery,
       },

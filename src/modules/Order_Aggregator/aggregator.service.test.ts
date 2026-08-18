@@ -142,6 +142,9 @@ const mockBatchHandoffData = () => ({
       id: "o1",
       orderNumber: "ORD-1",
       status: "ASSIGNED",
+      deliveryAddress: "42 Buyer Street, Colombo",
+      deliveryLat: 6.91,
+      deliveryLng: 79.86,
       deliveryStop: { id: "delivery-stop-1", status: "PENDING", type: "DELIVERY" },
       items: [
         {
@@ -217,6 +220,8 @@ test("getBatchHandoffBundle loads a field-admin batch without a route", async ()
   assert.equal(payload.route.routeNumber, "BATCH-1");
   assert.equal(payload.route.currentPhase, "PICKUP");
   assert.equal(payload.orders.length, 1);
+  assert.equal(payload.orders[0]?.address, "42 Buyer Street, Colombo");
+  assert.equal(payload.orders[0]?.deliveryAddress, "42 Buyer Street, Colombo");
 
   restoreBatchFind();
 });
