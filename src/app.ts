@@ -3,6 +3,7 @@ import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
+import path from "path";
 import authRoutes from "./modules/auth/auth.routes.js";
 import driverRoutes from "./modules/driver/driver.routes.js";
 import fieldAdminRoutes from "./modules/field_admin/fieldadmin.routes.js";
@@ -27,9 +28,6 @@ dotenv.config({ override: true });
 
 const app = express();
 
-<<<<<<< Updated upstream
-app.use(cors());
-=======
 const isProduction = process.env.NODE_ENV === "production";
 
 app.use(
@@ -41,9 +39,7 @@ app.use(
     allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
-// Serve uploaded files (images) from /uploads
-app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
->>>>>>> Stashed changes
+app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 
 app.get("/", (req, res) => {
   res.send("Server is running 🚀");

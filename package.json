@@ -10,23 +10,14 @@
     "build": "tsc && mkdir -p dist/src/generated && cp -r src/generated/prisma dist/src/generated/prisma",
     "postinstall": "prisma generate",
     "start": "node dist/src/server.js",
-<<<<<<< Updated upstream
-    "seed": "tsx prisma/seed.ts",
-    "test": "tsx test/run-all-tests.ts"
-  },
-  "prisma": {
-    "seed": "tsx prisma/seed.ts"
-=======
-    "test": "node --test --import tsx \"test/**/*.test.ts\"",
-    "test:watch": "node --test --watch --import tsx \"test/**/*.test.ts\"",
-    "test": "tsx test/run-all-tests.ts"
+    "test": "tsx test/run-all-tests.ts",
+    "test:watch": "node --test --watch --import tsx \"test/**/*.test.ts\""
   },
   "prisma": {
     "db:inspect": "tsx inspect-db.ts",
     "route:admin": "tsx tmp-route-admin.ts",
     "studio": "prisma studio --port 5555",
     "planner:service": "cd route-optimizer-service && uvicorn app.main:app --host 0.0.0.0 --port 8001 --reload"
->>>>>>> Stashed changes
   },
   "keywords": [],
   "author": "",
