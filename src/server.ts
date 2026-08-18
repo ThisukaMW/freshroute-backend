@@ -27,7 +27,7 @@ const loadClearExpiredCarts = async () => {
 //   return runDueCatchupAggregations;
 // };
 import { setPlannerRealtimeIo } from "./modules/planner/planner.realtime.js";
-import { startRouteRerouteWorker } from "./modules/planner/route-reroute.worker.js";
+import { startRouteRerouteWorker, stopRouteRerouteWorker } from "./modules/planner/route-reroute.worker.js";
 
 const PORT = process.env.PORT || 5000;
 const HOST = process.env.HOST || "0.0.0.0";
@@ -74,6 +74,7 @@ const io = new Server(httpServer, {
 });
 
 setupSocketHandlers(io);
+setPlannerRealtimeIo(io);
 
 let cartExpiryInterval: NodeJS.Timeout | null = null;
 let aggregationInterval: NodeJS.Timeout | null = null;
@@ -87,6 +88,7 @@ const shutdown = (signal: string) => {
 
   if (cartExpiryInterval) clearInterval(cartExpiryInterval);
   if (aggregationInterval) clearInterval(aggregationInterval);
+  stopRouteRerouteWorker();
 
   try {
     io.disconnectSockets(true);
@@ -121,6 +123,11 @@ httpServer.listen(PORT, async () => {
   } catch (error) {
     console.error("Cart expiry cleanup failed on startup:", error);
   }
+
+  // Live re-route worker: re-evaluates active routes on an interval and
+  // auto-applies a better route when the driver's live position makes one
+  // available (see planner.service.ts:rerouteActiveRoutesOnce).
+  startRouteRerouteWorker();
 
   // Catch up overnight batching if the server was down during 00:00–04:00 Colombo
   // try {

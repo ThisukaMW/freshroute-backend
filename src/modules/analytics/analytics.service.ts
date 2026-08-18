@@ -3,9 +3,39 @@
 
 import prisma from "../../config/database.js";
 import { startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, format } from "date-fns";
+import { getDeliveryDayBoundsColombo } from "../Order_Aggregator/aggregator.colombo.js";
 
 // The four allowed time periods for all analytics functions
 export type Period = "daily" | "weekly" | "monthly" | "yearly";
+
+// Revenue = money actually captured, not just orders placed. Based on completed
+// payments (not order status) so a later refund automatically stops counting it,
+// and bounded by Sri Lanka's civil day (Asia/Colombo) rather than the server's
+// local clock, so "today" means the same thing here as it does for the aggregator.
+export const getTodayRevenue = async () => {
+  const { deliveryDayStart, deliveryDayEnd } = getDeliveryDayBoundsColombo(new Date());
+
+  const [revenueAgg, paidOrdersCount] = await Promise.all([
+    prisma.payment.aggregate({
+      _sum: { amount: true },
+      where: {
+        status: "COMPLETED",
+        completedAt: { gte: deliveryDayStart, lte: deliveryDayEnd },
+      },
+    }),
+    prisma.payment.count({
+      where: {
+        status: "COMPLETED",
+        completedAt: { gte: deliveryDayStart, lte: deliveryDayEnd },
+      },
+    }),
+  ]);
+
+  return {
+    revenueToday: revenueAgg._sum.amount ?? 0,
+    paidOrdersToday: paidOrdersCount,
+  };
+};
 
 // Add up total revenue and order count for each time slot in the chosen period
 export const getRevenueTrend = async (period: Period) => {
@@ -26,7 +56,7 @@ export const getRevenueTrend = async (period: Period) => {
       const agg = await prisma.order.aggregate({
         _sum: { totalAmount: true },
         _count: { id: true },
-        where: { placedAt: { gte: s.start, lte: s.end }, status: { notIn: ["CANCELLED", "PAYMENT_FAILED"] } },
+        where: { placedAt: { gte: s.start, lte: s.end }, status: { notIn: ["CANCELLED", "PAYMENT_FAILED", "PENDING", "PAYMENT_PENDING"] } },
       });
       return { label: s.label, revenue: agg._sum.totalAmount ?? 0, orders: agg._count.id };
     }));
@@ -45,7 +75,7 @@ export const getRevenueTrend = async (period: Period) => {
       const agg = await prisma.order.aggregate({
         _sum: { totalAmount: true },
         _count: { id: true },
-        where: { placedAt: { gte: startOfDay(day), lte: endOfDay(day) }, status: { notIn: ["CANCELLED", "PAYMENT_FAILED"] } },
+        where: { placedAt: { gte: startOfDay(day), lte: endOfDay(day) }, status: { notIn: ["CANCELLED", "PAYMENT_FAILED", "PENDING", "PAYMENT_PENDING"] } },
       });
       return { label: format(day, "EEE"), revenue: agg._sum.totalAmount ?? 0, orders: agg._count.id };
     }));
@@ -58,7 +88,7 @@ export const getRevenueTrend = async (period: Period) => {
       const agg = await prisma.order.aggregate({
         _sum: { totalAmount: true },
         _count: { id: true },
-        where: { placedAt: { gte: startOfMonth(month), lte: endOfMonth(month) }, status: { notIn: ["CANCELLED", "PAYMENT_FAILED"] } },
+        where: { placedAt: { gte: startOfMonth(month), lte: endOfMonth(month) }, status: { notIn: ["CANCELLED", "PAYMENT_FAILED", "PENDING", "PAYMENT_PENDING"] } },
       });
       return { label: format(month, "MMM"), revenue: agg._sum.totalAmount ?? 0, orders: agg._count.id };
     }));
@@ -71,7 +101,7 @@ export const getRevenueTrend = async (period: Period) => {
       const agg = await prisma.order.aggregate({
         _sum: { totalAmount: true },
         _count: { id: true },
-        where: { placedAt: { gte: new Date(year, 0, 1), lte: new Date(year, 11, 31, 23, 59, 59) }, status: { notIn: ["CANCELLED", "PAYMENT_FAILED"] } },
+        where: { placedAt: { gte: new Date(year, 0, 1), lte: new Date(year, 11, 31, 23, 59, 59) }, status: { notIn: ["CANCELLED", "PAYMENT_FAILED", "PENDING", "PAYMENT_PENDING"] } },
       });
       return { label: String(year), revenue: agg._sum.totalAmount ?? 0, orders: agg._count.id };
     })
@@ -257,7 +287,7 @@ export const getAovAndRefundTrend = async (period: Period) => {
   const computeSlot = async (start: Date, end: Date, label: string) => {
     const [orders, refunds] = await Promise.all([
       prisma.order.findMany({
-        where: { placedAt: { gte: start, lte: end }, status: { notIn: ["CANCELLED", "PAYMENT_FAILED"] } },
+        where: { placedAt: { gte: start, lte: end }, status: { notIn: ["CANCELLED", "PAYMENT_FAILED", "PENDING", "PAYMENT_PENDING"] } },
         select: { totalAmount: true },
       }),
       prisma.payment.count({ where: { status: "REFUNDED", updatedAt: { gte: start, lte: end } } }),
@@ -302,10 +332,11 @@ export const getAovAndRefundTrend = async (period: Period) => {
   );
 };
 
-// Run all six analytics functions at the same time and return everything in one object
+// Run all analytics functions at the same time and return everything in one object
 export const getAdminAnalytics = async (period: Period) => {
-  const [revenueTrend, revenueBySeller, categoryBreakdown, paymentBreakdown, transactionTrend, aovTrend] =
+  const [revenueToday, revenueTrend, revenueBySeller, categoryBreakdown, paymentBreakdown, transactionTrend, aovTrend] =
     await Promise.all([
+      getTodayRevenue(),
       getRevenueTrend(period),
       getRevenueBySeller(),
       getRevenueByCategory(),
@@ -314,5 +345,5 @@ export const getAdminAnalytics = async (period: Period) => {
       getAovAndRefundTrend(period),
     ]);
 
-  return { revenueTrend, revenueBySeller, categoryBreakdown, paymentBreakdown, transactionTrend, aovTrend };
+  return { revenueToday, revenueTrend, revenueBySeller, categoryBreakdown, paymentBreakdown, transactionTrend, aovTrend };
 };

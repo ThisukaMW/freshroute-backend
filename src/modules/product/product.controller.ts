@@ -18,6 +18,11 @@ import prisma from "../../config/database.js";
 import { notifySellerProductReviewed } from "../notifications/notification.events.js";
 import { notifyAdminsProductSubmitted } from "../notifications/notification.events.js";
 
+// Builds a full, browser-loadable URL for an uploaded file, e.g.
+// http://localhost:5000/uploads/1699999999999-123456789.jpg
+const buildUploadUrl = (req: AuthRequest, filename: string): string =>
+  `${req.protocol}://${req.get("host")}/uploads/${filename}`;
+
 // =====================================
 // SELLER ADD PRODUCT
 // =====================================
@@ -34,7 +39,7 @@ export const addProduct = async (req: AuthRequest, res: Response) => {
 
     // files (images)
     const files = (req as AuthRequest & { files?: Express.Multer.File[] }).files ?? [];
-    const imageUrls = files.map((file) => file.path);
+    const imageUrls = files.map((file) => buildUploadUrl(req, file.filename));
 
     // extra fields
     const variants = JSON.parse(req.body.variants || "[]");
@@ -146,7 +151,7 @@ export const editProductController = async (
     }
 
     if (files.length > 0) {
-      updateBody.imageUrl = files[0].path;
+      updateBody.imageUrl = buildUploadUrl(req, files[0].filename);
     } else if (imageUrl !== undefined) {
       updateBody.imageUrl = imageUrl || null;
     }

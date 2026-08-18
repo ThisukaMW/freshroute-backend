@@ -13,8 +13,7 @@ import {
   getSellerProductsController,
 } from "./product.controller.js";
 
-import multer from "multer";
-const upload = multer({ dest: "uploads/" });
+import { upload } from "../../middlewares/upload.middleware.js";
 
 const router = Router();
 

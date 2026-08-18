@@ -1,5 +1,6 @@
 import prisma from "../../config/database.js";
 import { startOfDay, endOfDay, subDays } from "date-fns";
+import { getDeliveryDayBoundsColombo } from "../Order_Aggregator/aggregator.colombo.js";
 
 const activeBuyerStatuses = new Set([
   "PENDING",
@@ -40,11 +41,17 @@ export const getTodayOrders = async (userId: string) => {
 
 export const getTodayRevenue = async (userId: string) => {
   const sellerId = await getSellerIdFromUserId(userId);
-  const today = new Date();
+  // Colombo civil day, and only items whose order was actually paid for —
+  // matches the same fix applied to the admin dashboard's revenue figures.
+  const { deliveryDayStart, deliveryDayEnd } = getDeliveryDayBoundsColombo(new Date());
 
   const revenueData = await prisma.orderItem.aggregate({
     _sum: { totalPrice: true },
-    where: { sellerId, createdAt: { gte: startOfDay(today), lte: endOfDay(today) } },
+    where: {
+      sellerId,
+      createdAt: { gte: deliveryDayStart, lte: deliveryDayEnd },
+      order: { payment: { status: "COMPLETED" } },
+    },
   });
 
   return {
