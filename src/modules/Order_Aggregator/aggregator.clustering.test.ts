@@ -29,6 +29,8 @@ const makeOrder = (
   sellerLat: 6.9,
   sellerLng: 79.85,
   sellerIds: ["seller-1"],
+  deferredFromSlot: null,
+  sellers: [{ id: "seller-1", address: "Seller Street", lat: 6.9, lng: 79.85 }],
 });
 
 test("mixed delivery slots at same geo never share a cluster", () => {

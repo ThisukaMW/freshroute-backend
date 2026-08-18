@@ -9,6 +9,7 @@ import {
   assessSeller,
   assignedTasks,
   completeDelivery,
+  completeOrderFulfillment,
   completeStop,
   completedRoutes,
   completedTasks,
@@ -120,8 +121,8 @@ router.get("/payment/history", paymentHistory);
 router.get("/payment/invoices", paymentInvoices);
 router.get("/payment/methods", paymentMethods);
 router.get("/payment/refunds", paymentRefunds);
-router.get("/payment/refunds/:id", paymentRefundDetail);
 router.get("/payment/refunds/eligible-orders", paymentRefundEligibleOrders);
+router.get("/payment/refunds/:id", paymentRefundDetail);
 // NOTE: added refund initiation endpoint used by refund screen action flow.
 router.post("/payment/refunds/initiate", paymentRefundInitiate);
 
@@ -148,6 +149,7 @@ router.post("/reject/feedback", rejectFeedback);
 
 router.post("/stops/:stopId/complete", completeStop);
 router.post("/delivery/complete", completeDelivery);
+router.post("/order/:orderId/fulfill", completeOrderFulfillment);
 
 // //User Assesment APIs
 

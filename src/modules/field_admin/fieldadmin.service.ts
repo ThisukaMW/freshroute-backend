@@ -69,7 +69,10 @@ const VALID_REFUND_STATUS_TRANSITIONS: Record<string, string[]> = {
 };
 
 const ACTIVE_LOAD_STATUSES: Array<"BATCHED" | "ASSIGNED" | "IN_TRANSIT"> = ["BATCHED", "ASSIGNED", "IN_TRANSIT"];
-const ACTIVE_ROUTE_STATUSES: Array<"ASSIGNED" | "STARTED" | "IN_PROGRESS"> = ["ASSIGNED", "STARTED", "IN_PROGRESS"];
+
+const assignedToFieldAdmin = (fieldAdminId: string) => ({
+  OR: [{ fieldAdminId }, { routes: { some: { fieldAdminId } } }],
+});
 
 //recalculate the live load of a truck.
 const recalculateTruckLiveLoad = async (
@@ -79,7 +82,9 @@ const recalculateTruckLiveLoad = async (
   const activeOrders = await tx.order.findMany({
     where: {
       status: { in: ACTIVE_LOAD_STATUSES },
-      batch: { routes: { some: { truckId } } },
+      batch: {
+        OR: [{ truckId }, { routes: { some: { truckId } } }],
+      },
     },
     select: { totalWeight: true, totalVolume: true },
   });
@@ -119,8 +124,13 @@ const ensureOrderOwnedByFieldAdmin = async (fieldAdminId: string, orderId: strin
   if (!order) {
     throw new Error("Order not found");
   }
-  const hasOwnership = await prisma.route.findFirst({
-    where: { fieldAdminId, batch: { orders: { some: { id: orderId } } } },
+  const hasOwnership = await prisma.order.findFirst({
+    where: {
+      id: orderId,
+      batch: {
+        OR: [{ fieldAdminId }, { routes: { some: { fieldAdminId } } }],
+      },
+    },
     select: { id: true },
   });
   if (!hasOwnership) {
@@ -174,6 +184,17 @@ const orderSelect = {
   },
   batch: {
     select: {
+      id: true,
+      batchNumber: true,
+      fieldAdminId: true,
+      scheduledDate: true,
+      timeWindowStart: true,
+      truck: {
+        select: {
+          id: true,
+          vehicleNumber: true,
+        },
+      },
       routes: {
         select: {
           id: true,
@@ -211,6 +232,7 @@ const orderSelect = {
     select: {
       id: true,
       quantity: true,
+      unitPrice: true,
       sellerId: true,
       product: { select: { id: true, name: true, unit: true } },
       inspections: {
@@ -238,6 +260,12 @@ const toFieldAdminOrderContract = (
     actualDelivery: Date | null;
     deliveryStop: { id: string; estimatedArrival: Date | null; status: string } | null;
     batch: {
+      id: string;
+      batchNumber: string;
+      fieldAdminId: string | null;
+      scheduledDate: Date;
+      timeWindowStart: Date | null;
+      truck: { id: string; vehicleNumber: string | null } | null;
       routes: Array<{
         id: string;
         routeNumber: string;
@@ -257,6 +285,7 @@ const toFieldAdminOrderContract = (
     items: Array<{
       id: string;
       quantity: number;
+      unitPrice: number;
       sellerId: string;
       product: { id: string; name: string; unit: string };
       inspections: Array<{ result: string }>;
@@ -266,6 +295,21 @@ const toFieldAdminOrderContract = (
 ) =>
   orders.map((order) => {
     const route = order.batch?.routes[0] ?? null;
+    const assignedRoute = route
+      ? {
+          id: route.id,
+          routeNumber: route.routeNumber,
+          status: route.status,
+          scheduledStart: route.scheduledStart,
+        }
+      : order.batch
+        ? {
+            id: order.batch.id,
+            routeNumber: order.batch.batchNumber,
+            status: "ASSIGNED",
+            scheduledStart: order.batch.timeWindowStart ?? order.batch.scheduledDate,
+          }
+        : null;
     const routeStops = route?.stops ?? [];
     const sellerPickups = routeStops.filter((stop) => stop.type === "PICKUP" && stop.sellerId);
     const hubPickup = routeStops.find((stop) => stop.type === "PICKUP" && !stop.sellerId) ?? null;
@@ -310,6 +354,7 @@ const toFieldAdminOrderContract = (
       items: order.items.map((item) => ({
         id: item.id,
         quantity: item.quantity,
+        unitPrice: item.unitPrice,
         name: item.product.name,
         unit: item.product.unit,
         sellerId: item.sellerId,
@@ -319,20 +364,15 @@ const toFieldAdminOrderContract = (
       hubStopId: hubPickup?.id ?? null,
       deliveryStopId: order.deliveryStop?.id ?? null,
       fulfillmentPhase,
-      route: route
-        ? {
-            id: route.id,
-            routeNumber: route.routeNumber,
-            status: route.status,
-            scheduledStart: route.scheduledStart,
-          }
-        : null,
+      route: assignedRoute,
       driver: route?.driver
         ? { id: route.driver.id, name: route.driver.user.name }
         : null,
       truck: route?.truck
         ? { id: route.truck.id, vehicleNumber: route.truck.vehicleNumber }
-        : null,
+        : order.batch?.truck
+          ? { id: order.batch.truck.id, vehicleNumber: order.batch.truck.vehicleNumber }
+          : null,
       eta: order.deliveryStop?.estimatedArrival ?? order.estimatedDelivery ?? null,
       stopStatus: order.deliveryStop?.status ?? null,
       deliveredAt: order.actualDelivery,
@@ -344,11 +384,7 @@ export const getAllOrders = async (fieldAdminId: string) => {
   await ensureFieldAdminExists(fieldAdminId);
   const orders = await prisma.order.findMany({
     where: {
-      batch: { routes: { some: { fieldAdminId } } },
-      OR: [
-        { status: { notIn: ["BATCHED", "ASSIGNED", "IN_TRANSIT"] } },
-        { batch: { routes: { some: { fieldAdminId, status: { in: ACTIVE_ROUTE_STATUSES } } } } },
-      ],
+      batch: assignedToFieldAdmin(fieldAdminId),
     },
     select: orderSelect,
     orderBy: { placedAt: "desc" },
@@ -364,19 +400,10 @@ export const getOrdersByStatus = async (
   >
 ) => {
   await ensureFieldAdminExists(fieldAdminId);
-  const requiresActiveRoute = statuses.some((status) => ["BATCHED", "ASSIGNED", "IN_TRANSIT"].includes(status));
   const orders = await prisma.order.findMany({
     where: {
       status: { in: statuses },
-      batch: { routes: { some: { fieldAdminId } } },
-      ...(requiresActiveRoute
-        ? {
-            OR: [
-              { status: { notIn: ["BATCHED", "ASSIGNED", "IN_TRANSIT"] } },
-              { batch: { routes: { some: { fieldAdminId, status: { in: ACTIVE_ROUTE_STATUSES } } } } },
-            ],
-          }
-        : {}),
+      batch: assignedToFieldAdmin(fieldAdminId),
     },
     select: orderSelect,
     orderBy: { placedAt: "desc" },
@@ -409,56 +436,118 @@ export const getFieldAdminNotifications = async (fieldAdminId: string) => {
 };
 
 //get all routes for a field admin.
+const truckSelect = {
+  id: true,
+  vehicleNumber: true,
+  vehicleType: true,
+  maxWeight: true,
+  maxVolume: true,
+  maxStops: true,
+  currentLoadWeight: true,
+  currentLoadVolume: true,
+  currentLoadStops: true,
+} as const;
+
+const routeStatusFromBatch = (status: string) => {
+  if (status === "IN_PROGRESS") return "IN_PROGRESS" as const;
+  if (status === "COMPLETED") return "COMPLETED" as const;
+  return "ASSIGNED" as const;
+};
+
+const batchStatusesForRoutes = (
+  statuses?: Array<"PLANNED" | "ASSIGNED" | "STARTED" | "IN_PROGRESS" | "COMPLETED" | "FAILED" | "CANCELLED">
+) => {
+  if (!statuses || statuses.length === 0) {
+    return ["CLOSED", "ROUTED", "IN_PROGRESS", "COMPLETED"] as Array<
+      "CLOSED" | "ROUTED" | "IN_PROGRESS" | "COMPLETED"
+    >;
+  }
+  const mapped = new Set<"CLOSED" | "ROUTED" | "IN_PROGRESS" | "COMPLETED">();
+  for (const status of statuses) {
+    if (status === "PLANNED" || status === "ASSIGNED") {
+      mapped.add("CLOSED");
+      mapped.add("ROUTED");
+    }
+    if (status === "STARTED" || status === "IN_PROGRESS") {
+      mapped.add("IN_PROGRESS");
+    }
+    if (status === "COMPLETED") {
+      mapped.add("COMPLETED");
+    }
+  }
+  return [...mapped];
+};
+
 export const getRoutes = async (
   fieldAdminId: string,
   statuses?: Array<"PLANNED" | "ASSIGNED" | "STARTED" | "IN_PROGRESS" | "COMPLETED" | "FAILED" | "CANCELLED">
 ) => {
   await ensureFieldAdminExists(fieldAdminId);
-  const routes = await prisma.route.findMany({
-    where: {
-      fieldAdminId,
-      ...(statuses ? { status: { in: statuses } } : {}),
-    },
-    include: {
-      driver: { include: { user: { select: { name: true } } } },
-      truck: {
-        select: {
-          id: true,
-          vehicleNumber: true,
-          vehicleType: true,
-          maxWeight: true,
-          maxVolume: true,
-          maxStops: true,
-          currentLoadWeight: true,
-          currentLoadVolume: true,
-          currentLoadStops: true,
-        },
+  const [routes, assignedBatches] = await Promise.all([
+    prisma.route.findMany({
+      where: {
+        fieldAdminId,
+        ...(statuses ? { status: { in: statuses } } : {}),
       },
-      _count: { select: { stops: true } },
-    },
-    orderBy: { scheduledStart: "desc" },
-  });
+      include: {
+        driver: { include: { user: { select: { name: true } } } },
+        truck: { select: truckSelect },
+        _count: { select: { stops: true } },
+      },
+      orderBy: { scheduledStart: "desc" },
+    }),
+    prisma.batch.findMany({
+      where: {
+        fieldAdminId,
+        status: { in: batchStatusesForRoutes(statuses) },
+      },
+      include: { truck: { select: truckSelect } },
+      orderBy: { scheduledDate: "desc" },
+    }),
+  ]);
 
-  const truckIds = Array.from(new Set(routes.map((route) => route.truck?.id).filter(Boolean))) as string[];
+  const routedBatchIds = new Set(routes.map((route) => route.batchId));
+  const syntheticRoutes = assignedBatches
+    .filter((batch) => !routedBatchIds.has(batch.id))
+    .map((batch) => ({
+      id: batch.id,
+      routeNumber: batch.batchNumber,
+      status: routeStatusFromBatch(batch.status),
+      fieldAdminId: batch.fieldAdminId,
+      driverId: null,
+      truckId: batch.truckId,
+      batchId: batch.id,
+      scheduledStart: batch.timeWindowStart,
+      scheduledEnd: batch.timeWindowEnd,
+      driver: null,
+      truck: batch.truck,
+      _count: { stops: 0 },
+    }))
+    .filter((route) => !statuses || statuses.includes(route.status));
+
+  const combined = [...routes, ...syntheticRoutes];
+  const truckIds = Array.from(new Set(combined.map((route) => route.truck?.id).filter(Boolean))) as string[];
   if (truckIds.length === 0) {
-    return routes;
+    return combined;
   }
 
   const activeOrders = await prisma.order.findMany({
     where: {
       status: { in: ACTIVE_LOAD_STATUSES },
-      batch: { routes: { some: { truckId: { in: truckIds } } } },
+      batch: {
+        OR: [{ truckId: { in: truckIds } }, { routes: { some: { truckId: { in: truckIds } } } }],
+      },
     },
     select: {
       totalWeight: true,
       totalVolume: true,
-      batch: { select: { routes: { select: { truckId: true } } } },
+      batch: { select: { truckId: true, routes: { select: { truckId: true } } } },
     },
   });
 
   const loadByTruck = new Map<string, { weight: number; volume: number; stops: number }>();
   for (const order of activeOrders) {
-    const truckId = order.batch?.routes?.[0]?.truckId;
+    const truckId = order.batch?.truckId ?? order.batch?.routes?.[0]?.truckId;
     if (!truckId) continue;
     const current = loadByTruck.get(truckId) ?? { weight: 0, volume: 0, stops: 0 };
     current.weight += order.totalWeight ?? 0;
@@ -467,7 +556,7 @@ export const getRoutes = async (
     loadByTruck.set(truckId, current);
   }
 
-  return routes.map((route) => {
+  return combined.map((route) => {
     if (!route.truck) return route;
     const live = loadByTruck.get(route.truck.id) ?? { weight: 0, volume: 0, stops: 0 };
     return {
@@ -520,8 +609,8 @@ export const createInspection = async (
   await ensureFieldAdminExists(fieldAdminId);
   const orderItem = await ensureOrderItemOwnedByFieldAdmin(fieldAdminId, payload.orderItemId);
 
-  if (!["ASSIGNED", "BATCHED"].includes(orderItem.order.status)) {
-    throw new Error("Inspections are only allowed during the pickup phase (ASSIGNED or BATCHED orders)");
+  if (!["ASSIGNED", "BATCHED", "IN_TRANSIT"].includes(orderItem.order.status)) {
+    throw new Error("Inspections are only allowed for active pickup/delivery orders");
   }
 
   const sellerPickupStop = await prisma.stop.findFirst({
@@ -534,7 +623,13 @@ export const createInspection = async (
     select: { id: true },
   });
   if (!sellerPickupStop) {
-    throw new Error("No pending seller pickup stop found for this order item");
+    const hasRouteStops = await prisma.stop.findFirst({
+      where: { route: { fieldAdminId, batch: { orders: { some: { id: orderItem.orderId } } } } },
+      select: { id: true },
+    });
+    if (hasRouteStops && orderItem.order.status !== "IN_TRANSIT") {
+      throw new Error("No pending seller pickup stop found for this order item");
+    }
   }
 
   const totalQuantity = orderItem.quantity;
@@ -645,6 +740,17 @@ const ensureOrderItemsInspected = async (
   }
 };
 
+const ensureOrderFullyInspected = async (
+  tx: Pick<typeof prisma, "orderItem" | "productInspection">,
+  orderId: string
+) => {
+  const orderItems = await tx.orderItem.findMany({
+    where: { orderId },
+    select: { id: true },
+  });
+  await ensureOrderItemsInspected(tx, orderItems.map((item) => item.id));
+};
+
 //mark a stop complete with pickup/delivery phase gates.
 export const markStopComplete = async (
   fieldAdminId: string,
@@ -656,7 +762,16 @@ export const markStopComplete = async (
     where: { id: payload.stopId, route: { fieldAdminId } },
     include: {
       order: true,
-      route: { select: { id: true, batchId: true, status: true, truckId: true, driverId: true } },
+      route: {
+        select: {
+          id: true,
+          batchId: true,
+          status: true,
+          truckId: true,
+          driverId: true,
+          batch: { select: { truckId: true } },
+        },
+      },
     },
   });
 
@@ -762,8 +877,9 @@ export const markStopComplete = async (
       });
     }
 
-    if (stop.route.truckId) {
-      await recalculateTruckLiveLoad(tx, stop.route.truckId);
+    const allocatedTruckId = stop.route.truckId ?? stop.route.batch.truckId ?? null;
+    if (allocatedTruckId) {
+      await recalculateTruckLiveLoad(tx, allocatedTruckId);
     }
 
     const remainingDeliveries = await tx.stop.count({
@@ -780,8 +896,8 @@ export const markStopComplete = async (
         data: { status: "COMPLETED", actualEnd: new Date() },
       });
 
-      if (stop.route.truckId) {
-        await recalculateTruckLiveLoad(tx, stop.route.truckId);
+      if (allocatedTruckId) {
+        await recalculateTruckLiveLoad(tx, allocatedTruckId);
       }
       if (stop.route.driverId) {
         await tx.driver.update({
@@ -804,6 +920,66 @@ export const markDeliveryComplete = async (
   fieldAdminId: string,
   payload: { stopId: string; notes?: string }
 ) => markStopComplete(fieldAdminId, payload);
+
+export const confirmOrderFulfillment = async (
+  fieldAdminId: string,
+  payload: { orderId: string; action: "pickup" | "delivery"; notes?: string }
+) => {
+  await ensureFieldAdminExists(fieldAdminId);
+  const order = await ensureOrderOwnedByFieldAdmin(fieldAdminId, payload.orderId);
+
+  if (order.status === "DELIVERED") {
+    throw new Error("This order is already delivered");
+  }
+  if (order.status === "CANCELLED" || order.status === "FAILED") {
+    throw new Error("This order cannot be fulfilled");
+  }
+
+  const matchingStop = await prisma.stop.findFirst({
+    where: {
+      type: payload.action === "pickup" ? "PICKUP" : "DELIVERY",
+      status: { not: "COMPLETED" },
+      ...(payload.action === "delivery" ? { orderId: order.id } : {}),
+      route: {
+        AND: [
+          { OR: [{ fieldAdminId }, { batch: { fieldAdminId } }] },
+          { batch: { orders: { some: { id: order.id } } } },
+        ],
+      },
+    },
+    orderBy: { sequenceOrder: "asc" },
+    select: { id: true },
+  });
+
+  if (matchingStop) {
+    return markStopComplete(fieldAdminId, { stopId: matchingStop.id, notes: payload.notes });
+  }
+
+  if (payload.action === "pickup") {
+    if (order.status === "IN_TRANSIT") {
+      throw new Error("Pickup is already completed for this order");
+    }
+    if (!["BATCHED", "ASSIGNED"].includes(order.status)) {
+      throw new Error("Pickup can only be confirmed for batched or assigned orders");
+    }
+    await ensureOrderFullyInspected(prisma, order.id);
+    const updated = await prisma.order.update({
+      where: { id: order.id },
+      data: { status: "IN_TRANSIT" },
+    });
+    return { id: updated.id, status: updated.status, action: "pickup" as const };
+  }
+
+  if (order.status !== "IN_TRANSIT") {
+    throw new Error("Complete pickup before marking delivery");
+  }
+
+  const updated = await prisma.order.update({
+    where: { id: order.id },
+    data: { status: "DELIVERED", actualDelivery: new Date() },
+  });
+  return { id: updated.id, status: updated.status, action: "delivery" as const };
+};
 
 //create an assessment for a target.
 export const createAssessment = async (
@@ -986,7 +1162,7 @@ export const updateTruckCapacity = async (
 export const getPaymentHistory = async (fieldAdminId: string) => {
   await ensureFieldAdminExists(fieldAdminId);
   return prisma.payment.findMany({
-    where: { order: { batch: { routes: { some: { fieldAdminId } } } } },
+    where: { order: { batch: assignedToFieldAdmin(fieldAdminId) } },
     include: { order: { select: { id: true, orderNumber: true, totalAmount: true, status: true } } },
     orderBy: { createdAt: "desc" },
   });
@@ -1023,7 +1199,7 @@ export const getRefundEligibleOrders = async (fieldAdminId: string) => {
 
   const orders = await prisma.order.findMany({
     where: {
-      batch: { routes: { some: { fieldAdminId } } },
+      batch: assignedToFieldAdmin(fieldAdminId),
       items: {
         some: {
           inspections: {
@@ -1387,26 +1563,35 @@ export const getFieldAdminRouteHandoff = async (fieldAdminId: string, routeId: s
     where: { id: routeId, fieldAdminId },
     select: { batchId: true },
   });
-  if (!route) {
-    throw new Error("Route not found for this field admin");
+  if (route) {
+    return getBatchHandoffBundle(route.batchId, { fieldAdminId });
   }
-  return getBatchHandoffBundle(route.batchId, { fieldAdminId });
+  return getBatchHandoffBundle(routeId, { fieldAdminId });
 };
 
 //get handoff bundles for all active routes assigned to a field admin.
 export const getFieldAdminRouteHandoffs = async (fieldAdminId: string) => {
   await ensureFieldAdminExists(fieldAdminId);
-  const routes = await prisma.route.findMany({
-    where: {
-      fieldAdminId,
-      status: { in: ["PLANNED", "ASSIGNED", "STARTED", "IN_PROGRESS"] },
-    },
-    select: { id: true, batchId: true },
-    orderBy: { scheduledStart: "desc" },
-  });
-  return Promise.all(
-    routes.map((route) => getBatchHandoffBundle(route.batchId, { fieldAdminId }))
-  );
+  const [routes, batches] = await Promise.all([
+    prisma.route.findMany({
+      where: {
+        fieldAdminId,
+        status: { in: ["PLANNED", "ASSIGNED", "STARTED", "IN_PROGRESS"] },
+      },
+      select: { batchId: true },
+      orderBy: { scheduledStart: "desc" },
+    }),
+    prisma.batch.findMany({
+      where: {
+        fieldAdminId,
+        status: { in: ["CLOSED", "ROUTED", "IN_PROGRESS"] },
+      },
+      select: { id: true },
+      orderBy: { scheduledDate: "desc" },
+    }),
+  ]);
+  const batchIds = [...new Set([...routes.map((route) => route.batchId), ...batches.map((batch) => batch.id)])];
+  return Promise.all(batchIds.map((batchId) => getBatchHandoffBundle(batchId, { fieldAdminId })));
 };
 
 //get the dashboard overview for a field admin.
@@ -1417,11 +1602,7 @@ export const getDashboardOverview = async (fieldAdminId: string) => {
     prisma.order.count({
       where: {
         status: { in: ["BATCHED", "ASSIGNED", "IN_TRANSIT"] },
-        batch: {
-          routes: {
-            some: { fieldAdminId, status: { in: ACTIVE_ROUTE_STATUSES } },
-          },
-        },
+        batch: assignedToFieldAdmin(fieldAdminId),
       },
     }),
     prisma.assessment.count({ where: { fieldAdminId } }),
@@ -1431,13 +1612,10 @@ export const getDashboardOverview = async (fieldAdminId: string) => {
         status: { in: ["PENDING", "IN_PROGRESS"] },
       },
     }),
-    prisma.route.count({
+    prisma.batch.count({
       where: {
         fieldAdminId,
-        scheduledStart: {
-          gte: new Date(new Date().setHours(0, 0, 0, 0)),
-          lt: new Date(new Date().setHours(23, 59, 59, 999)),
-        },
+        status: { in: ["CLOSED", "ROUTED", "IN_PROGRESS"] },
       },
     }),
   ]);

@@ -74,12 +74,37 @@ export const isWithinScheduledAggregatorWindowColombo = (now: Date = new Date())
   return h >= 0 && h < 4;
 };
 
+export const CATCHUP_AFTERNOON_HOUR = Number(process.env.AGGREGATOR_CATCHUP_AFTERNOON_HOUR ?? 11);
+export const CATCHUP_EVENING_HOUR = Number(process.env.AGGREGATOR_CATCHUP_EVENING_HOUR ?? 17);
+
+export const getCatchupRunWindowColombo = (now: Date, hour: number) => {
+  const { year, month, day } = getColomboYmd(now);
+  const dayStart = colomboCivilDayStartUtc(year, month, day);
+  const windowStart = new Date(dayStart.getTime() + hour * 60 * 60 * 1000);
+  const windowEnd = new Date(windowStart.getTime() + 60 * 60 * 1000);
+  return { windowStart, windowEnd };
+};
+
+export const isWithinCatchupHourColombo = (now: Date, hour: number) => getColomboHour(now) === hour;
+
 export type DeliveryTimeSlot = "MORNING" | "AFTERNOON" | "EVENING";
 
-const SLOT_HOURS: Record<DeliveryTimeSlot, { startHour: number; endHour: number }> = {
+export const SLOT_HOURS: Record<DeliveryTimeSlot, { startHour: number; endHour: number }> = {
   MORNING: { startHour: 6, endHour: 12 },
   AFTERNOON: { startHour: 12, endHour: 18 },
   EVENING: { startHour: 18, endHour: 22 },
+};
+
+export const SLOT_LABELS: Record<DeliveryTimeSlot, string> = {
+  MORNING: "Morning (6 AM – 12 PM)",
+  AFTERNOON: "Afternoon (12 PM – 6 PM)",
+  EVENING: "Evening (6 PM – 10 PM)",
+};
+
+export const NEXT_DELIVERY_SLOT: Record<DeliveryTimeSlot, DeliveryTimeSlot | null> = {
+  MORNING: "AFTERNOON",
+  AFTERNOON: "EVENING",
+  EVENING: null,
 };
 
 /** Delivery window for a buyer slot on a given Colombo delivery day. */

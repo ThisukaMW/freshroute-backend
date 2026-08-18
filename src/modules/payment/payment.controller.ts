@@ -69,23 +69,6 @@ export const createPayment: RequestHandler = async (req, res) => {
   }
 };
 
-// export const stripeWebhook: RequestHandler = async (req, res) => {
-//   const sig = req.headers["stripe-signature"] as string;
-
-//   if (!sig) {
-//     res.status(400).json({ message: "Missing stripe-signature header" });
-//     return;
-//   }
-
-//   try {
-//     const data = await handleWebhookEvent(req.body as Buffer, sig);
-//     res.json(data);
-//   } catch (error: unknown) {
-//     const message = error instanceof Error ? error.message : "Webhook error";
-//     res.status(400).json({ message });
-//   }
-// };
-
 export const stripeWebhook: RequestHandler = async (req, res) => {
   const sig = req.headers["stripe-signature"] as string;
 
@@ -195,3 +178,5 @@ export const paymentById: RequestHandler<{ id: string }> = async (req, res) => {
     res.status(500).json({ message });
   }
 };
+
+

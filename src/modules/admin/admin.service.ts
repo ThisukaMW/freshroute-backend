@@ -1,5 +1,7 @@
+import Stripe from "stripe";
 import prisma from "../../config/database.js";
 import { canTruckCarrySlice } from "../Order_Aggregator/aggregator.rules.js";
+import { getStripe } from "../payment/payment.service.js";
 
 // Get all orders, newest first, including buyer name, product details, and payment info
 export const getAllOrders = async (filters?: { since?: string; until?: string }) => {
@@ -277,7 +279,10 @@ export const assignRouteFleet = async (
     ]);
 
     if (!truck || !truck.isActive) throw new Error("Truck not found or inactive");
-    if (!truck.isAvailable) throw new Error("Truck is not available");
+    const alreadyAllocatedToThisBatch = route.batch.truckId === input.truckId;
+    if (!truck.isAvailable && !alreadyAllocatedToThisBatch) {
+      throw new Error("Truck is not available");
+    }
     if (!fieldAdmin || !fieldAdmin.isActive) throw new Error("Field admin not found or inactive");
 
     const totalWeight = route.batch.orders.reduce((sum, o) => sum + (o.totalWeight ?? 0), 0);
@@ -318,7 +323,9 @@ export const assignRouteFleet = async (
     const activeOrders = await tx.order.findMany({
       where: {
         status: { in: ["BATCHED", "ASSIGNED", "IN_TRANSIT"] },
-        batch: { routes: { some: { truckId: input.truckId } } },
+        batch: {
+          OR: [{ truckId: input.truckId }, { routes: { some: { truckId: input.truckId } } }],
+        },
       },
       select: { totalWeight: true, totalVolume: true },
     });
@@ -327,6 +334,7 @@ export const assignRouteFleet = async (
     await tx.truck.update({
       where: { id: input.truckId },
       data: {
+        isAvailable: false,
         currentLoadWeight,
         currentLoadVolume,
         currentLoadStops: activeOrders.length,
@@ -335,4 +343,55 @@ export const assignRouteFleet = async (
 
     return updatedRoute;
   });
+};
+
+export const initiateRefund = async (refundId: string) => {
+  const refund = await prisma.refund.findUnique({
+    where: { id: refundId },
+    include: {
+      order: {
+        include: {
+          payment: true,
+        },
+      },
+    },
+  });
+
+  if (!refund) {
+    throw new Error("Refund not found");
+  }
+
+  const payment = refund.order.payment;
+
+  if (!payment) {
+    throw new Error("Payment not found");
+  }
+
+  if (!payment.gatewayPaymentId) {
+    throw new Error("PaymentIntent missing");
+  }
+
+  const stripeRefund = await getStripe().refunds.create({
+    payment_intent: payment.gatewayPaymentId,
+    amount: Math.round(refund.amount * 100),
+  });
+
+  await prisma.$transaction(async (tx) => {
+    await tx.refund.update({
+      where: { id: refund.id },
+      data: {
+        status: "REFUNDED",
+      },
+    });
+
+    await tx.payment.update({
+      where: { id: payment.id },
+      data: {
+        status: "REFUNDED",
+        refundedAt: new Date(),
+      },
+    });
+  });
+
+  return stripeRefund;
 };

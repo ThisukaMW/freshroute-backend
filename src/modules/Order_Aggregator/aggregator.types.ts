@@ -13,6 +13,10 @@ export interface AggregationRunInput {
   autoAssignFleet?: boolean;
   autoAssignDriver?: boolean;
   dryRun?: boolean;
+  runMode?: "overnight" | "catchup";
+  targetDeliveryDay?: Date;
+  targetDeliverySlot?: DeliveryTimeSlot;
+  includeDeferredFromSlots?: DeliveryTimeSlot[];
 }
 
 export interface CandidateOrder {
@@ -36,6 +40,13 @@ export interface CandidateOrder {
   sellerLat: number | null;
   sellerLng: number | null;
   sellerIds: string[];
+  deferredFromSlot: DeliveryTimeSlot | null;
+  sellers: Array<{
+    id: string;
+    address: string;
+    lat: number | null;
+    lng: number | null;
+  }>;
 }
 
 export interface RejectedOrderReason {
@@ -80,6 +91,8 @@ export interface AggregationSummary {
     autoAssignRoutes: boolean;
     autoAssignFleet: boolean;
     autoAssignDriver: boolean;
+    runMode: "overnight" | "catchup";
+    targetDeliverySlot?: DeliveryTimeSlot;
   };
   totalCandidatesFetched: number;
   totalEligible: number;
@@ -100,6 +113,19 @@ export interface AggregationSummary {
     orderNumbers: string[];
     totalWeight: number;
     totalVolume: number;
+    truckId: string;
+    fieldAdminId: string | null;
   }>;
   rejectedOrders: RejectedOrderReason[];
+  deferredOrders: Array<{
+    orderId: string;
+    orderNumber: string;
+    fromSlot: DeliveryTimeSlot;
+    toSlot: DeliveryTimeSlot;
+  }>;
+  terminalRejections: Array<{
+    orderId: string;
+    orderNumber: string;
+    reason: string;
+  }>;
 }

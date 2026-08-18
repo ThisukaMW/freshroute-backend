@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import prisma from "../../config/database.js";
-import { createDamageReport, getAllOrders, getDashboardOverview, getFieldAdminProfile, getOrdersByStatus, markStopComplete } from "./fieldadmin.service.js";
+import { confirmOrderFulfillment, createDamageReport, createInspection, getAllOrders, getDashboardOverview, getFieldAdminProfile, getOrdersByStatus, markStopComplete } from "./fieldadmin.service.js";
 
 const withMock = <T extends object, K extends keyof T>(
   obj: T,
@@ -39,7 +39,7 @@ test("getFieldAdminProfile returns mapped field admin details", async () => {
   restoreFind();
 });
 
-test("getOrdersByStatus filters scheduled orders to active route assignments", async () => {
+test("getOrdersByStatus filters scheduled orders to the assigned field admin batch", async () => {
   const restoreFieldAdmin = withMock(prisma.fieldAdmin, "findUnique", ((async () => ({
     id: "fa-1",
     userId: "u1",
@@ -50,11 +50,9 @@ test("getOrdersByStatus filters scheduled orders to active route assignments", a
     "findMany",
     ((async (args: any) => {
       assert.deepEqual(args.where.status, { in: ["BATCHED", "ASSIGNED"] });
-      assert.deepEqual(args.where.batch.routes.some, { fieldAdminId: "fa-1" });
-      assert.deepEqual(args.where.OR, [
-        { status: { notIn: ["BATCHED", "ASSIGNED", "IN_TRANSIT"] } },
-        { batch: { routes: { some: { fieldAdminId: "fa-1", status: { in: ["ASSIGNED", "STARTED", "IN_PROGRESS"] } } } } },
-      ]);
+      assert.deepEqual(args.where.batch, {
+        OR: [{ fieldAdminId: "fa-1" }, { routes: { some: { fieldAdminId: "fa-1" } } }],
+      });
       return [];
     }) as unknown) as typeof prisma.order.findMany
   );
@@ -65,7 +63,7 @@ test("getOrdersByStatus filters scheduled orders to active route assignments", a
   restoreFieldAdmin();
 });
 
-test("getAllOrders hides stale batched orders when the route is no longer active", async () => {
+test("getAllOrders loads orders from batches assigned to the field admin", async () => {
   const restoreFieldAdmin = withMock(prisma.fieldAdmin, "findUnique", ((async () => ({
     id: "fa-1",
     userId: "u1",
@@ -75,11 +73,9 @@ test("getAllOrders hides stale batched orders when the route is no longer active
     prisma.order,
     "findMany",
     ((async (args: any) => {
-      assert.deepEqual(args.where.batch.routes.some, { fieldAdminId: "fa-1" });
-      assert.deepEqual(args.where.OR, [
-        { status: { notIn: ["BATCHED", "ASSIGNED", "IN_TRANSIT"] } },
-        { batch: { routes: { some: { fieldAdminId: "fa-1", status: { in: ["ASSIGNED", "STARTED", "IN_PROGRESS"] } } } } },
-      ]);
+      assert.deepEqual(args.where.batch, {
+        OR: [{ fieldAdminId: "fa-1" }, { routes: { some: { fieldAdminId: "fa-1" } } }],
+      });
       return [];
     }) as unknown) as typeof prisma.order.findMany
   );
@@ -144,6 +140,108 @@ test("createDamageReport creates report when stop is valid", async () => {
   restoreFieldAdmin();
 });
 
+test("confirmOrderFulfillment blocks pickup when order items are not inspected", async () => {
+  const restoreFieldAdmin = withMock(prisma.fieldAdmin, "findUnique", ((async () => ({
+    id: "fa-1",
+    userId: "u1",
+    user: { name: "Field Admin 1", email: "fieldadmin1@freshroute.com" },
+  })) as unknown) as typeof prisma.fieldAdmin.findUnique);
+  const restoreOrderFindUnique = withMock(
+    prisma.order,
+    "findUnique",
+    ((async () => ({
+      id: "order-1",
+      status: "ASSIGNED",
+    })) as unknown) as typeof prisma.order.findUnique
+  );
+  const restoreOrderFindFirst = withMock(
+    prisma.order,
+    "findFirst",
+    ((async () => ({ id: "order-1" })) as unknown) as typeof prisma.order.findFirst
+  );
+  const restoreStopFindFirst = withMock(
+    prisma.stop,
+    "findFirst",
+    ((async () => null) as unknown) as typeof prisma.stop.findFirst
+  );
+  const restoreOrderItemFindMany = withMock(
+    prisma.orderItem,
+    "findMany",
+    ((async () => [{ id: "item-1" }, { id: "item-2" }]) as unknown) as typeof prisma.orderItem.findMany
+  );
+  const restoreInspectionFindMany = withMock(
+    prisma.productInspection,
+    "findMany",
+    ((async () => [{ orderItemId: "item-1", result: "APPROVED" }]) as unknown) as typeof prisma.productInspection.findMany
+  );
+
+  await assert.rejects(
+    confirmOrderFulfillment("fa-1", { orderId: "order-1", action: "pickup" }),
+    /All order items at this seller stop must be inspected before pickup confirmation/
+  );
+
+  restoreInspectionFindMany();
+  restoreOrderItemFindMany();
+  restoreStopFindFirst();
+  restoreOrderFindFirst();
+  restoreOrderFindUnique();
+  restoreFieldAdmin();
+});
+
+test("createInspection allows in-transit order items for recovery review", async () => {
+  const restoreFieldAdmin = withMock(prisma.fieldAdmin, "findUnique", ((async () => ({
+    id: "fa-1",
+    userId: "u1",
+    user: { name: "Field Admin 1", email: "fieldadmin1@freshroute.com" },
+  })) as unknown) as typeof prisma.fieldAdmin.findUnique);
+  const restoreOrderItemFindUnique = withMock(
+    prisma.orderItem,
+    "findUnique",
+    ((async () => ({
+      id: "item-1",
+      orderId: "order-1",
+      sellerId: "seller-1",
+      quantity: 5,
+      unitPrice: 100,
+      order: { id: "order-1", status: "IN_TRANSIT" },
+      product: { id: "product-1", unit: "kg" },
+    })) as unknown) as typeof prisma.orderItem.findUnique
+  );
+  const restoreOrderFindFirst = withMock(
+    prisma.order,
+    "findFirst",
+    ((async () => ({ id: "order-1" })) as unknown) as typeof prisma.order.findFirst
+  );
+  const restoreStopFindFirst = withMock(
+    prisma.stop,
+    "findFirst",
+    ((async (...args: any[]) => {
+      const firstArg = args[0];
+      if (firstArg?.where?.type === "PICKUP") return null;
+      return { id: "route-stop-1" };
+    }) as unknown) as typeof prisma.stop.findFirst
+  );
+  const restoreCreate = withMock(
+    prisma.productInspection,
+    "create",
+    ((async ({ data }: any) => ({ id: "insp-1", ...data })) as unknown) as typeof prisma.productInspection.create
+  );
+
+  const inspection = await createInspection("fa-1", {
+    orderItemId: "item-1",
+    approvedQuantity: 5,
+  });
+
+  assert.equal(inspection.result, "APPROVED");
+  assert.equal(inspection.orderItemId, "item-1");
+
+  restoreCreate();
+  restoreStopFindFirst();
+  restoreOrderFindFirst();
+  restoreOrderItemFindUnique();
+  restoreFieldAdmin();
+});
+
 test("getDashboardOverview counts only active assigned/in-transit orders", async () => {
   const restoreFieldAdmin = withMock(prisma.fieldAdmin, "findUnique", ((async () => ({
     id: "fa-1",
@@ -156,14 +254,24 @@ test("getDashboardOverview counts only active assigned/in-transit orders", async
     ((async (args: any) => {
       assert.deepEqual(args.where, {
         status: { in: ["BATCHED", "ASSIGNED", "IN_TRANSIT"] },
-        batch: { routes: { some: { fieldAdminId: "fa-1", status: { in: ["ASSIGNED", "STARTED", "IN_PROGRESS"] } } } },
+        batch: {
+          OR: [{ fieldAdminId: "fa-1" }, { routes: { some: { fieldAdminId: "fa-1" } } }],
+        },
       });
       return 4;
     }) as unknown) as typeof prisma.order.count
   );
   const restoreAssessmentCount = withMock(prisma.assessment, "count", ((async () => 2) as unknown) as typeof prisma.assessment.count);
   const restoreStopCount = withMock(prisma.stop, "count", ((async () => 5) as unknown) as typeof prisma.stop.count);
-  const restoreRouteCount = withMock(prisma.route, "count", ((async () => 1) as unknown) as typeof prisma.route.count);
+  const restoreBatchCount = withMock(
+    prisma.batch,
+    "count",
+    ((async (args: any) => {
+      assert.equal(args.where.fieldAdminId, "fa-1");
+      assert.deepEqual(args.where.status, { in: ["CLOSED", "ROUTED", "IN_PROGRESS"] });
+      return 1;
+    }) as unknown) as typeof prisma.batch.count
+  );
 
   const { assignedOrders, assessments, pendingQuality, routesToday } = await getDashboardOverview("fa-1");
 
@@ -172,7 +280,7 @@ test("getDashboardOverview counts only active assigned/in-transit orders", async
   assert.equal(pendingQuality, 5);
   assert.equal(routesToday, 1);
 
-  restoreRouteCount();
+  restoreBatchCount();
   restoreStopCount();
   restoreAssessmentCount();
   restoreOrderCount();
@@ -199,7 +307,14 @@ test("markStopComplete blocks delivery before hub pickup is completed", async ()
           itemsSummary: null,
           notes: null,
           order: { id: "o1" },
-          route: { id: "route-1", batchId: "batch-1", status: "IN_PROGRESS", truckId: null, driverId: null },
+          route: {
+            id: "route-1",
+            batchId: "batch-1",
+            status: "IN_PROGRESS",
+            truckId: null,
+            driverId: null,
+            batch: { truckId: null },
+          },
         };
       }
       if (args?.where?.sellerId === null) {
@@ -215,5 +330,85 @@ test("markStopComplete blocks delivery before hub pickup is completed", async ()
   );
 
   restoreStopFindFirst();
+  restoreFieldAdmin();
+});
+
+test("confirmOrderFulfillment picks up a batched order then allows delivery", async () => {
+  const restoreFieldAdmin = withMock(prisma.fieldAdmin, "findUnique", ((async () => ({
+    id: "fa-1",
+    userId: "u1",
+    user: { name: "Field Admin 1", email: "fieldadmin1@freshroute.com" },
+  })) as unknown) as typeof prisma.fieldAdmin.findUnique);
+
+  let status = "BATCHED";
+  const restoreOrderFindUnique = withMock(
+    prisma.order,
+    "findUnique",
+    ((async () => ({ id: "o1", status })) as unknown) as typeof prisma.order.findUnique
+  );
+  const restoreOrderFindFirst = withMock(
+    prisma.order,
+    "findFirst",
+    ((async () => ({ id: "o1" })) as unknown) as typeof prisma.order.findFirst
+  );
+  const restoreStopFind = withMock(prisma.stop, "findFirst", ((async () => null) as unknown) as typeof prisma.stop.findFirst);
+  const restoreOrderUpdate = withMock(
+    prisma.order,
+    "update",
+    ((async (args: any) => {
+      status = args.data.status;
+      return { id: "o1", status };
+    }) as unknown) as typeof prisma.order.update
+  );
+
+  const pickedUp = await confirmOrderFulfillment("fa-1", { orderId: "o1", action: "pickup" });
+  assert.equal(pickedUp.status, "IN_TRANSIT");
+  const delivered = await confirmOrderFulfillment("fa-1", { orderId: "o1", action: "delivery" });
+  assert.equal(delivered.status, "DELIVERED");
+
+  restoreOrderUpdate();
+  restoreStopFind();
+  restoreOrderFindFirst();
+  restoreOrderFindUnique();
+  restoreFieldAdmin();
+});
+
+test("confirmOrderFulfillment rejects delivery before pickup and locks delivered orders", async () => {
+  const restoreFieldAdmin = withMock(prisma.fieldAdmin, "findUnique", ((async () => ({
+    id: "fa-1",
+    userId: "u1",
+    user: { name: "Field Admin 1", email: "fieldadmin1@freshroute.com" },
+  })) as unknown) as typeof prisma.fieldAdmin.findUnique);
+  const restoreOrderFindFirst = withMock(
+    prisma.order,
+    "findFirst",
+    ((async () => ({ id: "o1" })) as unknown) as typeof prisma.order.findFirst
+  );
+  const restoreStopFind = withMock(prisma.stop, "findFirst", ((async () => null) as unknown) as typeof prisma.stop.findFirst);
+
+  const restoreBatched = withMock(
+    prisma.order,
+    "findUnique",
+    ((async () => ({ id: "o1", status: "BATCHED" })) as unknown) as typeof prisma.order.findUnique
+  );
+  await assert.rejects(
+    confirmOrderFulfillment("fa-1", { orderId: "o1", action: "delivery" }),
+    /Complete pickup before marking delivery/
+  );
+  restoreBatched();
+
+  const restoreDelivered = withMock(
+    prisma.order,
+    "findUnique",
+    ((async () => ({ id: "o1", status: "DELIVERED" })) as unknown) as typeof prisma.order.findUnique
+  );
+  await assert.rejects(
+    confirmOrderFulfillment("fa-1", { orderId: "o1", action: "pickup" }),
+    /already delivered/
+  );
+
+  restoreDelivered();
+  restoreStopFind();
+  restoreOrderFindFirst();
   restoreFieldAdmin();
 });

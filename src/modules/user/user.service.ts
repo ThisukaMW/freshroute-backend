@@ -25,13 +25,53 @@ export const getUserById = async (id: string, db: any = prisma) => {
   const user = await db.user.findUnique({
     where: { id },
     select: {
-      ...userSelect,
+      id: true,
+      name: true,
+      role: true,
+      status: true,
+      email: true,
+      phone: true,
+      address: true,
       createdAt: true,
+      buyerProfile: { select: { id: true } },
+      sellerProfile: { select: { id: true, averageRating: true } },
     },
   });
 
   if (!user) throw new Error("User not found");
-  return user;
+
+  const { buyerProfile, sellerProfile, ...base } = user;
+
+  let stats: Record<string, unknown> = {};
+
+  if (buyerProfile) {
+    const [totalOrders, spentAgg] = await Promise.all([
+      db.order.count({ where: { buyerId: buyerProfile.id } }),
+      db.order.aggregate({
+        where: { buyerId: buyerProfile.id, isCancelled: false },
+        _sum: { totalAmount: true },
+      }),
+    ]);
+    stats = {
+      totalOrders,
+      totalSpent: spentAgg._sum.totalAmount ?? 0,
+    };
+  } else if (sellerProfile) {
+    const [totalProducts, orderIdRows] = await Promise.all([
+      db.product.count({ where: { sellerId: sellerProfile.id } }),
+      db.orderItem.groupBy({
+        by: ["orderId"],
+        where: { sellerId: sellerProfile.id },
+      }),
+    ]);
+    stats = {
+      totalProducts,
+      totalOrders: orderIdRows.length,
+      rating: sellerProfile.averageRating,
+    };
+  }
+
+  return { ...base, ...stats };
 };
 
 export const updateUserRole = async (id: string, role: UserRole, db: any = prisma) => {
