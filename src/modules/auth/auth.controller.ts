@@ -13,7 +13,6 @@ import { sendPasswordChangedEmail } from "../../utils/mailer.js";
 import { loginSeller, loginBuyer } from "./auth.service.js";
 import { notifyAdminsSellerRegistered, notifyAdminsBuyerRegistered } from "../notifications/notification.events.js";
 import prisma from "../../config/database.js";
-import jwt from "jsonwebtoken";
 
 // ─── Validation helpers ────────────────────────────────────────────
 

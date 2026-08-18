@@ -249,3 +249,4 @@ export const rejectUserController: RequestHandler<{ userId: string }> = async (r
     res.status(status).json({ message });
   }
 };
+

@@ -21,7 +21,7 @@ import profileRoutes from "./modules/profile/profile.routes.js";
 import ratingRoutes from "./modules/rating/rating.routes.js";
 import notificationRoutes from "./modules/notifications/notification.routes.js";
 import truckRoutes from "./modules/truck/truck.routes.js";
-import ratingRouter from "./modules/rating/rating.routes.js";
+//import ratingRouter from "./modules/rating/rating.routes.js";
 import inventoryRoutes from "./modules/inventory/inventory.routes.js";
 import dashboardRoutes from "./modules/dashboard/dashboard.routes.js";
 import analyticsRouter from "./modules/analytics/analytics.routes.js";
@@ -49,6 +49,9 @@ app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 app.get("/", (req, res) => {
   res.send("Server is running 🚀");
 });
+
+// Serve uploaded files (product images, rating photos, etc.) statically
+app.use("/uploads", express.static("uploads"));
 
 // Health check
 app.get("/api/v1/health", (_req, res) => {
@@ -80,7 +83,7 @@ app.use("/api/v1/profile", profileRoutes);
 app.use("/api/v1/rating", ratingRoutes);
 app.use("/api/v1/notifications", notificationRoutes);
 app.use("/api/v1/trucks", truckRoutes);
-app.use("/api/v1/ratings", ratingRouter);
+//app.use("/api/v1/ratings", ratingRouter);
 app.use("/api/v1/analytics", analyticsRouter);
 app.use("/api/v1/system", systemRoutes);
 

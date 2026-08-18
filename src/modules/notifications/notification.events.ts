@@ -209,140 +209,41 @@ export const notifySellerLowStock = async (
   }
 };
 
-const SLOT_WINDOW: Record<string, string> = {
-  MORNING: "Morning (6 AM – 12 PM)",
-  AFTERNOON: "Afternoon (12 PM – 6 PM)",
-  EVENING: "Evening (6 PM – 10 PM)",
-};
-
-const slotLabel = (slot: string) => SLOT_WINDOW[slot] ?? slot;
-
-export const notifyBuyerDeliveryDeferred = async (
+// ─────────────────────────────────────────────
+// 🛒 BUYER: Reminds the buyer once per delivery day, covering their whole
+// ─────────────────────────────────────────────
+export const notifyBuyerCartReminder = async (
   buyerUserId: string,
-  orderNumber: string,
-  fromSlot: string,
-  toSlot: string
+  itemCount: number
 ) => {
   try {
     await createNotification({
       userId: buyerUserId,
-      title: "Delivery moved to a later window today",
-      body: `Order ${orderNumber} could not be batched for ${slotLabel(fromSlot)}. Pickup and delivery will happen in the ${slotLabel(toSlot)} window today.`,
-      data: {
-        type: "DELIVERY_DEFERRED",
-        orderNumber,
-        fromSlot,
-        toSlot,
-      },
+      title: "⏰ Your cart is waiting",
+      body: `You still have ${itemCount} item(s) in your cart. Complete checkout before ordering closes for today.`,
+      data: { type: "CART_REMINDER" },
     });
   } catch (err) {
-    console.error("[notifyBuyerDeliveryDeferred] failed:", err);
+    console.error("[notifyBuyerCartReminder] failed:", err);
   }
 };
 
-export const notifySellerPickupDeferred = async (
-  sellerUserId: string,
-  orderNumber: string,
-  fromSlot: string,
-  toSlot: string
-) => {
-  try {
-    await createNotification({
-      userId: sellerUserId,
-      title: "Pickup moved to a later window today",
-      body: `Order ${orderNumber} was not batched for ${slotLabel(fromSlot)}. Please keep items ready for pickup in the ${slotLabel(toSlot)} window today.`,
-      data: {
-        type: "PICKUP_DEFERRED",
-        orderNumber,
-        fromSlot,
-        toSlot,
-      },
-    });
-  } catch (err) {
-    console.error("[notifySellerPickupDeferred] failed:", err);
-  }
-};
-
-export const notifyBuyerOrderBatched = async (
+// ─────────────────────────────────────────────
+// 🛒 BUYER: Notifies the buyer when an item is added to cart
+// ─────────────────────────────────────────────
+export const notifyBuyerItemAdded = async (
   buyerUserId: string,
-  orderNumber: string,
-  slot: string
+  productName: string,
+  quantity: number
 ) => {
   try {
     await createNotification({
       userId: buyerUserId,
-      title: "Order scheduled for delivery",
-      body: `Order ${orderNumber} has been batched and will be delivered in the ${slotLabel(slot)} window today.`,
-      data: {
-        type: "ORDER_BATCHED",
-        orderNumber,
-        slot,
-      },
+      title: "🛒 Item added to cart",
+      body: `${productName} (x${quantity}) was added to your cart.`,
+      data: { type: "ITEM_ADDED_TO_CART", productName },
     });
   } catch (err) {
-    console.error("[notifyBuyerOrderBatched] failed:", err);
-  }
-};
-
-export const notifySellerPickupScheduled = async (
-  sellerUserId: string,
-  orderNumber: string,
-  slot: string
-) => {
-  try {
-    await createNotification({
-      userId: sellerUserId,
-      title: "Pickup scheduled",
-      body: `Order ${orderNumber} has been batched. Please have items ready for pickup in the ${slotLabel(slot)} window today.`,
-      data: {
-        type: "PICKUP_SCHEDULED",
-        orderNumber,
-        slot,
-      },
-    });
-  } catch (err) {
-    console.error("[notifySellerPickupScheduled] failed:", err);
-  }
-};
-
-export const notifyBuyerAggregationFailed = async (
-  buyerUserId: string,
-  orderNumber: string,
-  reason: string
-) => {
-  try {
-    await createNotification({
-      userId: buyerUserId,
-      title: "Order could not be batched today",
-      body: `Order ${orderNumber} could not be included in today's delivery batches. ${reason} Our team will follow up.`,
-      data: {
-        type: "AGGREGATION_FAILED",
-        orderNumber,
-        reason,
-      },
-    });
-  } catch (err) {
-    console.error("[notifyBuyerAggregationFailed] failed:", err);
-  }
-};
-
-export const notifySellerAggregationFailed = async (
-  sellerUserId: string,
-  orderNumber: string,
-  reason: string
-) => {
-  try {
-    await createNotification({
-      userId: sellerUserId,
-      title: "Order pickup delayed",
-      body: `Order ${orderNumber} could not be batched today. ${reason} Keep the items aside until we confirm a new pickup window.`,
-      data: {
-        type: "AGGREGATION_FAILED",
-        orderNumber,
-        reason,
-      },
-    });
-  } catch (err) {
-    console.error("[notifySellerAggregationFailed] failed:", err);
+    console.error("[notifyBuyerItemAdded] failed:", err);
   }
 };

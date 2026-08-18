@@ -247,10 +247,29 @@ export const completeStop = async (
   });
 
   if (body.status === "COMPLETED" && stop.orderId) {
-    await prisma.order.update({
+    const updatedOrder = await prisma.order.update({
       where: { id: stop.orderId },
       data: { status: "DELIVERED", actualDelivery: now },
+      include: { buyer: { select: { userId: true } } },
     });
+
+    // Notify the buyer that their order was delivered — the frontend
+    // listens for this notification type to pop the rating modal
+    try {
+      await prisma.notification.create({
+        data: {
+          userId: updatedOrder.buyer.userId,
+          title: "Order delivered! 📦",
+          body: `Your order #${updatedOrder.orderNumber} has been delivered. Tap to rate your experience.`,
+          data: {
+            type: "ORDER_DELIVERED",
+            orderId: updatedOrder.id,
+          },
+        },
+      });
+    } catch (notifErr) {
+      console.error("Failed to send delivery notification:", notifErr);
+    }
   }
 
   if (body.status === "FAILED" && stop.orderId) {

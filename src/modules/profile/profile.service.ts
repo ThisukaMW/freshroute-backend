@@ -1,9 +1,42 @@
-// This file does the actual database work for all profile updates.
-// It also sends the user a notification after each successful change.
-
 import bcrypt from "bcrypt";
 import prisma from "../../config/database.js";
 import { createNotification } from "../notifications/notification.service.js";
+
+// This file does the actual database work for all profile updates.
+// It also sends the user a notification after each successful change.
+
+// Whenever a user's DEFAULT saved address changes, mirror it onto their
+// role-specific profile (Seller.businessAddress or Buyer.deliveryAddress).
+// This keeps the old denormalized fields in sync without a separate manual
+// "business address" input — the Saved Addresses list is now the single
+// source of truth, same as the buyer flow.
+const syncPrimaryAddress = async (
+  userId: string,
+  data: { address: string; city?: string; latitude?: number; longitude?: number }
+) => {
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } });
+  if (!user) return;
+
+  if (user.role === "SELLER") {
+    await prisma.seller.updateMany({
+      where: { userId },
+      data: {
+        businessAddress: data.address,
+        latitude:  data.latitude,
+        longitude: data.longitude,
+      },
+    });
+  } else if (user.role === "BUYER") {
+    await prisma.buyer.updateMany({
+      where: { userId },
+      data: {
+        deliveryAddress: data.address,
+        latitude:  data.latitude,
+        longitude: data.longitude,
+      },
+    });
+  }
+};
 
 // Save updated name, phone, and/or city to the database, then notify the user
 export const updatePersonalInfo = async (
@@ -60,21 +93,19 @@ export const updateDeliveryAddress = async (
 };
 
 // Update the seller's business name and address; also updates city on the user record if given
+// Update the seller's business name only; city on the user record if given.
+// Business address is no longer set here — it's managed exclusively through
+// the Saved Addresses list (whichever address is marked default).
 export const updateBusinessInfo = async (
   userId: string,
-  data: { businessName?: string; businessAddress?: string; city?: string; latitude?: number; longitude?: number }
+  data: { businessName?: string; city?: string }
 ) => {
   const seller = await prisma.seller.findUnique({ where: { userId } });
   if (!seller) throw new Error("Seller profile not found");
 
   await prisma.seller.update({
     where: { userId },
-    data: {
-      businessName:    data.businessName,
-      businessAddress: data.businessAddress,
-      latitude:        data.latitude,
-      longitude:       data.longitude,
-    },
+    data: { businessName: data.businessName },
   });
 
   if (data.city) {
@@ -133,10 +164,123 @@ export const getSellerStatus = async (userId: string) => {
   return { isApproved: seller?.isApproved ?? false, status: user?.status ?? "ACTIVE" };
 };
 
-// Delete all notifications for the user first, then delete the user account itself
+// ─── Delete account ──────────────────────────────────────────────
+//
+// Deleting a User cascades automatically to Buyer, Seller, Driver,
+// FieldAdmin, Notification, and Address (all marked onDelete: Cascade
+// in the schema). But several tables reference orders/products/sellers
+// WITHOUT a cascade — Payment, Rating, SellerProduct, and the Restrict
+// relations on OrderItem/CartItem's productId — so those rows must be
+// cleared manually first, or the delete fails with a foreign key error
+// (e.g. "Payment_orderId_fkey").
+//
+// Order of operations (deepest dependents first):
+//   1. Rating       — references order/product/seller/buyer/driver, no cascade
+//   2. Payment       — references order, no cascade
+//   3. OrderItem     — references product (Restrict); also has denormalized
+//                       sellerId so it catches items in OTHER buyers' orders
+//                       that reference this seller's products
+//   4. CartItem      — references product (Restrict); catches items in
+//                       OTHER buyers' carts that reference this seller's products
+//   5. StockReservation — references order/product/seller
+//   6. SellerProduct — references product/seller, no cascade
+//   7. Order         — now safe (Payment/Rating/OrderItem cleared)
+//   8. Product       — now safe (CartItem/Rating/SellerProduct/OrderItem cleared)
+//   9. User          — cascades Buyer/Seller/Driver/FieldAdmin/Notification/Address
 export const deleteAccount = async (userId: string) => {
-  await prisma.notification.deleteMany({ where: { userId } });
-  await prisma.user.delete({ where: { id: userId } });
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      buyerProfile:  { select: { id: true } },
+      sellerProfile: { select: { id: true } },
+      driverProfile: { select: { id: true } },
+    },
+  });
+  if (!user) throw new Error("User not found");
+
+  const buyerId  = user.buyerProfile?.id;
+  const sellerId = user.sellerProfile?.id;
+  const driverId = user.driverProfile?.id;
+
+  // Orders this user placed (as a buyer)
+  const orders = buyerId
+    ? await prisma.order.findMany({ where: { buyerId }, select: { id: true } })
+    : [];
+  const orderIds = orders.map((o) => o.id);
+
+  // Products this user listed (as a seller)
+  const products = sellerId
+    ? await prisma.product.findMany({ where: { sellerId }, select: { id: true } })
+    : [];
+  const productIds = products.map((p) => p.id);
+
+  const ops: any[] = [];
+
+  // 1. Ratings — no cascade from order/product/seller/buyer/driver
+  const ratingOr: any[] = [];
+  if (orderIds.length)   ratingOr.push({ orderId: { in: orderIds } });
+  if (productIds.length) ratingOr.push({ productId: { in: productIds } });
+  if (sellerId)           ratingOr.push({ sellerId });
+  if (buyerId)             ratingOr.push({ buyerId });
+  if (driverId)             ratingOr.push({ driverId });
+  if (ratingOr.length) {
+    ops.push(prisma.rating.deleteMany({ where: { OR: ratingOr } }));
+  }
+
+  // 2. Payments — no cascade from order
+  if (orderIds.length) {
+    ops.push(prisma.payment.deleteMany({ where: { orderId: { in: orderIds } } }));
+  }
+
+  // 3. Order items — clear by orderId, and by sellerId to catch items
+  //    inside OTHER buyers' orders that reference this seller's products
+  const orderItemOr: any[] = [];
+  if (orderIds.length) orderItemOr.push({ orderId: { in: orderIds } });
+  if (sellerId)         orderItemOr.push({ sellerId });
+  if (orderItemOr.length) {
+    ops.push(prisma.orderItem.deleteMany({ where: { OR: orderItemOr } }));
+  }
+
+  // 4. Cart items — clear items in OTHER buyers' carts that reference
+  //    this seller's products (Restrict on CartItem.productId)
+  const cartItemOr: any[] = [];
+  if (sellerId)           cartItemOr.push({ sellerId });
+  if (productIds.length) cartItemOr.push({ productId: { in: productIds } });
+  if (cartItemOr.length) {
+    ops.push(prisma.cartItem.deleteMany({ where: { OR: cartItemOr } }));
+  }
+
+  // 5. Stock reservations tied to these orders/products/seller
+  const reservationOr: any[] = [];
+  if (orderIds.length)   reservationOr.push({ orderId: { in: orderIds } });
+  if (sellerId)           reservationOr.push({ sellerId });
+  if (productIds.length) reservationOr.push({ productId: { in: productIds } });
+  if (reservationOr.length) {
+    ops.push(prisma.stockReservation.deleteMany({ where: { OR: reservationOr } }));
+  }
+
+  // 6. Seller-product links — no cascade, must clear before deleting products
+  const sellerProductOr: any[] = [];
+  if (sellerId)           sellerProductOr.push({ sellerId });
+  if (productIds.length) sellerProductOr.push({ productId: { in: productIds } });
+  if (sellerProductOr.length) {
+    ops.push(prisma.sellerProduct.deleteMany({ where: { OR: sellerProductOr } }));
+  }
+
+  // 7. Orders — now safe (Payment/Rating/OrderItem already cleared)
+  if (orderIds.length) {
+    ops.push(prisma.order.deleteMany({ where: { id: { in: orderIds } } }));
+  }
+
+  // 8. Products — now safe (CartItem/Rating/SellerProduct/OrderItem already cleared)
+  if (productIds.length) {
+    ops.push(prisma.product.deleteMany({ where: { id: { in: productIds } } }));
+  }
+
+  // 9. User — cascades Buyer, Seller, Driver, FieldAdmin, Notification, Address
+  ops.push(prisma.user.delete({ where: { id: userId } }));
+
+  await prisma.$transaction(ops);
 };
 
 // ─── Saved addresses (multi-address, buyers + sellers) ─────────────
@@ -145,7 +289,7 @@ export const deleteAccount = async (userId: string) => {
 export const listAddresses = async (userId: string) => {
   return prisma.address.findMany({
     where: { userId },
-    orderBy: { createdAt: "desc" },
+    orderBy: [{ isDefault: "desc" }, { createdAt: "desc" }],
   });
 };
 
@@ -155,6 +299,7 @@ export const addAddress = async (
   data: { label?: string; address: string; city?: string; latitude?: number; longitude?: number }
 ) => {
   const existingCount = await prisma.address.count({ where: { userId } });
+  const isDefault = existingCount === 0;
 
   const address = await prisma.address.create({
     data: {
@@ -164,9 +309,13 @@ export const addAddress = async (
       city: data.city,
       latitude: data.latitude,
       longitude: data.longitude,
-      isDefault: existingCount === 0,
+      isDefault,
     },
   });
+
+  if (isDefault) {
+    await syncPrimaryAddress(userId, data);
+  }
 
   await createNotification({
     userId,
@@ -187,7 +336,7 @@ export const updateAddress = async (
   const existing = await prisma.address.findFirst({ where: { id: addressId, userId } });
   if (!existing) throw new Error("Address not found");
 
-  return prisma.address.update({
+  const updated = await prisma.address.update({
     where: { id: addressId },
     data: {
       label: data.label?.trim() || undefined,
@@ -197,6 +346,17 @@ export const updateAddress = async (
       longitude: data.longitude,
     },
   });
+
+  if (existing.isDefault) {
+    await syncPrimaryAddress(userId, {
+      address: updated.address,
+      city: updated.city ?? undefined,
+      latitude: updated.latitude ?? undefined,
+      longitude: updated.longitude ?? undefined,
+    });
+  }
+
+  return updated;
 };
 
 // Delete a saved address. If it was the default, pass the default badge to the next one
@@ -223,6 +383,13 @@ export const setDefaultAddress = async (userId: string, addressId: string) => {
     prisma.address.updateMany({ where: { userId }, data: { isDefault: false } }),
     prisma.address.update({ where: { id: addressId }, data: { isDefault: true } }),
   ]);
+
+  await syncPrimaryAddress(userId, {
+    address: existing.address,
+    city: existing.city ?? undefined,
+    latitude: existing.latitude ?? undefined,
+    longitude: existing.longitude ?? undefined,
+  });
 };
 
 // ─── Notification preferences ───────────────────────────────────────

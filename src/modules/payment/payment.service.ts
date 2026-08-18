@@ -77,8 +77,9 @@ export const handleWebhookEvent = async (payload: Buffer, sig: string) => {
 
     const order = await prisma.order.findUnique({
       where: { id: orderId },
-      select: { deliveryTimeSlot: true },
+      select: { deliveryTimeSlot: true},
     });
+
     if (!order?.deliveryTimeSlot) {
       console.error(`Order ${orderId} missing deliveryTimeSlot — cannot set deliveryDate`);
     }
