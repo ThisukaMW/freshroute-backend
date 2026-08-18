@@ -1,5 +1,7 @@
+import Stripe from "stripe";
 import prisma from "../../config/database.js";
 import { canTruckCarrySlice } from "../Order_Aggregator/aggregator.rules.js";
+import { getStripe } from "../payment/payment.service.js";
 
 // Get all orders, newest first, including buyer name, product details, and payment info
 export const getAllOrders = async (filters?: { since?: string; until?: string }) => {
@@ -335,4 +337,55 @@ export const assignRouteFleet = async (
 
     return updatedRoute;
   });
+};
+
+export const initiateRefund = async (refundId: string) => {
+  const refund = await prisma.refund.findUnique({
+    where: { id: refundId },
+    include: {
+      order: {
+        include: {
+          payment: true,
+        },
+      },
+    },
+  });
+
+  if (!refund) {
+    throw new Error("Refund not found");
+  }
+
+  const payment = refund.order.payment;
+
+  if (!payment) {
+    throw new Error("Payment not found");
+  }
+
+  if (!payment.gatewayPaymentId) {
+    throw new Error("PaymentIntent missing");
+  }
+
+  const stripeRefund = await getStripe().refunds.create({
+    payment_intent: payment.gatewayPaymentId,
+    amount: Math.round(refund.amount * 100),
+  });
+
+  await prisma.$transaction(async (tx) => {
+    await tx.refund.update({
+      where: { id: refund.id },
+      data: {
+        status: "REFUNDED",
+      },
+    });
+
+    await tx.payment.update({
+      where: { id: payment.id },
+      data: {
+        status: "REFUNDED",
+        refundedAt: new Date(),
+      },
+    });
+  });
+
+  return stripeRefund;
 };

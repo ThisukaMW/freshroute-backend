@@ -4,7 +4,7 @@ import { computeOrderDeliveryDateColombo } from "../Order_Aggregator/aggregator.
 
 let stripeInstance: Stripe | null = null;
 
-function getStripe(): Stripe {
+export function getStripe(): Stripe {
   if (!stripeInstance) {
     const apiKey = process.env.STRIPE_SECRET_KEY;
     if (!apiKey) {
@@ -64,11 +64,14 @@ export const createPaymentIntent = async (orderId: string, currency: string) => 
 };
 
 export const handleWebhookEvent = async (payload: Buffer, sig: string) => {
-  const event = getStripe().webhooks.constructEvent(
-    payload,
-    sig,
-    process.env.STRIPE_WEBHOOK_SECRET!
-  );
+  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+  if (!webhookSecret) {
+    throw new Error("STRIPE_WEBHOOK_SECRET environment variable is not set");
+  }
+
+  const rawBody = Buffer.isBuffer(payload) ? payload : Buffer.from(payload as Uint8Array);
+
+  const event = getStripe().webhooks.constructEvent(rawBody, sig, webhookSecret);
 
   if (event.type === "checkout.session.completed") {
     const session = event.data.object as Stripe.Checkout.Session;
@@ -98,9 +101,15 @@ export const handleWebhookEvent = async (payload: Buffer, sig: string) => {
     });
 
     await prisma.payment.updateMany({
-      where: { gatewayPaymentId: session.id },
-      data: { status: "COMPLETED" },
-    });
+    where: {
+        gatewayPaymentId: session.id,
+    },
+    data: {
+        status: "COMPLETED",
+        gatewayPaymentId: session.payment_intent as string,
+        completedAt: new Date(),
+    },
+});
 
     console.log(`✅ Order ${orderId} payment completed - stock already deducted`);
   }
