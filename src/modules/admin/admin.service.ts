@@ -279,7 +279,10 @@ export const assignRouteFleet = async (
     ]);
 
     if (!truck || !truck.isActive) throw new Error("Truck not found or inactive");
-    if (!truck.isAvailable) throw new Error("Truck is not available");
+    const alreadyAllocatedToThisBatch = route.batch.truckId === input.truckId;
+    if (!truck.isAvailable && !alreadyAllocatedToThisBatch) {
+      throw new Error("Truck is not available");
+    }
     if (!fieldAdmin || !fieldAdmin.isActive) throw new Error("Field admin not found or inactive");
 
     const totalWeight = route.batch.orders.reduce((sum, o) => sum + (o.totalWeight ?? 0), 0);
@@ -320,7 +323,9 @@ export const assignRouteFleet = async (
     const activeOrders = await tx.order.findMany({
       where: {
         status: { in: ["BATCHED", "ASSIGNED", "IN_TRANSIT"] },
-        batch: { routes: { some: { truckId: input.truckId } } },
+        batch: {
+          OR: [{ truckId: input.truckId }, { routes: { some: { truckId: input.truckId } } }],
+        },
       },
       select: { totalWeight: true, totalVolume: true },
     });
@@ -329,6 +334,7 @@ export const assignRouteFleet = async (
     await tx.truck.update({
       where: { id: input.truckId },
       data: {
+        isAvailable: false,
         currentLoadWeight,
         currentLoadVolume,
         currentLoadStops: activeOrders.length,

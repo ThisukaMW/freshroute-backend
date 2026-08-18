@@ -4,7 +4,6 @@ import express from "express";
 import cors from "cors";
 import path from "path";
 import dotenv from "dotenv";
-import path from "path";
 import authRoutes from "./modules/auth/auth.routes.js";
 import driverRoutes from "./modules/driver/driver.routes.js";
 import plannerRoutes from "./modules/planner/planner.routes.js";
@@ -43,23 +42,16 @@ app.use(
     allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
-app.use(express.json());
-// Serve uploaded files (images) from /uploads
-app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
+app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 
 app.get("/", (req, res) => {
   res.send("Server is running 🚀");
 });
 
-// Serve uploaded files (product images, rating photos, etc.) statically
-app.use("/uploads", express.static("uploads"));
-
-// Health check
 app.get("/api/v1/health", (_req, res) => {
   res.json({ status: "FreshRoute backend running 🚀" });
 });
 
-// Parse JSON for normal routes, but leave webhook requests as raw bytes for Stripe
 app.use((req, res, next) => {
   if (req.originalUrl === "/api/v1/payments/webhook") return next();
   express.json()(req, res, next);

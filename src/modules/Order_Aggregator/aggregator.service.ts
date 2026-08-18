@@ -688,6 +688,16 @@ const createBatchesOnly = async (
           },
         });
 
+        await tx.truck.update({
+          where: { id: selectedTruck.id },
+          data: {
+            isAvailable: false,
+            currentLoadWeight: slice.totalWeight,
+            currentLoadVolume: slice.totalVolume,
+            currentLoadStops: slice.orders.length,
+          },
+        });
+
         return {
           batchId: batch.id,
           batchNumber: batch.batchNumber,

@@ -278,6 +278,7 @@ test("runOrderAggregation creates batches only and allocates a truck", async () 
   let capturedBatchCreate: Record<string, unknown> | null = null;
   let capturedOrderUpdate: Record<string, unknown> | null = null;
   let capturedCandidateQuery: Record<string, unknown> | null = null;
+  let capturedTruckUpdate: Record<string, unknown> | null = null;
   let routeCreates = 0;
   let stopCreates = 0;
   let routeUpdates = 0;
@@ -399,6 +400,12 @@ test("runOrderAggregation creates batches only and allocates a truck", async () 
         return { id: "batch-1", batchNumber: "BATCH-1" };
       },
     },
+    truck: {
+      update: async (args: Record<string, unknown>) => {
+        capturedTruckUpdate = args;
+        return { id: "truck-1" };
+      },
+    },
   };
 
   restore(
@@ -438,6 +445,8 @@ test("runOrderAggregation creates batches only and allocates a truck", async () 
     assert.equal(capturedBatchCreate?.truckId, "truck-1");
     assert.equal(capturedBatchCreate?.fieldAdminId, "fa-1");
     assert.equal(capturedBatchCreate?.status, "CLOSED");
+    assert.equal((capturedTruckUpdate?.where as { id?: string })?.id, "truck-1");
+    assert.equal((capturedTruckUpdate?.data as { isAvailable?: boolean })?.isAvailable, false);
     assert.equal((capturedOrderUpdate?.data as { status?: string })?.status, "BATCHED");
     assert.equal((capturedOrderUpdate?.data as { batchId?: string })?.batchId, "batch-1");
     assert.equal((capturedOrderUpdate?.data as { stopId?: string | null })?.stopId, null);
@@ -742,6 +751,9 @@ test("runOrderAggregation splits four clustered orders into two batches", async 
         return { id, batchNumber: `BATCH-${batchCreates}` };
       },
     },
+    truck: {
+      update: async () => ({ id: "truck-1" }),
+    },
   };
 
   restore(
@@ -861,6 +873,9 @@ test("runOrderAggregation includes previously rejected paid orders with the late
         return { id: `batch-${batchCreates}`, batchNumber: `BATCH-${batchCreates}` };
       },
     },
+    truck: {
+      update: async () => ({ id: "truck-1" }),
+    },
   };
 
   restore(
@@ -944,6 +959,9 @@ const mockTxForOrders = (orders: Array<{ id: string }>) => {
         batchCreates += 1;
         return { id: `batch-${batchCreates}`, batchNumber: `BATCH-${batchCreates}` };
       },
+    },
+    truck: {
+      update: async () => ({ id: "truck-1" }),
     },
   };
   return tx;
