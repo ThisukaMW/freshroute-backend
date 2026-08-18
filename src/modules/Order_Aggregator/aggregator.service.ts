@@ -364,13 +364,20 @@ const getRecentCandidates = async (limit = RECENT_CANDIDATE_LIMIT): Promise<Cand
     );
   }
 
+  // Recent paid orders first (already newest-first, max `limit`).
+  // Leftovers from prior rejections fill unused slots only — never more than 20 per run.
   const byId = new Map<string, (typeof recent)[number]>();
-  for (const order of [...previouslyRejected, ...recent]) {
+  for (const order of recent) {
+    byId.set(order.id, order);
+  }
+  for (const order of previouslyRejected) {
+    if (byId.has(order.id)) continue;
+    if (byId.size >= limit) break;
     byId.set(order.id, order);
   }
 
   console.log(
-    `[aggregator] candidates: recent=${recent.length}, previouslyRejected=${previouslyRejected.length}, merged=${byId.size}`
+    `[aggregator] candidates: recent=${recent.length}, previouslyRejected=${previouslyRejected.length}, merged=${byId.size}, cap=${limit}`
   );
   return [...byId.values()].map(mapCandidateOrder);
 };

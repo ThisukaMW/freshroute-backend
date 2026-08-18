@@ -27,7 +27,23 @@ dotenv.config({ override: true });
 
 const app = express();
 
+<<<<<<< Updated upstream
 app.use(cors());
+=======
+const isProduction = process.env.NODE_ENV === "production";
+
+app.use(
+  cors({
+    origin: isProduction
+      ? (process.env.CORS_ORIGINS ?? process.env.CLIENT_URL ?? false)
+      : true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  })
+);
+// Serve uploaded files (images) from /uploads
+app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
+>>>>>>> Stashed changes
 
 app.get("/", (req, res) => {
   res.send("Server is running 🚀");

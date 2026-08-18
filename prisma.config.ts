@@ -6,9 +6,12 @@ console.log("DATABASE_URL:", process.env["DATABASE_URL"]);
 
 export default defineConfig({
   schema: "prisma/schema.prisma",
+<<<<<<< Updated upstream
   migrations: {
     seed: "node prisma/seed.js",
   },
+=======
+>>>>>>> Stashed changes
   datasource: {
     url: process.env["DATABASE_URL"],
   },
