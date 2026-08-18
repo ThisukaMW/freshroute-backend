@@ -325,7 +325,18 @@ export const getOrderById = async (orderId: string, buyerId: string) => {
       items: {
         include: {
           product: {
-            select: { name: true, unit: true, imageUrl: true },
+            select: {
+              name: true,
+              unit: true,
+              imageUrl: true,
+              seller: {
+                select: {
+                  id: true,
+                  businessName: true,
+                  user: { select: { name: true } },
+                },
+              },
+            },
           },
         },
       },
@@ -348,7 +359,17 @@ export const getBuyerOrders = async (buyerId: string) => {
       items: {
         include: {
           product: {
-            select: { name: true, unit: true },
+            select: {
+              name: true,
+              unit: true,
+              seller: {
+                select: {
+                  id: true,
+                  businessName: true,
+                  user: { select: { name: true } },
+                },
+              },
+            },
           },
         },
       },
