@@ -81,14 +81,15 @@ export const createOrder = async (input: CreateOrderInput) => {
 
     if (!reservation) {
       // Check if there's a CONFIRMED one from a previous failed order
-      const confirmedReservation = await prisma.stockReservation.findFirst({
-        where: {
-          productId: item.productId,
-          sellerId: item.sellerId,
-          buyerId: input.buyerId,
-          status: "CONFIRMED",
-        },
-      });
+        const confirmedReservation = await prisma.stockReservation.findFirst({
+          where: {
+            productId: item.productId,
+            sellerId: item.sellerId,
+            buyerId: input.buyerId,
+            status: "CONFIRMED",
+          },
+          include: { order: true },
+        });
 
       if (confirmedReservation) {
         throw new Error(

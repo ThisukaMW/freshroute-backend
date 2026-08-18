@@ -1,5 +1,5 @@
 import express, { Router, type RequestHandler } from "express";
-import { protect } from "../../middlewares/auth.middleware.js";
+import { authorize, protect } from "../../middlewares/auth.middleware.js";
 import { requireOrderingPortalOpen } from "../../middlewares/orderingPortal.middleware.js";
 import {
   createPayment,

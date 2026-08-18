@@ -55,7 +55,7 @@ app.get("/api/v1/health", (_req, res) => {
   res.json({ status: "FreshRoute backend running 🚀" });
 });
 
-// Skip express.json() for the Stripe webhook route — it needs raw body
+// Parse JSON for normal routes, but leave webhook requests as raw bytes for Stripe
 app.use((req, res, next) => {
   if (req.originalUrl === "/api/v1/payments/webhook") return next();
   express.json()(req, res, next);
