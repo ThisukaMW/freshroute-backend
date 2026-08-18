@@ -9,6 +9,7 @@ import {
   assessSeller,
   assignedTasks,
   completeDelivery,
+  completeOrderFulfillment,
   completeStop,
   completedRoutes,
   completedTasks,
@@ -148,6 +149,7 @@ router.post("/reject/feedback", rejectFeedback);
 
 router.post("/stops/:stopId/complete", completeStop);
 router.post("/delivery/complete", completeDelivery);
+router.post("/order/:orderId/fulfill", completeOrderFulfillment);
 
 // //User Assesment APIs
 
