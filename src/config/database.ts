@@ -2,6 +2,7 @@
 // It creates one shared database connection that all parts of the app can use.
 
 import net from "node:net";
+import dns from "node:dns";
 import { PrismaClient } from "../generated/prisma/index.js";
 import { PrismaPg } from "@prisma/adapter-pg";
 import dotenv from "dotenv";
@@ -14,11 +15,18 @@ dotenv.config();
 // makes Node dial addresses sequentially instead, which connects normally.
 net.setDefaultAutoSelectFamily(false);
 
+// This network can't complete outbound IPv6 connections at all, so force
+// DNS to resolve and hand back IPv4 addresses first — otherwise Node dials
+// the IPv6 address (sequentially, per the setting above) and it hangs until
+// ETIMEDOUT before ever trying IPv4.
+dns.setDefaultResultOrder("ipv4first");
+
 // Set up the database connection using the URL from the .env file
 const adapter = new PrismaPg({
   connectionString: process.env.DATABASE_URL!,
   keepAlive: true,
   keepAliveInitialDelayMillis: 5000,
+  connectionTimeoutMillis: 30000,
 }) as any;
 
 // Create the Prisma client (our tool to talk to the database) with the connection above

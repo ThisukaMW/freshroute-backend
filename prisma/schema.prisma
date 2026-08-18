@@ -173,7 +173,7 @@ model User {
   role          UserRole
   status        UserStatus  @default(ACTIVE)
   city          String?
-  address       String?
+  address       String?  
   addresses Address[]
   passwordHash  String
   prevPasswordHash  String?   // stores old hash before a reset, cleared after secure-account

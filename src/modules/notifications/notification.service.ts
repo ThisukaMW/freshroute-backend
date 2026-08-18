@@ -17,7 +17,7 @@ export const createNotification = async (data: {
       body: data.body,
       data: data.data ?? {},
     },
-  });
+  }); 
 
   // Check if the user has an FCM token saved — if not, skip push
   const user = await prisma.user.findUnique({
