@@ -1,7 +1,35 @@
 import Stripe from "stripe";
 import prisma from "../../config/database.js";
 import { canTruckCarrySlice } from "../Order_Aggregator/aggregator.rules.js";
-import { getStripe } from "../payment/payment.service.js";
+import { createPaymentIntent, getStripe } from "../payment/payment.service.js";
+
+export const resolveStripeRefundTarget = async (
+  stripe: Stripe,
+  gatewayPaymentId: string,
+): Promise<string> => {
+  const target = gatewayPaymentId.trim();
+  if (!target) throw new Error("Payment ID missing");
+
+  if (target.startsWith("pi_")) {
+    return target;
+  }
+
+  if (target.startsWith("cs_")) {
+    const session = await stripe.checkout.sessions.retrieve(target);
+    const paymentIntentId =
+      typeof session.payment_intent === "string"
+        ? session.payment_intent
+        : session.payment_intent?.id ?? null;
+
+    if (!paymentIntentId) {
+      throw new Error("Stripe checkout session does not have a payment intent attached");
+    }
+
+    return paymentIntentId;
+  }
+
+  return target;
+};
 
 // Get all orders, newest first, including buyer name, product details, and payment info
 export const getAllOrders = async (filters?: { since?: string; until?: string }) => {
@@ -355,37 +383,72 @@ export const initiateRefund = async (refundId: string) => {
     throw new Error("Refund not found");
   }
 
-  const payment = refund.order.payment;
-
-  if (!payment) {
-    throw new Error("Payment not found");
+  const eligibleStatuses = new Set(["PAID", "BATCHED", "ASSIGNED", "IN_TRANSIT", "DELIVERED"]);
+  if (!eligibleStatuses.has(refund.order.status)) {
+    throw new Error("Refunds can only be initiated for orders that are paid, batched, assigned, in transit, or delivered");
   }
 
-  if (!payment.gatewayPaymentId) {
-    throw new Error("PaymentIntent missing");
-  }
+  const existingPayment = refund.order.payment;
+  const currency = (existingPayment?.currency ?? "lkr").toLowerCase();
 
-  const stripeRefund = await getStripe().refunds.create({
-    payment_intent: payment.gatewayPaymentId,
-    amount: Math.round(refund.amount * 100),
-  });
+  if (existingPayment) {
+    const stripe = getStripe();
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ["card"],
+      mode: "payment",
+      line_items: [
+        {
+          price_data: {
+            currency,
+            product_data: { name: `FreshRoute refund for order ${refund.order.orderNumber}` },
+            unit_amount: Math.round(Number(refund.amount) * 100),
+          },
+          quantity: 1,
+        },
+      ],
+      success_url: `${process.env.CLIENT_URL ?? "http://localhost:5173"}/admin/refunds?refund=success`,
+      cancel_url: `${process.env.CLIENT_URL ?? "http://localhost:5173"}/admin/refunds?refund=cancelled`,
+      metadata: {
+        orderId: refund.orderId,
+        refundId: refund.id,
+        purpose: "admin_refund_session",
+      },
+    });
 
-  await prisma.$transaction(async (tx) => {
-    await tx.refund.update({
+    await prisma.payment.update({
+      where: { id: existingPayment.id },
+      data: {
+        status: "PENDING",
+        amount: refund.amount,
+        currency,
+        gatewayPaymentId: session.id,
+        completedAt: null,
+      },
+    });
+
+    await prisma.refund.update({
       where: { id: refund.id },
-      data: {
-        status: "REFUNDED",
-      },
+      data: { status: "PROCESSING" },
     });
 
-    await tx.payment.update({
-      where: { id: payment.id },
-      data: {
-        status: "REFUNDED",
-        refundedAt: new Date(),
-      },
-    });
+    return {
+      checkoutUrl: session.url,
+      paymentId: existingPayment.id,
+      refundStatus: "PROCESSING",
+      createdFrom: "payment-module-session",
+    };
+  }
+
+  const created = await createPaymentIntent(refund.orderId, currency, refund.amount);
+
+  await prisma.refund.update({
+    where: { id: refund.id },
+    data: { status: "PROCESSING" },
   });
 
-  return stripeRefund;
+  return {
+    ...created,
+    refundStatus: "PROCESSING",
+    createdFrom: "payment-module-session",
+  };
 };

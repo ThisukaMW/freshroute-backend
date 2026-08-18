@@ -23,9 +23,15 @@ export interface CreatePaymentInput {
   userId: string;
 }
 
-export const createPaymentIntent = async (orderId: string, currency: string) => {
+export const createPaymentIntent = async (
+  orderId: string,
+  currency: string,
+  amountOverride?: number,
+) => {
   const order = await prisma.order.findUnique({ where: { id: orderId } });
   if (!order) throw new Error("Order not found");
+
+  const amount = amountOverride ?? Number(order.totalAmount);
 
   const session = await getStripe().checkout.sessions.create({
     payment_method_types: ["card"],
@@ -34,7 +40,7 @@ export const createPaymentIntent = async (orderId: string, currency: string) => 
         price_data: {
           currency,
           product_data: { name: `FreshRoute Order ${order.orderNumber}` },
-          unit_amount: Math.round(Number(order.totalAmount) * 100),
+          unit_amount: Math.round(Number(amount) * 100),
         },
         quantity: 1,
       },
@@ -49,7 +55,7 @@ export const createPaymentIntent = async (orderId: string, currency: string) => 
     data: {
       orderId: order.id,
       gatewayPaymentId: session.id,
-      amount: order.totalAmount,
+      amount,
       currency,
       status: "PENDING",
     },
