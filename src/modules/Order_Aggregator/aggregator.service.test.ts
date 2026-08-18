@@ -142,6 +142,9 @@ const mockBatchHandoffData = () => ({
       id: "o1",
       orderNumber: "ORD-1",
       status: "ASSIGNED",
+      deliveryAddress: "42 Buyer Street, Colombo",
+      deliveryLat: 6.91,
+      deliveryLng: 79.86,
       deliveryStop: { id: "delivery-stop-1", status: "PENDING", type: "DELIVERY" },
       items: [
         {
@@ -217,6 +220,8 @@ test("getBatchHandoffBundle loads a field-admin batch without a route", async ()
   assert.equal(payload.route.routeNumber, "BATCH-1");
   assert.equal(payload.route.currentPhase, "PICKUP");
   assert.equal(payload.orders.length, 1);
+  assert.equal(payload.orders[0]?.address, "42 Buyer Street, Colombo");
+  assert.equal(payload.orders[0]?.deliveryAddress, "42 Buyer Street, Colombo");
 
   restoreBatchFind();
 });
@@ -273,6 +278,7 @@ test("runOrderAggregation creates batches only and allocates a truck", async () 
   let capturedBatchCreate: Record<string, unknown> | null = null;
   let capturedOrderUpdate: Record<string, unknown> | null = null;
   let capturedCandidateQuery: Record<string, unknown> | null = null;
+  let capturedTruckUpdate: Record<string, unknown> | null = null;
   let routeCreates = 0;
   let stopCreates = 0;
   let routeUpdates = 0;
@@ -394,6 +400,12 @@ test("runOrderAggregation creates batches only and allocates a truck", async () 
         return { id: "batch-1", batchNumber: "BATCH-1" };
       },
     },
+    truck: {
+      update: async (args: Record<string, unknown>) => {
+        capturedTruckUpdate = args;
+        return { id: "truck-1" };
+      },
+    },
   };
 
   restore(
@@ -433,6 +445,8 @@ test("runOrderAggregation creates batches only and allocates a truck", async () 
     assert.equal(capturedBatchCreate?.truckId, "truck-1");
     assert.equal(capturedBatchCreate?.fieldAdminId, "fa-1");
     assert.equal(capturedBatchCreate?.status, "CLOSED");
+    assert.equal((capturedTruckUpdate?.where as { id?: string })?.id, "truck-1");
+    assert.equal((capturedTruckUpdate?.data as { isAvailable?: boolean })?.isAvailable, false);
     assert.equal((capturedOrderUpdate?.data as { status?: string })?.status, "BATCHED");
     assert.equal((capturedOrderUpdate?.data as { batchId?: string })?.batchId, "batch-1");
     assert.equal((capturedOrderUpdate?.data as { stopId?: string | null })?.stopId, null);
@@ -737,6 +751,9 @@ test("runOrderAggregation splits four clustered orders into two batches", async 
         return { id, batchNumber: `BATCH-${batchCreates}` };
       },
     },
+    truck: {
+      update: async () => ({ id: "truck-1" }),
+    },
   };
 
   restore(
@@ -856,6 +873,9 @@ test("runOrderAggregation includes previously rejected paid orders with the late
         return { id: `batch-${batchCreates}`, batchNumber: `BATCH-${batchCreates}` };
       },
     },
+    truck: {
+      update: async () => ({ id: "truck-1" }),
+    },
   };
 
   restore(
@@ -883,6 +903,184 @@ test("runOrderAggregation includes previously rejected paid orders with the late
     assert.deepEqual(batchedIds, ["o-recent", "o-rejected"]);
     assert.equal(summary.totalCandidatesFetched, 2);
     assert.equal(summary.totalBatchesCreated, 2);
+  } finally {
+    restores.reverse().forEach((fn) => fn());
+  }
+});
+
+const mockAggregationDeps = (restore: <T extends object, K extends keyof T>(obj: T, key: K, mockValue: T[K]) => void) => {
+  restore(prisma.aggregationRun, "create", ((async () => ({ id: "run-cap" })) as unknown) as typeof prisma.aggregationRun.create);
+  restore(prisma.aggregationRun, "update", ((async () => ({})) as unknown) as typeof prisma.aggregationRun.update);
+  restore(
+    prisma.aggregationRunRejection,
+    "createMany",
+    ((async () => ({ count: 0 })) as unknown) as typeof prisma.aggregationRunRejection.createMany
+  );
+  restore(
+    prisma.truck,
+    "findMany",
+    ((async () => [
+      { id: "truck-1", maxWeight: 5000, maxVolume: 1000, maxStops: 40, storageSupport: "BOTH" },
+      { id: "truck-2", maxWeight: 5000, maxVolume: 1000, maxStops: 40, storageSupport: "BOTH" },
+    ]) as unknown) as typeof prisma.truck.findMany
+  );
+  restore(
+    prisma.fieldAdmin,
+    "findMany",
+    ((async () => [{ id: "fa-1" }, { id: "fa-2" }]) as unknown) as typeof prisma.fieldAdmin.findMany
+  );
+  restore(
+    prisma.hub,
+    "findMany",
+    ((async () => [{ id: "hub-1", latitude: 6.9, longitude: 79.85 }]) as unknown) as typeof prisma.hub.findMany
+  );
+  restore(
+    prisma.deliveryZone,
+    "findMany",
+    ((async () => [
+      { id: "zone-1", code: "CMB", minLat: 6.8, maxLat: 7.0, minLng: 79.7, maxLng: 80.0 },
+    ]) as unknown) as typeof prisma.deliveryZone.findMany
+  );
+  restore(prisma.order, "update", ((async () => ({})) as unknown) as typeof prisma.order.update);
+};
+
+const mockTxForOrders = (orders: Array<{ id: string }>) => {
+  let batchCreates = 0;
+  const tx = {
+    order: {
+      findMany: async (args: { where?: { id?: { in?: string[] } } }) => {
+        const ids = new Set(args.where?.id?.in ?? []);
+        return orders.filter((order) => ids.has(order.id));
+      },
+      updateMany: async () => ({ count: 1 }),
+    },
+    batch: {
+      create: async () => {
+        batchCreates += 1;
+        return { id: `batch-${batchCreates}`, batchNumber: `BATCH-${batchCreates}` };
+      },
+    },
+    truck: {
+      update: async () => ({ id: "truck-1" }),
+    },
+  };
+  return tx;
+};
+
+test("runOrderAggregation fetches at most 20 paid orders even when more exist", async () => {
+  const restores: Array<() => void> = [];
+  const restore = <T extends object, K extends keyof T>(obj: T, key: K, mockValue: T[K]) => {
+    restores.push(withMock(obj, key, mockValue));
+  };
+
+  const pool = Array.from({ length: 25 }, (_, index) => ({
+    ...mockEligibleOrder,
+    id: `o${index + 1}`,
+    orderNumber: `ORD-${index + 1}`,
+    placedAt: new Date(Date.UTC(2026, 4, 8, 0, index, 0)),
+  }));
+
+  mockAggregationDeps(restore);
+  restore(
+    prisma.aggregationRunRejection,
+    "findMany",
+    ((async () => []) as unknown) as typeof prisma.aggregationRunRejection.findMany
+  );
+  restore(
+    prisma.order,
+    "findMany",
+    ((async (args: { take?: number }) => {
+      if (args.take === 20) return pool.slice(0, 20);
+      if (args.take && args.take > 20) throw new Error("aggregator requested more than 20 orders");
+      return pool;
+    }) as unknown) as typeof prisma.order.findMany
+  );
+
+  const tx = mockTxForOrders(pool);
+  restore(
+    prisma,
+    "$transaction",
+    ((async (arg: unknown) => {
+      if (typeof arg === "function") {
+        return (arg as (client: typeof tx) => Promise<unknown>)(tx);
+      }
+      return arg;
+    }) as unknown) as typeof prisma.$transaction
+  );
+
+  try {
+    const summary = await runOrderAggregation({
+      windowStart: new Date("2026-05-08T00:00:00.000Z"),
+      windowEnd: new Date("2026-05-08T04:00:00.000Z"),
+      triggerMode: "manual",
+    });
+
+    assert.equal(summary.totalCandidatesFetched, 20);
+    assert.equal(summary.totalOrdersBatched, 20);
+    assert.ok(summary.totalCandidatesFetched <= 20);
+  } finally {
+    restores.reverse().forEach((fn) => fn());
+  }
+});
+
+test("runOrderAggregation does not let leftover rejections push a run past 20 orders", async () => {
+  const restores: Array<() => void> = [];
+  const restore = <T extends object, K extends keyof T>(obj: T, key: K, mockValue: T[K]) => {
+    restores.push(withMock(obj, key, mockValue));
+  };
+
+  const recent = Array.from({ length: 20 }, (_, index) => ({
+    ...mockEligibleOrder,
+    id: `recent-${index + 1}`,
+    orderNumber: `ORD-RECENT-${index + 1}`,
+    placedAt: new Date(Date.UTC(2026, 4, 8, 0, index, 0)),
+  }));
+  const leftover = {
+    ...mockEligibleOrder,
+    id: "leftover-old",
+    orderNumber: "ORD-LEFTOVER",
+    placedAt: new Date("2026-01-01T00:00:00.000Z"),
+  };
+
+  mockAggregationDeps(restore);
+  restore(
+    prisma.aggregationRunRejection,
+    "findMany",
+    ((async () => [{ orderId: leftover.id }]) as unknown) as typeof prisma.aggregationRunRejection.findMany
+  );
+  restore(
+    prisma.order,
+    "findMany",
+    ((async (args: { take?: number; where?: { id?: { in?: string[] } } }) => {
+      if (args.take === 20) return recent;
+      if (args.where?.id?.in?.includes(leftover.id)) return [leftover];
+      return [];
+    }) as unknown) as typeof prisma.order.findMany
+  );
+
+  const tx = mockTxForOrders([...recent, leftover]);
+  restore(
+    prisma,
+    "$transaction",
+    ((async (arg: unknown) => {
+      if (typeof arg === "function") {
+        return (arg as (client: typeof tx) => Promise<unknown>)(tx);
+      }
+      return arg;
+    }) as unknown) as typeof prisma.$transaction
+  );
+
+  try {
+    const summary = await runOrderAggregation({
+      windowStart: new Date("2026-05-08T00:00:00.000Z"),
+      windowEnd: new Date("2026-05-08T04:00:00.000Z"),
+      triggerMode: "manual",
+    });
+
+    const batchedIds = summary.batchesCreated.flatMap((batch) => batch.orderIds);
+    assert.equal(summary.totalCandidatesFetched, 20);
+    assert.equal(summary.totalOrdersBatched, 20);
+    assert.equal(batchedIds.includes("leftover-old"), false);
   } finally {
     restores.reverse().forEach((fn) => fn());
   }

@@ -1,6 +1,21 @@
 import { createNotification } from "./notification.service.js";
 import prisma from "../../config/database.js";
 
+// Returns false only if the user explicitly turned this notification type off.
+// Missing prefs / lookup failures default to "enabled" so nothing silently breaks.
+const isPrefEnabled = async (userId: string, prefKey: string): Promise<boolean> => {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { notificationPrefs: true },
+    });
+    const prefs = (user?.notificationPrefs as Record<string, boolean>) ?? {};
+    return prefs[prefKey] !== false;
+  } catch {
+    return true;
+  }
+};
+
 // ─────────────────────────────────────────────
 // 🛒 BUYER: Notifies the buyer when their order is placed successfully
 // ─────────────────────────────────────────────
@@ -10,6 +25,8 @@ export const notifyBuyerOrderPlaced = async (
   totalAmount: number
 ) => {
   try {
+    if (!(await isPrefEnabled(buyerUserId, "orderUpdates"))) return;
+
     await createNotification({
       userId: buyerUserId,
       title: "🛒 ORDER PLACED — One Step Away!",
@@ -30,7 +47,6 @@ export const notifySellerNewOrder = async (
   itemCount: number
 ) => {
   try {
-    // Look up the seller's userId so we can send them the notification
     const seller = await prisma.seller.findUnique({
       where: { id: sellerId },
       select: { userId: true },
@@ -40,6 +56,8 @@ export const notifySellerNewOrder = async (
       console.error("[notifySellerNewOrder] seller not found:", sellerId);
       return;
     }
+
+    if (!(await isPrefEnabled(seller.userId, "newOrders"))) return;
 
     await createNotification({
       userId: seller.userId,
@@ -71,10 +89,17 @@ export const notifyAdminsBuyerRegistered = async (
       return;
     }
 
-    console.log(`[notifyAdminsBuyerRegistered] notifying ${admins.length} admin(s)`);
+    const enabledFlags = await Promise.all(
+      admins.map((a) => isPrefEnabled(a.id, "vendorApprovals"))
+    );
+    const targets = admins.filter((_, i) => enabledFlags[i]);
+
+    if (targets.length === 0) return;
+
+    console.log(`[notifyAdminsBuyerRegistered] notifying ${targets.length} admin(s)`);
 
     await Promise.allSettled(
-      admins.map((admin) =>
+      targets.map((admin) =>
         createNotification({
           userId: admin.id,
           title: "🆕 New Buyer Registration",
@@ -97,7 +122,6 @@ export const notifyAdminsSellerRegistered = async (
   sellerId: string
 ) => {
   try {
-    // Find all admin users in the database
     const admins = await prisma.user.findMany({
       where: { role: "ADMIN" },
       select: { id: true },
@@ -108,12 +132,17 @@ export const notifyAdminsSellerRegistered = async (
       return;
     }
 
-    console.log(`[notifyAdminsSellerRegistered] notifying ${admins.length} admin(s)`);
+    const enabledFlags = await Promise.all(
+      admins.map((a) => isPrefEnabled(a.id, "vendorApprovals"))
+    );
+    const targets = admins.filter((_, i) => enabledFlags[i]);
 
-    // Send notification to every admin at the same time
-    // allSettled means one failure won't stop the others
+    if (targets.length === 0) return;
+
+    console.log(`[notifyAdminsSellerRegistered] notifying ${targets.length} admin(s)`);
+
     await Promise.allSettled(
-      admins.map((admin) =>
+      targets.map((admin) =>
         createNotification({
           userId: admin.id,
           title: "🆕 New Seller Registration",
@@ -142,8 +171,15 @@ export const notifyAdminsProductSubmitted = async (
     });
     if (admins.length === 0) return;
 
+    const enabledFlags = await Promise.all(
+      admins.map((a) => isPrefEnabled(a.id, "productApprovals"))
+    );
+    const targets = admins.filter((_, i) => enabledFlags[i]);
+
+    if (targets.length === 0) return;
+
     await Promise.allSettled(
-      admins.map((admin) =>
+      targets.map((admin) =>
         createNotification({
           userId: admin.id,
           title: "📦 New Product Pending Approval",
@@ -192,16 +228,18 @@ export const notifySellerLowStock = async (
   lowStockThreshold: number
 ) => {
   try {
+    if (!(await isPrefEnabled(sellerUserId, "lowStock"))) return;
+
     await createNotification({
       userId: sellerUserId,
       title: "⚠️ Low Stock Alert",
       body: `${productName} is running low: ${currentStock} ${unit} remaining. Reorder at ${lowStockThreshold} ${unit}.`,
-      data: { 
-        type: "LOW_STOCK", 
-        productName, 
+      data: {
+        type: "LOW_STOCK",
+        productName,
         currentStock: String(currentStock),
         unit,
-        lowStockThreshold: String(lowStockThreshold)
+        lowStockThreshold: String(lowStockThreshold),
       },
     });
   } catch (err) {
@@ -209,13 +247,57 @@ export const notifySellerLowStock = async (
   }
 };
 
-const SLOT_WINDOW: Record<string, string> = {
-  MORNING: "Morning (6 AM – 12 PM)",
-  AFTERNOON: "Afternoon (12 PM – 6 PM)",
-  EVENING: "Evening (6 PM – 10 PM)",
+// ─────────────────────────────────────────────
+// 🛒 BUYER: Reminds the buyer once per delivery day, covering their whole cart
+// ─────────────────────────────────────────────
+export const notifyBuyerCartReminder = async (
+  buyerUserId: string,
+  itemCount: number
+) => {
+  try {
+    if (!(await isPrefEnabled(buyerUserId, "orderUpdates"))) return;
+
+    await createNotification({
+      userId: buyerUserId,
+      title: "⏰ Your cart is waiting",
+      body: `You still have ${itemCount} item(s) in your cart. Complete checkout before ordering closes for today.`,
+      data: { type: "CART_REMINDER" },
+    });
+  } catch (err) {
+    console.error("[notifyBuyerCartReminder] failed:", err);
+  }
 };
 
-const slotLabel = (slot: string) => SLOT_WINDOW[slot] ?? slot;
+// ─────────────────────────────────────────────
+// 🛒 BUYER: Notifies the buyer when an item is added to cart
+// ─────────────────────────────────────────────
+export const notifyBuyerItemAdded = async (
+  buyerUserId: string,
+  productName: string,
+  quantity: number
+) => {
+  try {
+    if (!(await isPrefEnabled(buyerUserId, "orderUpdates"))) return;
+
+    await createNotification({
+      userId: buyerUserId,
+      title: "🛒 Item added to cart",
+      body: `${productName} (x${quantity}) was added to your cart.`,
+      data: { type: "ITEM_ADDED_TO_CART", productName },
+    });
+  } catch (err) {
+    console.error("[notifyBuyerItemAdded] failed:", err);
+  }
+};
+
+const slotLabel = (slot: string) => {
+  const labels: Record<string, string> = {
+    MORNING: "Morning (6 AM – 12 PM)",
+    AFTERNOON: "Afternoon (12 PM – 6 PM)",
+    EVENING: "Evening (6 PM – 10 PM)",
+  };
+  return labels[slot] ?? slot;
+};
 
 export const notifyBuyerDeliveryDeferred = async (
   buyerUserId: string,
@@ -226,14 +308,9 @@ export const notifyBuyerDeliveryDeferred = async (
   try {
     await createNotification({
       userId: buyerUserId,
-      title: "Delivery moved to a later window today",
-      body: `Order ${orderNumber} could not be batched for ${slotLabel(fromSlot)}. Pickup and delivery will happen in the ${slotLabel(toSlot)} window today.`,
-      data: {
-        type: "DELIVERY_DEFERRED",
-        orderNumber,
-        fromSlot,
-        toSlot,
-      },
+      title: "Delivery window updated",
+      body: `Order ${orderNumber} moved from ${slotLabel(fromSlot)} to ${slotLabel(toSlot)}.`,
+      data: { type: "DELIVERY_DEFERRED", orderNumber, fromSlot, toSlot },
     });
   } catch (err) {
     console.error("[notifyBuyerDeliveryDeferred] failed:", err);
@@ -249,14 +326,9 @@ export const notifySellerPickupDeferred = async (
   try {
     await createNotification({
       userId: sellerUserId,
-      title: "Pickup moved to a later window today",
-      body: `Order ${orderNumber} was not batched for ${slotLabel(fromSlot)}. Please keep items ready for pickup in the ${slotLabel(toSlot)} window today.`,
-      data: {
-        type: "PICKUP_DEFERRED",
-        orderNumber,
-        fromSlot,
-        toSlot,
-      },
+      title: "Pickup window updated",
+      body: `Pickup for ${orderNumber} moved from ${slotLabel(fromSlot)} to ${slotLabel(toSlot)}.`,
+      data: { type: "PICKUP_DEFERRED", orderNumber, fromSlot, toSlot },
     });
   } catch (err) {
     console.error("[notifySellerPickupDeferred] failed:", err);
@@ -271,13 +343,9 @@ export const notifyBuyerOrderBatched = async (
   try {
     await createNotification({
       userId: buyerUserId,
-      title: "Order scheduled for delivery",
-      body: `Order ${orderNumber} has been batched and will be delivered in the ${slotLabel(slot)} window today.`,
-      data: {
-        type: "ORDER_BATCHED",
-        orderNumber,
-        slot,
-      },
+      title: "Order batched for delivery",
+      body: `Order ${orderNumber} is scheduled for ${slotLabel(slot)}.`,
+      data: { type: "ORDER_BATCHED", orderNumber, slot },
     });
   } catch (err) {
     console.error("[notifyBuyerOrderBatched] failed:", err);
@@ -293,12 +361,8 @@ export const notifySellerPickupScheduled = async (
     await createNotification({
       userId: sellerUserId,
       title: "Pickup scheduled",
-      body: `Order ${orderNumber} has been batched. Please have items ready for pickup in the ${slotLabel(slot)} window today.`,
-      data: {
-        type: "PICKUP_SCHEDULED",
-        orderNumber,
-        slot,
-      },
+      body: `Pickup for ${orderNumber} is scheduled for ${slotLabel(slot)}.`,
+      data: { type: "PICKUP_SCHEDULED", orderNumber, slot },
     });
   } catch (err) {
     console.error("[notifySellerPickupScheduled] failed:", err);
@@ -313,13 +377,9 @@ export const notifyBuyerAggregationFailed = async (
   try {
     await createNotification({
       userId: buyerUserId,
-      title: "Order could not be batched today",
-      body: `Order ${orderNumber} could not be included in today's delivery batches. ${reason} Our team will follow up.`,
-      data: {
-        type: "AGGREGATION_FAILED",
-        orderNumber,
-        reason,
-      },
+      title: "Order could not be batched",
+      body: `Order ${orderNumber} could not be added to a delivery batch. ${reason}`,
+      data: { type: "AGGREGATION_FAILED", orderNumber, reason },
     });
   } catch (err) {
     console.error("[notifyBuyerAggregationFailed] failed:", err);
@@ -334,13 +394,9 @@ export const notifySellerAggregationFailed = async (
   try {
     await createNotification({
       userId: sellerUserId,
-      title: "Order pickup delayed",
-      body: `Order ${orderNumber} could not be batched today. ${reason} Keep the items aside until we confirm a new pickup window.`,
-      data: {
-        type: "AGGREGATION_FAILED",
-        orderNumber,
-        reason,
-      },
+      title: "Pickup could not be scheduled",
+      body: `Order ${orderNumber} could not be batched. ${reason}`,
+      data: { type: "AGGREGATION_FAILED", orderNumber, reason },
     });
   } catch (err) {
     console.error("[notifySellerAggregationFailed] failed:", err);

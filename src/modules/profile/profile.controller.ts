@@ -105,28 +105,19 @@ export const updateDeliveryAddressController = async (req: AuthRequest, res: Res
   }
 };
 
-/** Update business name and address — for sellers only. */
+/** Update business name — for sellers only. Address is managed via Saved Addresses. */
 export const updateBusinessInfoController = async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.userId;
     if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
-    const { businessName, businessAddress, city, latitude, longitude } = req.body;
+    const { businessName, city } = req.body;
 
     if (!businessName || !businessName.trim()) {
       return res.status(400).json({ message: "Business name is required" });
     }
-    if (!businessAddress || !businessAddress.trim()) {
-      return res.status(400).json({ message: "Business address is required" });
-    }
 
-    await updateBusinessInfo(userId, {
-      businessName,
-      businessAddress,
-      city,
-      latitude:  latitude  !== undefined ? Number(latitude)  : undefined,
-      longitude: longitude !== undefined ? Number(longitude) : undefined,
-    });
+    await updateBusinessInfo(userId, { businessName, city });
     res.json({ message: "Business info updated" });
   } catch (err: any) {
     res.status(500).json({ message: err.message ?? "Failed to update business info" });
@@ -181,6 +172,14 @@ export const deleteAccountController = async (req: AuthRequest, res: Response) =
   try {
     const userId = req.userId;
     if (!userId) return res.status(401).json({ message: "Unauthorized" });
+
+    // Admins can't self-delete via this endpoint — the platform needs at
+    // least one admin account at all times, and account removal for admins
+    // should go through a separate, more deliberate process if ever needed.
+    if (req.role === "ADMIN" || req.role === "FIELD_ADMIN") {
+      return res.status(403).json({ message: "Admin accounts cannot be deleted from the profile page." });
+    }
+
     await deleteAccount(userId);
     res.json({ message: "Account deleted successfully" });
   } catch (err: any) {

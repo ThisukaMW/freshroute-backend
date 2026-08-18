@@ -24,6 +24,7 @@ import {
   getTaskStops,
   markDeliveryComplete,
   markStopComplete,
+  confirmOrderFulfillment,
   initiateRefund,
   updateTruckCapacity,
 } from "./fieldadmin.service.js";
@@ -579,6 +580,25 @@ export const completeDelivery = async (req: AuthRequest, res: Response) => {
   try {
     const { stopId, notes } = req.body as { stopId: string; notes?: string };
     const data = await markDeliveryComplete(req.fieldAdminId!, { stopId, notes });
+    res.json(data);
+  } catch (error) {
+    fail(res, error, 400);
+  }
+};
+
+export const completeOrderFulfillment = async (req: AuthRequest, res: Response) => {
+  try {
+    const orderId = Array.isArray(req.params.orderId) ? req.params.orderId[0] : req.params.orderId;
+    const { action, notes } = req.body as { action?: "pickup" | "delivery"; notes?: string };
+    if (!orderId) {
+      res.status(400).json({ message: "orderId is required" });
+      return;
+    }
+    if (action !== "pickup" && action !== "delivery") {
+      res.status(400).json({ message: "action must be pickup or delivery" });
+      return;
+    }
+    const data = await confirmOrderFulfillment(req.fieldAdminId!, { orderId, action, notes });
     res.json(data);
   } catch (error) {
     fail(res, error, 400);

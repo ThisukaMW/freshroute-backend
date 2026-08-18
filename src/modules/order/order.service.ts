@@ -81,14 +81,15 @@ export const createOrder = async (input: CreateOrderInput) => {
 
     if (!reservation) {
       // Check if there's a CONFIRMED one from a previous failed order
-      const confirmedReservation = await prisma.stockReservation.findFirst({
-        where: {
-          productId: item.productId,
-          sellerId: item.sellerId,
-          buyerId: input.buyerId,
-          status: "CONFIRMED",
-        },
-      });
+        const confirmedReservation = await prisma.stockReservation.findFirst({
+          where: {
+            productId: item.productId,
+            sellerId: item.sellerId,
+            buyerId: input.buyerId,
+            status: "CONFIRMED",
+          },
+          include: { order: true },
+        });
 
       if (confirmedReservation) {
         throw new Error(
@@ -270,7 +271,7 @@ export const createOrder = async (input: CreateOrderInput) => {
   // ─── NOTIFICATIONS ────────────────────────────────────────────────────────
 
   // Notify buyer their order was placed
-  await notifyBuyerOrderPlaced(buyer.userId, order.orderNumber, totalAmount);
+  //await notifyBuyerOrderPlaced(buyer.userId, order.orderNumber, totalAmount);
 
   // Notify each unique seller they have a new order
   const uniqueSellerIds = [...new Set(input.items.map((i) => i.sellerId))];
@@ -325,11 +326,27 @@ export const getOrderById = async (orderId: string, buyerId: string) => {
       items: {
         include: {
           product: {
-            select: { name: true, unit: true, imageUrl: true },
+            select: {
+              name: true,
+              unit: true,
+              imageUrl: true,
+              seller: {
+                select: {
+                  id: true,
+                  businessName: true,
+                  user: { select: { name: true } },
+                },
+              },
+            },
           },
         },
       },
       payment: true,
+      deliveryStop: {              // ← add this
+        include: {
+          route: { select: { driverId: true } },
+        },
+      },
     },
   });
 
@@ -348,7 +365,17 @@ export const getBuyerOrders = async (buyerId: string) => {
       items: {
         include: {
           product: {
-            select: { name: true, unit: true },
+            select: {
+              name: true,
+              unit: true,
+              seller: {
+                select: {
+                  id: true,
+                  businessName: true,
+                  user: { select: { name: true } },
+                },
+              },
+            },
           },
         },
       },

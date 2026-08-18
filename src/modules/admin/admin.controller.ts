@@ -9,6 +9,7 @@ import {
   getBatchById,
   listFleetOptions,
   assignRouteFleet,
+  initiateRefund,
 } from "./admin.service.js";
 import { approveUser, rejectUser, getPendingUsers } from "../auth/auth.service.js";
 import { sendApprovalEmail, sendRejectionEmail } from "../../utils/mailer.js";
@@ -248,4 +249,25 @@ export const rejectUserController: RequestHandler<{ userId: string }> = async (r
     const status = message.includes("not found") ? 404 : 400;
     res.status(status).json({ message });
   }
+};
+
+export const initiateRefundController: RequestHandler<{id:string}> =
+async (req,res)=>{
+
+    try{
+
+        const refund = await initiateRefund(req.params.id);
+
+        res.json(refund);
+
+    }catch(err){
+
+        res.status(400).json({
+            message: err instanceof Error
+                ? err.message
+                : "Refund failed"
+        });
+
+    }
+
 };

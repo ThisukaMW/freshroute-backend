@@ -25,14 +25,14 @@ import {
   countRouteStops,
   sequenceSellerPickups,
 } from "./aggregator.pickup-stops.js";
-import {
+/*import {
   notifyBuyerAggregationFailed,
   notifyBuyerDeliveryDeferred,
   notifyBuyerOrderBatched,
   notifySellerAggregationFailed,
   notifySellerPickupDeferred,
   notifySellerPickupScheduled,
-} from "../notifications/notification.events.js";
+} from "../notifications/notification.events.js";*/
 import type { DeliveryTimeSlot } from "./aggregator.types.js";
 
 const configDefault = {
@@ -364,13 +364,20 @@ const getRecentCandidates = async (limit = RECENT_CANDIDATE_LIMIT): Promise<Cand
     );
   }
 
+  // Recent paid orders first (already newest-first, max `limit`).
+  // Leftovers from prior rejections fill unused slots only — never more than 20 per run.
   const byId = new Map<string, (typeof recent)[number]>();
-  for (const order of [...previouslyRejected, ...recent]) {
+  for (const order of recent) {
+    byId.set(order.id, order);
+  }
+  for (const order of previouslyRejected) {
+    if (byId.has(order.id)) continue;
+    if (byId.size >= limit) break;
     byId.set(order.id, order);
   }
 
   console.log(
-    `[aggregator] candidates: recent=${recent.length}, previouslyRejected=${previouslyRejected.length}, merged=${byId.size}`
+    `[aggregator] candidates: recent=${recent.length}, previouslyRejected=${previouslyRejected.length}, merged=${byId.size}, cap=${limit}`
   );
   return [...byId.values()].map(mapCandidateOrder);
 };
@@ -475,14 +482,14 @@ const processAggregationRejections = async (
         lastAggregationNoticeAt: now,
       },
     });
-    const targets = notifyTargets.get(item.orderId);
+    /*const targets = notifyTargets.get(item.orderId);
     if (!targets) continue;
     await notifyBuyerDeliveryDeferred(targets.buyerUserId, item.orderNumber, item.fromSlot, item.toSlot);
     await Promise.all(
       targets.sellerUserIds.map((sellerUserId) =>
         notifySellerPickupDeferred(sellerUserId, item.orderNumber, item.fromSlot, item.toSlot)
       )
-    );
+    );*/
   }
 
   for (const item of classified.terminal) {
@@ -493,14 +500,14 @@ const processAggregationRejections = async (
         lastAggregationNoticeAt: now,
       },
     });
-    const targets = notifyTargets.get(item.orderId);
+    /*const targets = notifyTargets.get(item.orderId);
     if (!targets) continue;
     await notifyBuyerAggregationFailed(targets.buyerUserId, item.orderNumber, item.reason);
     await Promise.all(
       targets.sellerUserIds.map((sellerUserId) =>
         notifySellerAggregationFailed(sellerUserId, item.orderNumber, item.reason)
       )
-    );
+    );*/
   }
 
   return {
@@ -528,7 +535,7 @@ const notifyCatchupBatchedOrders = async (
   });
   if (deferredOrders.length === 0) return;
 
-  const targets = await loadOrderNotifyTargets(deferredOrders.map((order) => order.id));
+ /* const targets = await loadOrderNotifyTargets(deferredOrders.map((order) => order.id));
   for (const order of deferredOrders) {
     const slot = order.deliveryTimeSlot ?? slotByOrderId.get(order.id) ?? "AFTERNOON";
     const notify = targets.get(order.id);
@@ -539,7 +546,7 @@ const notifyCatchupBatchedOrders = async (
         notifySellerPickupScheduled(sellerUserId, order.orderNumber, slot)
       )
     );
-  }
+  }*/
 };
 
 //persist the geo assignments of orders.
@@ -678,6 +685,16 @@ const createBatchesOnly = async (
             batchId: batch.id,
             status: "BATCHED",
             stopId: null,
+          },
+        });
+
+        await tx.truck.update({
+          where: { id: selectedTruck.id },
+          data: {
+            isAvailable: false,
+            currentLoadWeight: slice.totalWeight,
+            currentLoadVolume: slice.totalVolume,
+            currentLoadStops: slice.orders.length,
           },
         });
 
@@ -1067,14 +1084,18 @@ export const getBatchHandoffBundle = async (
     const sellerPickupsForOrderComplete =
       sellerStopsForOrder.length === 0 ||
       sellerStopsForOrder.every((stop) => stop.status === "COMPLETED");
-    const pickupComplete = sellerPickupsForOrderComplete && itemsInspected;
     const deliveryComplete = order.deliveryStop?.status === "COMPLETED" || order.status === "DELIVERED";
-    const eligibleForDelivery = pickupComplete && hubComplete && !deliveryComplete;
+    const hasRouteStops = allStops.length > 0;
+    const pickupComplete = hasRouteStops
+      ? sellerPickupsForOrderComplete && itemsInspected
+      : order.status === "IN_TRANSIT" || deliveryComplete;
+    const hubCompleteForOrder = hasRouteStops ? hubComplete : pickupComplete;
+    const eligibleForDelivery = pickupComplete && hubCompleteForOrder && !deliveryComplete;
 
     let currentPhase: "PICKUP" | "DROPOFF" | "COMPLETED" = "PICKUP";
     if (deliveryComplete) {
       currentPhase = "COMPLETED";
-    } else if (pickupComplete && hubComplete) {
+    } else if (hasRouteStops ? pickupComplete && hubComplete : order.status === "IN_TRANSIT") {
       currentPhase = "DROPOFF";
     }
 
@@ -1138,6 +1159,15 @@ export const getBatchHandoffBundle = async (
           ? null
           : "Inspect all order products before hub pickup confirmation",
       };
+    } else if (!hasRouteStops && currentPhase === "PICKUP") {
+      pickupNextAction = {
+        stopId: order.id,
+        stopKind: "SELLER_PICKUP",
+        canComplete: itemsInspected,
+        blockedReason: itemsInspected
+          ? null
+          : "Inspect all order products before pickup confirmation",
+      };
     }
 
     return {
@@ -1145,6 +1175,9 @@ export const getBatchHandoffBundle = async (
       orderNumber: order.orderNumber,
       status: order.status,
       customer: order.buyer?.user?.name ?? null,
+      address: order.deliveryAddress ?? null,
+      deliveryAddress: order.deliveryAddress ?? null,
+      coords: { latitude: order.deliveryLat, longitude: order.deliveryLng },
       currentPhase,
       deliveryStopId: order.deliveryStop?.id ?? deliveryStop?.id ?? null,
       sellerPickupStopIds,
@@ -1183,10 +1216,20 @@ export const getBatchHandoffBundle = async (
                     ? "Complete seller pickups and inspections first"
                     : "Order not ready for delivery",
           }
-        : null,
+        : currentPhase === "DROPOFF"
+          ? {
+              id: order.id,
+              type: "DELIVERY" as const,
+              address: order.deliveryAddress ?? null,
+              latitude: order.deliveryLat ?? null,
+              longitude: order.deliveryLng ?? null,
+              canComplete: true,
+              blockedReason: null,
+            }
+          : null,
       fulfillment: {
         pickupComplete,
-        hubComplete,
+        hubComplete: hubCompleteForOrder,
         deliveryComplete,
         eligibleForDelivery,
       },
