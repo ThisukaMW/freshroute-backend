@@ -307,7 +307,14 @@ test("markStopComplete blocks delivery before hub pickup is completed", async ()
           itemsSummary: null,
           notes: null,
           order: { id: "o1" },
-          route: { id: "route-1", batchId: "batch-1", status: "IN_PROGRESS", truckId: null, driverId: null },
+          route: {
+            id: "route-1",
+            batchId: "batch-1",
+            status: "IN_PROGRESS",
+            truckId: null,
+            driverId: null,
+            batch: { truckId: null },
+          },
         };
       }
       if (args?.where?.sellerId === null) {

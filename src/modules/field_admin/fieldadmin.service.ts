@@ -82,7 +82,9 @@ const recalculateTruckLiveLoad = async (
   const activeOrders = await tx.order.findMany({
     where: {
       status: { in: ACTIVE_LOAD_STATUSES },
-      batch: { routes: { some: { truckId } } },
+      batch: {
+        OR: [{ truckId }, { routes: { some: { truckId } } }],
+      },
     },
     select: { totalWeight: true, totalVolume: true },
   });
@@ -760,7 +762,16 @@ export const markStopComplete = async (
     where: { id: payload.stopId, route: { fieldAdminId } },
     include: {
       order: true,
-      route: { select: { id: true, batchId: true, status: true, truckId: true, driverId: true } },
+      route: {
+        select: {
+          id: true,
+          batchId: true,
+          status: true,
+          truckId: true,
+          driverId: true,
+          batch: { select: { truckId: true } },
+        },
+      },
     },
   });
 
@@ -866,8 +877,9 @@ export const markStopComplete = async (
       });
     }
 
-    if (stop.route.truckId) {
-      await recalculateTruckLiveLoad(tx, stop.route.truckId);
+    const allocatedTruckId = stop.route.truckId ?? stop.route.batch.truckId ?? null;
+    if (allocatedTruckId) {
+      await recalculateTruckLiveLoad(tx, allocatedTruckId);
     }
 
     const remainingDeliveries = await tx.stop.count({
@@ -884,8 +896,8 @@ export const markStopComplete = async (
         data: { status: "COMPLETED", actualEnd: new Date() },
       });
 
-      if (stop.route.truckId) {
-        await recalculateTruckLiveLoad(tx, stop.route.truckId);
+      if (allocatedTruckId) {
+        await recalculateTruckLiveLoad(tx, allocatedTruckId);
       }
       if (stop.route.driverId) {
         await tx.driver.update({

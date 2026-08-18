@@ -14,6 +14,7 @@ import {
   getPendingUsersController,
   approveUserController,
   rejectUserController,
+  initiateRefundController,
 } from "./admin.controller.js";
 import { getUsers } from "../user/user.controller.js";
 
@@ -51,5 +52,11 @@ router.patch("/routes/:routeId/fleet", assignRouteFleetController);
 router.get("/refunds", authorize("ADMIN"), listRefundsController);
 router.get("/refunds/:id", authorize("ADMIN"), getRefundDetailController);
 router.patch("/refunds/:id", authorize("ADMIN"), updateRefundController);
+
+router.post(
+    "/refunds/:id/initiate",
+    authorize("ADMIN"),
+    initiateRefundController
+);
 
 export default router;

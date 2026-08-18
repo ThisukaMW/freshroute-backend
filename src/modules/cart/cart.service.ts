@@ -52,7 +52,7 @@ export const resetStaleConfirmedReservations = async (buyerId: string) => {
   const pendingOrders = await prisma.order.findMany({
     where: {
       buyerId,
-      status: "PENDING",
+      status: { in: ["PENDING", "PAYMENT_PENDING"] },
     },
   });
 
