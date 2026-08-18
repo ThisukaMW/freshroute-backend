@@ -1,5 +1,7 @@
-// This file connects our app to the PostgreSQL database using Prisma.
-// It creates one shared database connection that all parts of the app can use.
+// Shared Neon connection used by request handlers.
+// Use the generated client.js entry + a simple PrismaPg adapter.
+// Extra pool/socket options (keepAlive, Happy Eyeballs disable) hang
+// indefinitely against this Neon pooler from the long-lived API process.
 
 import net from "node:net";
 import dns from "node:dns";
@@ -29,8 +31,7 @@ const adapter = new PrismaPg({
   connectionTimeoutMillis: 30000,
 }) as any;
 
-// Create the Prisma client (our tool to talk to the database) with the connection above
-const prisma = new PrismaClient({ adapter });
+const prisma = createPrismaClient();
 
 export default prisma;
 export type { PrismaClient };
