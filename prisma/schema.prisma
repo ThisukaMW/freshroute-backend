@@ -367,6 +367,8 @@ model Product {
   category    String
   price       Float
   unit        String          // kg, piece, liter, etc.
+  unitWeight  Float           @default(0) // physical weight per unit (kg), used for order batching
+  unitVolume  Float           @default(0) // physical volume per unit, used for order batching
   stock       Float
   imageUrl    String?
   lowStock    Int      @default(10)
