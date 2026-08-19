@@ -131,6 +131,7 @@ export const createProduct = async (
       name: data.name.trim(),
       price: data.price,
       stock: data.stock,
+      imageUrl: data.imageUrl ?? null,
     },
   });
 
@@ -171,7 +172,7 @@ export const getSellerProducts = async (userId: string) => {
     lowStockThreshold: sp.product.lowStock,
     aggregateStock: sp.product.stock,
     status: sp.product.status,
-    imageUrl: sp.product.imageUrl,
+    imageUrl: sp.imageUrl ?? sp.product.imageUrl,
   }));
 };
 
@@ -276,39 +277,8 @@ export const updateProduct = async (
     throw new Error("Product not found in your inventory");
   }
 
-  // 1️⃣ Update Product entry - ONLY imageUrl can be changed
-  // Build update object with only provided fields
-  const productUpdateData: any = {};
-  if (data.imageUrl !== undefined) {
-    productUpdateData.imageUrl = data.imageUrl;
-  }
-
-  let updatedProduct = product;
-  if (Object.keys(productUpdateData).length > 0) {
-    updatedProduct = await prisma.product.update({
-      where: { id: productId },
-      data: productUpdateData,
-      include: {
-        seller: {
-          include: {
-            user: { select: { name: true, email: true } },
-          },
-        },
-        sellerProducts: {
-          include: {
-            seller: {
-              include: {
-                user: { select: { name: true } },
-              },
-            },
-          },
-        },
-      },
-    });
-  }
-
-  // 2️⃣ Update SellerProduct entry - price, stock, and name are editable
-  // Build update object with only provided fields
+  // Update SellerProduct entry - price, stock, name, and imageUrl are
+  // editable, and only affect THIS seller's own listing.
   const sellerProductUpdateData: any = {};
   if (data.price !== undefined) {
     sellerProductUpdateData.price = data.price;
@@ -318,6 +288,9 @@ export const updateProduct = async (
   }
   if (data.name !== undefined) {
     sellerProductUpdateData.name = data.name;
+  }
+  if (data.imageUrl !== undefined) {
+    sellerProductUpdateData.imageUrl = data.imageUrl;
   }
 
   let updatedSellerProduct = sellerProduct;
@@ -437,7 +410,7 @@ export const getApprovedProducts = async () => {
       stock: totalStock, // ✅ Total stock (for reference)
       availableStock: availableStock, // ✅ NEW: Available = Total - Reserved
       reservedQuantity: reservedQuantity, // ✅ NEW: How much is reserved
-      imageUrl: product.imageUrl,
+      imageUrl: product.imageUrl ?? product.sellerProducts.find((sp) => sp.imageUrl)?.imageUrl ?? null,
       status: product.status,
       seller: product.seller,
       sellerCount: product.sellerProducts.length,
@@ -483,6 +456,11 @@ export const getProductById = async (productId: string) => {
   return {
     ...product,
     stock: totalStock, // ✅ Override with live calculated value
+    // Same fallback as getApprovedProducts — if the catalog entry itself has
+    // no image, reuse whichever seller's listing happens to have one, so
+    // both the browse page and this "select a seller" page show the same
+    // picture for a given product instead of one being blank.
+    imageUrl: product.imageUrl ?? product.sellerProducts.find((sp) => sp.imageUrl)?.imageUrl ?? null,
   };
 };
 
@@ -522,6 +500,9 @@ export const getAllProducts = async (role: string) => {
     ratings: {
       select: { rating: true },
     },
+    sellerProducts: {
+      select: { imageUrl: true },
+    },
   };
 
   const products =
@@ -546,7 +527,14 @@ export const getAllProducts = async (role: string) => {
         ) / 10
       : 0;
 
-    const { ratings, ...rest } = p;
-    return { ...rest, averageRating, totalRatings };
+    const { ratings, sellerProducts, ...rest } = p;
+    return {
+      ...rest,
+      averageRating,
+      totalRatings,
+      // Fall back to any seller's uploaded image if the catalog entry
+      // itself has none, so the buyer browse page is never blank.
+      imageUrl: p.imageUrl ?? sellerProducts.find((sp) => sp.imageUrl)?.imageUrl ?? null,
+    };
   });
 };

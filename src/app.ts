@@ -2,6 +2,7 @@ import "dotenv/config";
 
 import express from "express";
 import cors from "cors";
+import multer from "multer";
 import path from "path";
 import dotenv from "dotenv";
 import authRoutes from "./modules/auth/auth.routes.js";
@@ -33,11 +34,17 @@ const app = express();
 
 const isProduction = process.env.NODE_ENV === "production";
 
+// CORS_ORIGINS is a comma-separated list — the `cors` package only accepts a
+// string as a single literal origin, so it must be split into an array or
+// none of the listed origins actually get allowed.
+const allowedOrigins = (process.env.CORS_ORIGINS ?? process.env.CLIENT_URL ?? "")
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
 app.use(
   cors({
-    origin: isProduction
-      ? (process.env.CORS_ORIGINS ?? process.env.CLIENT_URL ?? false)
-      : true,
+    origin: isProduction ? (allowedOrigins.length > 0 ? allowedOrigins : false) : true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
   })
@@ -79,5 +86,24 @@ app.use("/api/v1/trucks", truckRoutes);
 //app.use("/api/v1/ratings", ratingRouter);
 app.use("/api/v1/analytics", analyticsRouter);
 app.use("/api/v1/system", systemRoutes);
+
+// Global error handler — without this, thrown errors (e.g. multer's
+// fileFilter rejecting a bad upload) fall through to Express's default
+// HTML error page, which has no JSON `message` field for the frontend
+// to read, so every failure looked like a generic "Something went wrong."
+app.use(
+  (err: any, _req: express.Request, res: express.Response, next: express.NextFunction) => {
+    if (res.headersSent) return next(err);
+
+    if (err instanceof multer.MulterError) {
+      return res.status(400).json({ message: err.message });
+    }
+    if (err) {
+      console.error("[unhandled error]", err);
+      return res.status(err.statusCode || 500).json({ message: err.message || "Something went wrong" });
+    }
+    next();
+  }
+);
 
 export default app;

@@ -15,15 +15,18 @@ export function getStripe(): Stripe {
   return stripeInstance;
 }
 
-export type PaymentCurrency = "usd" | "lkr";
+// This business only operates in Sri Lanka — every payment is charged in
+// LKR. Fixed as a constant (rather than accepted from the client) so a
+// frontend bug can never cause a customer to be charged in the wrong
+// currency again.
+const PAYMENT_CURRENCY = "lkr";
 
 export interface CreatePaymentInput {
   orderId: string;
-  currency: PaymentCurrency;
   userId: string;
 }
 
-export const createPaymentIntent = async (orderId: string, currency: string) => {
+export const createPaymentIntent = async (orderId: string) => {
   const order = await prisma.order.findUnique({ where: { id: orderId } });
   if (!order) throw new Error("Order not found");
 
@@ -32,7 +35,7 @@ export const createPaymentIntent = async (orderId: string, currency: string) => 
     line_items: [
       {
         price_data: {
-          currency,
+          currency: PAYMENT_CURRENCY,
           product_data: { name: `FreshRoute Order ${order.orderNumber}` },
           unit_amount: Math.round(Number(order.totalAmount) * 100),
         },
@@ -50,7 +53,7 @@ export const createPaymentIntent = async (orderId: string, currency: string) => 
       orderId: order.id,
       gatewayPaymentId: session.id,
       amount: order.totalAmount,
-      currency,
+      currency: PAYMENT_CURRENCY,
       status: "PENDING",
     },
   });
