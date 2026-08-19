@@ -149,18 +149,10 @@ export const createOrder = async (input: CreateOrderInput) => {
       quantity: item.quantity,
       unitPrice,
       totalPrice,
-      itemWeight: (product.unitWeight ?? 0) * item.quantity,
-      itemVolume: (product.unitVolume ?? 0) * item.quantity,
     };
   });
 
   const subtotal = orderItems.reduce((sum, i) => sum + i.totalPrice, 0);
-  const totalWeight = parseFloat(
-    orderItems.reduce((sum, i) => sum + i.itemWeight, 0).toFixed(2)
-  );
-  const totalVolume = parseFloat(
-    orderItems.reduce((sum, i) => sum + i.itemVolume, 0).toFixed(2)
-  );
 
   // Match the exact tax/discount formula shown to the buyer at checkout
   // (getCartWithTotals in cart.service.ts) — otherwise the order total (and
@@ -182,25 +174,19 @@ export const createOrder = async (input: CreateOrderInput) => {
     .padStart(3, "0")}`;
 
   // Create order
-  const itemsForCreate = orderItems.map(
-    ({ itemWeight, itemVolume, ...item }) => item
-  );
-
   const order = await prisma.order.create({
     data: {
       buyerId: input.buyerId,
       orderNumber,
       status: "PENDING",
       totalAmount,
-      totalWeight,
-      totalVolume,
       deliveryAddress: input.deliveryAddress,
       deliveryLat: input.deliveryLat,
       deliveryLng: input.deliveryLng,
       deliveryTimeSlot: input.deliveryTimeSlot,
       specialInstructions: input.specialInstructions,
       items: {
-        create: itemsForCreate,
+        create: orderItems,
       },
     },
     include: {
