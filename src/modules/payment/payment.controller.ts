@@ -4,34 +4,17 @@ import prisma from "../../config/database.js";
 import {
   createPaymentIntent,
   handleWebhookEvent,
-  type CreatePaymentInput,
-  type PaymentCurrency,
 } from "./payment.service.js";
-
-const VALID_CURRENCIES: PaymentCurrency[] = ["usd", "lkr"];
 
 export const createPayment: RequestHandler = async (req, res) => {
   const authReq = req as AuthRequest;
 
   try {
-    const { orderId, currency } = authReq.body;
+    const { orderId } = authReq.body;
 
-    const requiredFields: (keyof CreatePaymentInput)[] = ["orderId", "currency"];
-
-    const missing = requiredFields.filter(
-      (f) => authReq.body[f] === undefined || authReq.body[f] === ""
-    );
-
-    if (missing.length > 0) {
+    if (!orderId) {
       res.status(400).json({
-        message: `Missing required fields: ${missing.join(", ")}`,
-      });
-      return;
-    }
-
-    if (!VALID_CURRENCIES.includes(currency)) {
-      res.status(400).json({
-        message: `Invalid currency. Must be one of: ${VALID_CURRENCIES.join(", ")}`,
+        message: "Missing required field: orderId",
       });
       return;
     }
@@ -56,7 +39,7 @@ export const createPayment: RequestHandler = async (req, res) => {
       return;
     }
 
-    const data = await createPaymentIntent(orderId, currency);
+    const data = await createPaymentIntent(orderId);
     res.status(201).json(data);
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Error";

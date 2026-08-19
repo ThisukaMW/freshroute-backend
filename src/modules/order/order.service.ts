@@ -152,9 +152,21 @@ export const createOrder = async (input: CreateOrderInput) => {
     };
   });
 
-  const totalAmount = parseFloat(
-    orderItems.reduce((sum, i) => sum + i.totalPrice, 0).toFixed(2)
-  );
+  const subtotal = orderItems.reduce((sum, i) => sum + i.totalPrice, 0);
+
+  // Match the exact tax/discount formula shown to the buyer at checkout
+  // (getCartWithTotals in cart.service.ts) — otherwise the order total (and
+  // therefore what Stripe actually charges) silently drops the tax and any
+  // applied promo code discount that the buyer saw on screen.
+  const tax = subtotal * 0.1;
+
+  const cart = await prisma.cart.findUnique({
+    where: { buyerId: input.buyerId },
+    include: { promoCode: true },
+  });
+  const discount = cart?.promoCode ? subtotal * (cart.promoCode.discount / 100) : 0;
+
+  const totalAmount = parseFloat((subtotal + tax - discount).toFixed(2));
 
   // Generate unique order number
   const orderNumber = `ORD-${Date.now()}-${Math.floor(Math.random() * 1000)

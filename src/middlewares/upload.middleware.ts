@@ -23,13 +23,15 @@ const fileFilter = (
   file: Express.Multer.File,
   cb: multer.FileFilterCallback
 ) => {
-  const allowed = /jpeg|jpg|png|pdf/
+  const allowed = /jpeg|jpg|png|webp|gif|pdf/
   const ext = allowed.test(path.extname(file.originalname).toLowerCase())
   const mime = allowed.test(file.mimetype)
   if (ext && mime) {
     cb(null, true)
   } else {
-    cb(new Error('Only images (jpg, png) and PDFs are allowed'))
+    const err: any = new Error('Only images (jpg, png, webp, gif) and PDFs are allowed')
+    err.statusCode = 400
+    cb(err)
   }
 }
 

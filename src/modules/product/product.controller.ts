@@ -175,7 +175,7 @@ export const editProductController = async (
         sellerStock: updateResult.sellerProduct.stock,
         aggregateStock: updateResult.product.stock,
         status: updateResult.product.status,
-        imageUrl: updateResult.product.imageUrl,
+        imageUrl: updateResult.sellerProduct.imageUrl ?? updateResult.product.imageUrl,
       },
     });
   } catch (error: any) {

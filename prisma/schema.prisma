@@ -396,9 +396,10 @@ model SellerProduct {
   productId String
   sellerId  String
 
-  name  String   
-  price Float
-  stock Float
+  name     String
+  price    Float
+  stock    Float
+  imageUrl String?
 
   product Product @relation(fields: [productId], references: [id])
   seller  Seller  @relation(fields: [sellerId], references: [id])
@@ -707,7 +708,7 @@ model Payment {
   order            Order          @relation(fields: [orderId], references: [id])
 
   amount           Float
-  currency         String         @default("USD")
+  currency         String         @default("lkr")
   status           PaymentStatus  @default(PENDING)
 
   gatewayPaymentId String?        @unique  // Stripe/Razorpay payment ID
