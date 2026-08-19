@@ -8,6 +8,7 @@ import {
   getSellerOrders,
   getSellerOrderById,
   getSellerStats,
+  getOrderTracking,
 } from "./order.service.js";
 import prisma from "../../config/database.js";
 
@@ -322,5 +323,45 @@ export const getSellerStatsController = async (
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Error";
     res.status(500).json({ success: false, message });
+  }
+};
+
+// GET /api/v1/orders/:id/tracking
+// Buyer who placed the order, or a seller with items in it, can call this.
+export const orderTrackingController = async (
+  req: AuthRequestWithParams<{ id: string }>,
+  res: Response
+) => {
+  try {
+    if (!req.userId) {
+      res.status(401).json({ message: "Unauthorized" });
+      return;
+    }
+
+    const [buyer, seller] = await Promise.all([
+      prisma.buyer.findUnique({ where: { userId: req.userId } }),
+      prisma.seller.findUnique({ where: { userId: req.userId } }),
+    ]);
+
+    if (!buyer && !seller) {
+      res.status(403).json({ message: "Only buyers or sellers can track orders" });
+      return;
+    }
+
+    const tracking = await getOrderTracking(req.params.id, {
+      buyerId: buyer?.id,
+      sellerId: seller?.id,
+    });
+    res.json(tracking);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Error";
+
+    const status = message.includes("not found")
+      ? 404
+      : message.includes("Forbidden")
+      ? 403
+      : 500;
+
+    res.status(status).json({ message });
   }
 };

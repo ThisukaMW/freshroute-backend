@@ -9,6 +9,7 @@ import {
   getSellerOrdersController,
   getSellerOrderByIdController,
   getSellerStatsController,
+  orderTrackingController,
 } from "./order.controller.js";
 
 const router = Router();
@@ -33,6 +34,9 @@ router.get("/seller/list", getSellerOrdersController);
 
 // GET /api/v1/orders/seller/stats (seller stats)
 router.get("/seller/stats", getSellerStatsController);
+
+// GET /api/v1/orders/:id/tracking (live driver location — buyer or seller on the order)
+router.get("/:id/tracking", orderTrackingController);
 
 // GET /api/v1/orders/:id (buyer's specific order)
 router.get("/:id", orderById);
