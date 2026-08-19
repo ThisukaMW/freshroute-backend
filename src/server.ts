@@ -35,14 +35,21 @@ const socketPingTimeoutMs = 20_000;
 
 const httpServer = createServer(app);
 
+// CORS_ORIGINS is a comma-separated list — same fix as app.ts's Express cors()
+// middleware. This was already split correctly below in allowRequest, but the
+// cors.origin option here still passed the raw string through, so it never
+// actually allowed any configured origin.
+const allowedOrigins = (process.env.CORS_ORIGINS ?? process.env.CLIENT_URL ?? "")
+  .split(",")
+  .map((value) => value.trim())
+  .filter(Boolean);
+
 const io = new Server(httpServer, {
   allowEIO3: false,
   pingInterval: socketPingIntervalMs,
   pingTimeout: socketPingTimeoutMs,
   cors: {
-    origin: isProduction
-      ? (process.env.CORS_ORIGINS ?? process.env.CLIENT_URL ?? false)
-      : true,
+    origin: isProduction ? (allowedOrigins.length > 0 ? allowedOrigins : false) : true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
   },
@@ -53,13 +60,6 @@ const io = new Server(httpServer, {
     }
 
     const origin = req.headers.origin ?? "none";
-    const allowedOrigins = (
-      process.env.CORS_ORIGINS ?? process.env.CLIENT_URL ?? ""
-    )
-      .split(",")
-      .map((value) => value.trim())
-      .filter(Boolean);
-
     const isAllowed = !req.headers.origin || allowedOrigins.includes(origin);
     if (!isAllowed) {
       console.error(
