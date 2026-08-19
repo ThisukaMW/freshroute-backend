@@ -211,7 +211,7 @@ const buildNodesForBatch = async (
 
       for (const [sellerId, quantity] of quantitiesBySeller.entries()) {
         const seller = sellerById.get(sellerId);
-        if (!seller) continue;
+        if (!seller || seller.latitude == null || seller.longitude == null) continue;
 
         nodes.push({
           nodeId: `pickup:${order.id}:${sellerId}`,

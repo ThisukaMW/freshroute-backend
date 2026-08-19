@@ -31,12 +31,11 @@
     "skipLibCheck": true
   },
   "include": [
-    "src/**/*",
-    "prisma/**/*",
-    "test/**/*"
+    "src/**/*"
   ],
   "exclude": [
     "node_modules",
-    "dist"
+    "dist",
+    "**/*.test.ts"
   ]
 }
