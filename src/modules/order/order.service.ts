@@ -149,10 +149,18 @@ export const createOrder = async (input: CreateOrderInput) => {
       quantity: item.quantity,
       unitPrice,
       totalPrice,
+      itemWeight: (product.unitWeight ?? 0) * item.quantity,
+      itemVolume: (product.unitVolume ?? 0) * item.quantity,
     };
   });
 
   const subtotal = orderItems.reduce((sum, i) => sum + i.totalPrice, 0);
+  const totalWeight = parseFloat(
+    orderItems.reduce((sum, i) => sum + i.itemWeight, 0).toFixed(2)
+  );
+  const totalVolume = parseFloat(
+    orderItems.reduce((sum, i) => sum + i.itemVolume, 0).toFixed(2)
+  );
 
   // Match the exact tax/discount formula shown to the buyer at checkout
   // (getCartWithTotals in cart.service.ts) — otherwise the order total (and
@@ -174,19 +182,25 @@ export const createOrder = async (input: CreateOrderInput) => {
     .padStart(3, "0")}`;
 
   // Create order
+  const itemsForCreate = orderItems.map(
+    ({ itemWeight, itemVolume, ...item }) => item
+  );
+
   const order = await prisma.order.create({
     data: {
       buyerId: input.buyerId,
       orderNumber,
       status: "PENDING",
       totalAmount,
+      totalWeight,
+      totalVolume,
       deliveryAddress: input.deliveryAddress,
       deliveryLat: input.deliveryLat,
       deliveryLng: input.deliveryLng,
       deliveryTimeSlot: input.deliveryTimeSlot,
       specialInstructions: input.specialInstructions,
       items: {
-        create: orderItems,
+        create: itemsForCreate,
       },
     },
     include: {
@@ -331,6 +345,79 @@ export const getBuyerAddresses = async (buyerId: string) => {
 };
 
 // GET /api/v1/orders/:id
+// GET /api/v1/orders/:id/tracking
+// Available to either the buyer who placed the order or a seller with items
+// in it. Only returns a live driver position once the order is actually
+// IN_TRANSIT — before that there's no driver en route yet, so the frontend
+// should just show the normal status timeline instead of a map.
+export const getOrderTracking = async (
+  orderId: string,
+  requester: { buyerId?: string; sellerId?: string }
+) => {
+  const order = await prisma.order.findUnique({
+    where: { id: orderId },
+    include: {
+      items: { select: { sellerId: true } },
+      deliveryStop: {
+        include: {
+          route: {
+            include: {
+              driver: {
+                select: {
+                  id: true,
+                  currentLat: true,
+                  currentLng: true,
+                  lastLocationUpdate: true,
+                  vehicleNumber: true,
+                  vehicleType: true,
+                  user: { select: { name: true, phone: true } },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+
+  if (!order) throw new Error("Order not found");
+
+  const isOwningBuyer = requester.buyerId && order.buyerId === requester.buyerId;
+  const isInvolvedSeller =
+    requester.sellerId && order.items.some((item) => item.sellerId === requester.sellerId);
+  if (!isOwningBuyer && !isInvolvedSeller) throw new Error("Forbidden");
+
+  if (order.status !== "IN_TRANSIT") {
+    return { available: false as const, status: order.status };
+  }
+
+  const driver = order.deliveryStop?.route?.driver;
+  if (!driver || driver.currentLat == null || driver.currentLng == null) {
+    return { available: false as const, status: order.status };
+  }
+
+  return {
+    available: true as const,
+    status: order.status,
+    driver: {
+      name: driver.user.name,
+      phone: driver.user.phone,
+      vehicleNumber: driver.vehicleNumber,
+      vehicleType: driver.vehicleType,
+    },
+    driverLocation: {
+      latitude: driver.currentLat,
+      longitude: driver.currentLng,
+      updatedAt: driver.lastLocationUpdate,
+    },
+    destination: {
+      latitude: order.deliveryLat,
+      longitude: order.deliveryLng,
+      address: order.deliveryAddress,
+    },
+  };
+};
+
 export const getOrderById = async (orderId: string, buyerId: string) => {
   const order = await prisma.order.findUnique({
     where: { id: orderId },
