@@ -34,7 +34,7 @@ export const addProduct = async (req: AuthRequest, res: Response) => {
       });
     }
 
-    const { name, description, category, price, unit, stock, productType } = req.body;
+    const { name, description, category, price, unit, unitWeight, unitVolume, stock, productType } = req.body;
     const imageUrl = typeof req.body.imageUrl === "string" ? req.body.imageUrl.trim() : undefined;
 
     // files (images)
@@ -46,7 +46,16 @@ export const addProduct = async (req: AuthRequest, res: Response) => {
     const pricingMode = req.body.pricingMode;
     const taxPercent = Number(req.body.taxPercent || 0);
 
-    if (!name || !category || price == null || !unit || stock == null || !productType) {
+    if (
+      !name ||
+      !category ||
+      price == null ||
+      !unit ||
+      unitWeight == null ||
+      unitVolume == null ||
+      stock == null ||
+      !productType
+    ) {
       return res.status(400).json({
         message: "Missing required fields",
       });
@@ -59,6 +68,8 @@ export const addProduct = async (req: AuthRequest, res: Response) => {
       category: category.trim(),
       price: Number(price),
       unit: unit.trim(),
+      unitWeight: Number(unitWeight),
+      unitVolume: Number(unitVolume),
       stock: Number(stock),
       imageUrl: imageUrls?.[0] ?? (imageUrl !== undefined ? imageUrl || null : null),
     };
@@ -148,6 +159,14 @@ export const editProductController = async (
 
     if (req.body.stock !== undefined) {
       updateBody.stock = Number(req.body.stock);
+    }
+
+    if (req.body.unitWeight !== undefined) {
+      updateBody.unitWeight = Number(req.body.unitWeight);
+    }
+
+    if (req.body.unitVolume !== undefined) {
+      updateBody.unitVolume = Number(req.body.unitVolume);
     }
 
     if (files.length > 0) {

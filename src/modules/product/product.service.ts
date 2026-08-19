@@ -15,6 +15,8 @@ export type CreateProductInput = {
   category: string;
   price: number;
   unit: string;
+  unitWeight: number;   // physical weight per unit (kg), used for order batching
+  unitVolume: number;   // physical volume per unit, used for order batching
   stock: number;
   imageUrl?: string | null;
 };
@@ -25,6 +27,8 @@ export type UpdateProductInput = {
   category?: string;
   price?: number;
   unit?: string;
+  unitWeight?: number;   // physical weight per unit (kg) — lives on catalog Product
+  unitVolume?: number;   // physical volume per unit — lives on catalog Product
   stock?: number;
   imageUrl?: string | null;
 };
@@ -102,6 +106,8 @@ export const createProduct = async (
         category: data.category,
         price: data.price,
         unit: data.unit,
+        unitWeight: data.unitWeight,
+        unitVolume: data.unitVolume,
         stock: 0,
         imageUrl: data.imageUrl ?? null,
         status: "PENDING_APPROVAL",
@@ -275,6 +281,20 @@ export const updateProduct = async (
   });
   if (!sellerProduct) {
     throw new Error("Product not found in your inventory");
+  }
+
+  // Weight/volume are physical catalog properties (like unit), so they live
+  // on Product rather than SellerProduct — but unlike name/category/unit,
+  // sellers are allowed to correct them after creation since these were
+  // only added retroactively and existing catalog entries default to 0.
+  if (data.unitWeight !== undefined || data.unitVolume !== undefined) {
+    await prisma.product.update({
+      where: { id: productId },
+      data: {
+        ...(data.unitWeight !== undefined ? { unitWeight: data.unitWeight } : {}),
+        ...(data.unitVolume !== undefined ? { unitVolume: data.unitVolume } : {}),
+      },
+    });
   }
 
   // Update SellerProduct entry - price, stock, name, and imageUrl are
