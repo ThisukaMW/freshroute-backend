@@ -519,6 +519,11 @@ export const getRoutes = async (
       batchId: batch.id,
       scheduledStart: batch.timeWindowStart,
       scheduledEnd: batch.timeWindowEnd,
+      // Never actually dispatched as a real Route, so there's no true
+      // actualEnd — fall back to the batch's own completion/update time so
+      // callers computing "completedAt" still get a sensible value.
+      actualEnd: batch.completedAt,
+      updatedAt: batch.updatedAt,
       driver: null,
       truck: batch.truck,
       _count: { stops: 0 },
