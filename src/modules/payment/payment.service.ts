@@ -83,7 +83,7 @@ export const handleWebhookEvent = async (payload: Buffer, sig: string) => {
 
     const order = await prisma.order.findUnique({
       where: { id: orderId },
-      select: { deliveryTimeSlot: true},
+      select: { deliveryTimeSlot: true, buyerId: true },
     });
 
     if (!order?.deliveryTimeSlot) {
@@ -114,6 +114,19 @@ export const handleWebhookEvent = async (payload: Buffer, sig: string) => {
         completedAt: new Date(),
     },
 });
+
+    // Cart is only cleared now — once the buyer has actually paid — not
+    // when the order was first created at "Proceed to Payment".
+    if (order?.buyerId) {
+      try {
+        await prisma.cartItem.deleteMany({
+          where: { cart: { buyerId: order.buyerId } },
+        });
+      } catch (cartClearError) {
+        // Non-fatal — expiry job will clean up anyway
+        console.error("⚠️ Failed to clear cart after payment:", cartClearError);
+      }
+    }
 
     console.log(`✅ Order ${orderId} payment completed - stock already deducted`);
   }
