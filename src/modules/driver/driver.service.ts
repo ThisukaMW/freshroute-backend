@@ -228,6 +228,24 @@ export const completeStop = async (
     throw new Error(`Stop is already ${stop.status}`);
   }
 
+  // Enforce the OR-Tools planned order — a stop can't be resolved (in any
+  // outcome) while an earlier stop on the same route is still pending.
+  // Pickup nodes always sort before their paired delivery, so this also
+  // guarantees a pickup is handled before its delivery.
+  const earlierPendingStop = await prisma.stop.findFirst({
+    where: {
+      routeId: stop.route.id,
+      sequenceOrder: { lt: stop.sequenceOrder },
+      status: { in: ["PENDING", "IN_PROGRESS"] },
+    },
+    orderBy: { sequenceOrder: "asc" },
+  });
+  if (earlierPendingStop) {
+    throw new Error(
+      `Complete stop #${earlierPendingStop.sequenceOrder} first — stops must be handled in route order`
+    );
+  }
+
   const now = new Date();
 
   const updated = await prisma.stop.update({
