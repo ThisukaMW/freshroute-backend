@@ -281,20 +281,10 @@ export const createOrder = async (input: CreateOrderInput) => {
     }
   }
 
-  // ✅ Clear buyer's cart from DB immediately after successful order
-  // This prevents syncCartFromDB() on CartPage from pulling items back
-  // after the buyer is redirected to order confirmation
-  try {
-    await prisma.cartItem.deleteMany({
-      where: {
-        cart: { buyerId: input.buyerId },
-      },
-    });
-    console.log(`✅ Cart cleared for buyer ${input.buyerId} after order ${order.orderNumber}`);
-  } catch (cartClearError) {
-    // Non-fatal — expiry job will clean up anyway
-    console.error("⚠️ Failed to clear cart after order:", cartClearError);
-  }
+  // Cart is intentionally left alone here — this order isn't paid yet.
+  // It's cleared in payment.service.ts's Stripe webhook, only once
+  // checkout.session.completed actually fires, so a buyer who backs out
+  // of the Stripe page still has their cart intact.
 
   // ─── NOTIFICATIONS ────────────────────────────────────────────────────────
 
