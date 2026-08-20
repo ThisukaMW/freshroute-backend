@@ -1,4 +1,5 @@
 import prisma from "../../config/database.js";
+import { normalizeStopItemsSummary, stopOrderItemIds } from "../../utils/stopItemsSummary.js";
 import { clusterByDeliveryGeo } from "./aggregator.clustering.js";
 import { ensureAtLeastTwoSlices, splitByCapacity } from "./aggregator.packing.js";
 import {
@@ -1034,7 +1035,7 @@ export const getBatchHandoffBundle = async (
 
   const sellerStopIdsByOrderItem = new Map<string, string[]>();
   for (const stop of sellerPickups) {
-    const summary = (stop.itemsSummary as Array<{ orderItemId?: string }> | null) ?? [];
+    const summary = normalizeStopItemsSummary(stop.itemsSummary);
     for (const entry of summary) {
       if (!entry.orderItemId) continue;
       const existing = sellerStopIdsByOrderItem.get(entry.orderItemId) ?? [];
@@ -1056,6 +1057,7 @@ export const getBatchHandoffBundle = async (
           ? ("SELLER_PICKUP" as const)
           : ("HUB_PICKUP" as const),
     sequenceOrder: stop.sequenceOrder,
+    sellerId: stop.sellerId ?? null,
     address: stop.seller?.businessAddress || stop.address,
     latitude: stop.seller?.latitude ?? stop.latitude,
     longitude: stop.seller?.longitude ?? stop.longitude,
@@ -1071,11 +1073,20 @@ export const getBatchHandoffBundle = async (
   const allSellerPickupsComplete = sellerPickups.every((stop) => stop.status === "COMPLETED");
 
   const orders = batch.orders.map((order) => {
-    const sellerPickupStopIds = Array.from(
+    const linkedSellerPickupStopIds = Array.from(
       new Set(
         order.items.flatMap((item) => sellerStopIdsByOrderItem.get(item.id) ?? [])
       )
     );
+    // Planner-created stops carry routing metadata instead of order item lines, so fall back
+    // to seller matching (the same link createInspection uses) when no line data is present.
+    const orderSellerIds = new Set(order.items.map((item) => item.sellerId));
+    const sellerPickupStopIds =
+      linkedSellerPickupStopIds.length > 0
+        ? linkedSellerPickupStopIds
+        : sellerPickups
+            .filter((stop) => stop.sellerId && orderSellerIds.has(stop.sellerId))
+            .map((stop) => stop.id);
     const sellerStopsForOrder = sellerPickups.filter((stop) => sellerPickupStopIds.includes(stop.id));
     const itemsInspected = order.items.every((item) => {
       const inspection = item.inspections[0];
@@ -1102,7 +1113,10 @@ export const getBatchHandoffBundle = async (
     const orderItems = order.items.map((item) => ({
       orderItemId: item.id,
       product: item.product,
+      name: item.product?.name ?? null,
+      unit: item.product?.unit ?? null,
       quantity: item.quantity,
+      unitPrice: item.unitPrice,
       sellerId: item.sellerId,
       inspectionStatus: item.inspections[0]?.result ?? null,
       isInspected: Boolean(
@@ -1112,10 +1126,7 @@ export const getBatchHandoffBundle = async (
     }));
 
     const sellerStopDetails = sellerStopsForOrder.map((stop) => {
-      const summary = (stop.itemsSummary as Array<{ orderItemId?: string }> | null) ?? [];
-      const orderItemIdsAtStop = summary
-        .map((entry) => entry.orderItemId)
-        .filter((id): id is string => Boolean(id));
+      const orderItemIdsAtStop = stopOrderItemIds(stop.itemsSummary);
       const relatedItems = order.items.filter((item) => orderItemIdsAtStop.includes(item.id));
       const stopItemsInspected = relatedItems.every((item) => {
         const inspection = item.inspections[0];
@@ -1174,6 +1185,8 @@ export const getBatchHandoffBundle = async (
       id: order.id,
       orderNumber: order.orderNumber,
       status: order.status,
+      totalAmount: order.totalAmount,
+      placedAt: order.placedAt,
       customer: order.buyer?.user?.name ?? null,
       address: order.deliveryAddress ?? null,
       deliveryAddress: order.deliveryAddress ?? null,
@@ -1181,6 +1194,8 @@ export const getBatchHandoffBundle = async (
       currentPhase,
       deliveryStopId: order.deliveryStop?.id ?? deliveryStop?.id ?? null,
       sellerPickupStopIds,
+      // Alias kept because order-tab payloads expose the same links as pickupStopIds.
+      pickupStopIds: sellerPickupStopIds,
       items: orderItems,
       pickup: {
         sellerStops: sellerStopDetails,

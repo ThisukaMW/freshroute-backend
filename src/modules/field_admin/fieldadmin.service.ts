@@ -1,5 +1,6 @@
 import prisma from "../../config/database.js";
 import { getBatchHandoffBundle } from "../Order_Aggregator/aggregator.service.js";
+import { normalizeStopItemsSummary, stopOrderItemIds } from "../../utils/stopItemsSummary.js";
 import {
   inferInspectionResult,
   isRefundWithinRemainingLimit,
@@ -315,15 +316,24 @@ const toFieldAdminOrderContract = (
     const hubPickup = routeStops.find((stop) => stop.type === "PICKUP" && !stop.sellerId) ?? null;
 
     const orderItemIds = new Set(order.items.map((item) => item.id));
-    const pickupStopIds = sellerPickups
-      .filter((stop) => {
-        const summary = (stop.itemsSummary as Array<{ orderItemId?: string; orderId?: string }> | null) ?? [];
-        return summary.some(
+    const linkedPickupStopIds = sellerPickups
+      .filter((stop) =>
+        normalizeStopItemsSummary(stop.itemsSummary).some(
           (entry) =>
             (entry.orderItemId && orderItemIds.has(entry.orderItemId)) || entry.orderId === order.id
-        );
-      })
+        )
+      )
       .map((stop) => stop.id);
+
+    // Planner-created stops carry routing metadata instead of order item lines, so fall back
+    // to seller matching (the same link createInspection uses) when no line data is present.
+    const orderSellerIds = new Set(order.items.map((item) => item.sellerId));
+    const pickupStopIds =
+      linkedPickupStopIds.length > 0
+        ? linkedPickupStopIds
+        : sellerPickups
+            .filter((stop) => stop.sellerId && orderSellerIds.has(stop.sellerId))
+            .map((stop) => stop.id);
 
     const sellerPickupsForOrder = sellerPickups.filter((stop) => pickupStopIds.includes(stop.id));
     const sellerPickupsComplete =
@@ -723,10 +733,7 @@ const syncBatchStatus = async (
   }
 };
 
-const getSellerStopOrderItemIds = (itemsSummary: unknown) => {
-  const summary = (itemsSummary as Array<{ orderItemId?: string }> | null) ?? [];
-  return summary.map((entry) => entry.orderItemId).filter(Boolean) as string[];
-};
+const getSellerStopOrderItemIds = (itemsSummary: unknown) => stopOrderItemIds(itemsSummary);
 
 const ensureOrderItemsInspected = async (
   tx: Pick<typeof prisma, "productInspection">,
@@ -1596,7 +1603,21 @@ export const getFieldAdminRouteHandoffs = async (fieldAdminId: string) => {
     }),
   ]);
   const batchIds = [...new Set([...routes.map((route) => route.batchId), ...batches.map((batch) => batch.id)])];
-  return Promise.all(batchIds.map((batchId) => getBatchHandoffBundle(batchId, { fieldAdminId })));
+  // One unreadable batch must not blank out every other assigned handoff.
+  const bundles = await Promise.allSettled(
+    batchIds.map((batchId) => getBatchHandoffBundle(batchId, { fieldAdminId }))
+  );
+  for (const bundle of bundles) {
+    if (bundle.status === "rejected") {
+      console.warn("Skipping field admin handoff bundle:", bundle.reason);
+    }
+  }
+  return bundles
+    .filter(
+      (bundle): bundle is PromiseFulfilledResult<Awaited<ReturnType<typeof getBatchHandoffBundle>>> =>
+        bundle.status === "fulfilled"
+    )
+    .map((bundle) => bundle.value);
 };
 
 //get the dashboard overview for a field admin.
