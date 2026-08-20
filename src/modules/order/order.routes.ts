@@ -3,6 +3,7 @@ import { protect } from "../../middlewares/auth.middleware.js";
 import { requireOrderingPortalOpen } from "../../middlewares/orderingPortal.middleware.js";
 import {
   placeOrder,
+  cancelOrderController,
   myOrders,
   getAddresses,
   orderById,
@@ -19,6 +20,9 @@ router.use(protect);
 // ============= BUYER ROUTES =============
 // POST /api/v1/orders
 router.post("/", requireOrderingPortalOpen, placeOrder);
+
+// POST /api/v1/orders/:id/cancel (buyer abandoned Stripe checkout without paying)
+router.post("/:id/cancel", cancelOrderController);
 
 // GET /api/v1/orders (buyer's orders)
 router.get("/", myOrders);

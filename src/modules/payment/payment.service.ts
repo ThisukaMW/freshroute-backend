@@ -44,7 +44,7 @@ export const createPaymentIntent = async (orderId: string) => {
     ],
     mode: "payment",
     success_url: `${process.env.CLIENT_URL}/payment-success`,
-    cancel_url: `${process.env.CLIENT_URL}/payment-cancel`,
+    cancel_url: `${process.env.CLIENT_URL}/payment-cancel?orderId=${order.id}`,
     metadata: { orderId: order.id },
   });
 
@@ -138,6 +138,16 @@ export const handleWebhookEvent = async (payload: Buffer, sig: string) => {
     const session = event.data.object as any;
     const orderId = session.metadata?.orderId;
     if (!orderId) return;
+
+    // The buyer may have already cancelled out of checkout, which deletes
+    // the order outright (see order.service.ts cancelUnpaidOrder). If this
+    // event arrives afterward for the same session, there's nothing left
+    // to fail — skip it instead of throwing on a delete-then-update race.
+    const orderStillExists = await prisma.order.findUnique({
+      where: { id: orderId },
+      select: { id: true },
+    });
+    if (!orderStillExists) return;
 
     // ✅ PAYMENT FAILED: Need to release the reservation and restore stock
     // Find all CONFIRMED reservations for this order
