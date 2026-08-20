@@ -2,6 +2,7 @@ import type { Response, Request } from "express";
 import type { AuthRequest } from "../../middlewares/auth.middleware.js";
 import {
   createOrder,
+  cancelUnpaidOrder,
   getOrderById,
   getBuyerOrders,
   getBuyerAddresses,
@@ -111,6 +112,35 @@ export const placeOrder = async (req: AuthRequest, res: Response) => {
       : 500;
 
     res.status(status).json({message});
+  }
+};
+
+// POST /api/v1/orders/:id/cancel
+// Buyer landed on /payment-cancel without paying — clean up the order.
+export const cancelOrderController = async (
+  req: AuthRequestWithParams<{ id: string }>,
+  res: Response
+) => {
+  try {
+    if (!req.userId) {
+      res.status(401).json({ message: "Unauthorized" });
+      return;
+    }
+
+    const buyer = await prisma.buyer.findUnique({
+      where: { userId: req.userId },
+    });
+
+    if (!buyer) {
+      res.status(403).json({ message: "Only buyers can cancel their own orders" });
+      return;
+    }
+
+    const result = await cancelUnpaidOrder(req.params.id, buyer.id);
+    res.json(result);
+  } catch (error: any) {
+    const status = error.statusCode ?? (error.message === "Order not found" ? 404 : 500);
+    res.status(status).json({ message: error.message ?? "Failed to cancel order" });
   }
 };
 

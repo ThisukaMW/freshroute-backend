@@ -303,6 +303,75 @@ export const createOrder = async (input: CreateOrderInput) => {
   return order;
 };
 
+// POST /api/v1/orders/:id/cancel
+// Called when a buyer lands back on /payment-cancel without having paid —
+// i.e. createOrder's hard stock deduction happened but Stripe checkout was
+// never completed. Deletes the order (it was never real — no payment, no
+// batch, nothing downstream depends on it yet), restores the stock that was
+// deducted, and reverts the matching StockReservation rows back to ACTIVE
+// so the buyer's cart hold survives. The reservation rows themselves are
+// never deleted here — only their status/orderId change.
+export const cancelUnpaidOrder = async (orderId: string, buyerId: string) => {
+  const order = await prisma.order.findUnique({
+    where: { id: orderId },
+    include: { items: true },
+  });
+
+  if (!order) throw new Error("Order not found");
+
+  if (order.buyerId !== buyerId) {
+    const err: any = new Error("Forbidden");
+    err.statusCode = 403;
+    throw err;
+  }
+
+  // Never touch an order that's already paid (or further along) — this
+  // endpoint only exists to clean up an order the buyer abandoned before
+  // paying. If it's already PAID, treat this as a no-op rather than error,
+  // since the webhook may have raced ahead of this request.
+  if (order.status === "PAID") {
+    return { cancelled: false, reason: "Order already paid" };
+  }
+  if (!["PENDING", "PAYMENT_PENDING", "PAYMENT_FAILED"].includes(order.status)) {
+    const err: any = new Error(`Order cannot be cancelled from status ${order.status}`);
+    err.statusCode = 409;
+    throw err;
+  }
+
+  // Restore the stock that createOrder hard-deducted.
+  for (const item of order.items) {
+    try {
+      await inventoryService.updateSellerProductStock({
+        productId: item.productId,
+        sellerId: item.sellerId,
+        quantity: item.quantity, // positive = restore
+        type: "RETURN",
+        reason: `Order ${order.orderNumber} cancelled - payment not completed`,
+        orderId: order.id,
+      });
+      await inventoryService.recalculateProductStock(item.productId);
+    } catch (error) {
+      console.error(
+        `⚠️ Failed to restore stock for ${item.productId} on cancelled order ${order.orderNumber}:`,
+        error instanceof Error ? error.message : error
+      );
+    }
+  }
+
+  // Undo the ACTIVE → CONFIRMED step from createOrder. The row stays —
+  // it goes back to being a normal cart-side soft hold.
+  await prisma.stockReservation.updateMany({
+    where: { orderId: order.id, status: "CONFIRMED" },
+    data: { status: "ACTIVE", orderId: null },
+  });
+
+  // Payment.orderId has no cascade, so it has to go before the order does.
+  await prisma.payment.deleteMany({ where: { orderId: order.id } });
+  await prisma.order.delete({ where: { id: order.id } });
+
+  return { cancelled: true };
+};
+
 // GET /api/v1/orders/addresses
 export const getBuyerAddresses = async (buyerId: string) => {
   const buyer = await prisma.buyer.findUnique({
