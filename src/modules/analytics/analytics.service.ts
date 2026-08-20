@@ -2,11 +2,98 @@
 // Every function queries the database and organizes results by the chosen time period.
 
 import prisma from "../../config/database.js";
-import { startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, format } from "date-fns";
-import { getDeliveryDayBoundsColombo } from "../Order_Aggregator/aggregator.colombo.js";
+import {
+  getDeliveryDayBoundsColombo,
+  getColomboYmd,
+  colomboCivilDayStartUtc,
+  colomboCivilDayEndUtc,
+} from "../Order_Aggregator/aggregator.colombo.js";
 
 // The four allowed time periods for all analytics functions
 export type Period = "daily" | "weekly" | "monthly" | "yearly";
+
+// All the trend functions below bucket by Sri Lanka's civil calendar
+// (Asia/Colombo, UTC+5:30), not the server's local timezone — Render runs in
+// UTC, so an order placed in the Colombo evening (after 18:30 UTC) would
+// otherwise land in the wrong day/week/slot entirely once the server's own
+// "today" disagrees with Sri Lanka's.
+
+const WEEKDAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+// Treats Y-M-D as an abstract calendar date (not a specific instant), so this
+// is safe regardless of server timezone — no real zone conversion happening.
+const colomboWeekdayLabel = (year: number, month: number, day: number) =>
+  WEEKDAY_NAMES[new Date(Date.UTC(year, month - 1, day)).getUTCDay()];
+
+const shiftYmd = (year: number, month: number, day: number, deltaDays: number) => {
+  const t = new Date(Date.UTC(year, month - 1, day));
+  t.setUTCDate(t.getUTCDate() + deltaDays);
+  return { year: t.getUTCFullYear(), month: t.getUTCMonth() + 1, day: t.getUTCDate() };
+};
+
+// The 6 three-hour slots used by the "daily" period, anchored to Colombo's
+// civil midnight for `anchor` rather than the server's local midnight.
+const DAILY_SLOT_HOURS = [
+  { label: "6AM", startHour: 6, endHour: 9 },
+  { label: "9AM", startHour: 9, endHour: 12 },
+  { label: "12PM", startHour: 12, endHour: 15 },
+  { label: "3PM", startHour: 15, endHour: 18 },
+  { label: "6PM", startHour: 18, endHour: 21 },
+  { label: "9PM", startHour: 21, endHour: 24 },
+];
+
+const colomboDailySlots = (anchor: Date) => {
+  const { deliveryDayStart } = getDeliveryDayBoundsColombo(anchor);
+  return DAILY_SLOT_HOURS.map((s) => ({
+    label: s.label,
+    start: new Date(deliveryDayStart.getTime() + s.startHour * 60 * 60 * 1000),
+    end: new Date(deliveryDayStart.getTime() + s.endHour * 60 * 60 * 1000 - 1),
+  }));
+};
+
+// The 7 days of the current Colombo week (Monday-start).
+const colomboWeekDays = (anchor: Date) => {
+  const { year, month, day } = getColomboYmd(anchor);
+  const dow = new Date(Date.UTC(year, month - 1, day)).getUTCDay(); // 0=Sun..6=Sat
+  const daysSinceMonday = (dow + 6) % 7;
+  const monday = shiftYmd(year, month, day, -daysSinceMonday);
+  return Array.from({ length: 7 }, (_, i) => {
+    const d = shiftYmd(monday.year, monday.month, monday.day, i);
+    return {
+      label: colomboWeekdayLabel(d.year, d.month, d.day),
+      start: colomboCivilDayStartUtc(d.year, d.month, d.day),
+      end: colomboCivilDayEndUtc(d.year, d.month, d.day),
+    };
+  });
+};
+
+// The 12 months of the current Colombo year.
+const colomboMonthsOfYear = (anchor: Date) => {
+  const { year } = getColomboYmd(anchor);
+  return Array.from({ length: 12 }, (_, i) => {
+    const month = i + 1;
+    const nextMonth = month === 12 ? { y: year + 1, m: 1 } : { y: year, m: month + 1 };
+    return {
+      label: MONTH_NAMES[i],
+      start: colomboCivilDayStartUtc(year, month, 1),
+      end: new Date(colomboCivilDayStartUtc(nextMonth.y, nextMonth.m, 1).getTime() - 1),
+    };
+  });
+};
+
+// The last 5 Colombo calendar years.
+const colomboLastYears = (anchor: Date, count: number) => {
+  const { year: currentYear } = getColomboYmd(anchor);
+  return Array.from({ length: count }, (_, i) => {
+    const year = currentYear - (count - 1) + i;
+    return {
+      label: String(year),
+      start: colomboCivilDayStartUtc(year, 1, 1),
+      end: new Date(colomboCivilDayStartUtc(year + 1, 1, 1).getTime() - 1),
+    };
+  });
+};
 
 // Revenue = money actually captured, not just orders placed. Based on completed
 // payments (not order status) so a later refund automatically stops counting it,
@@ -37,75 +124,26 @@ export const getTodayRevenue = async () => {
   };
 };
 
+const REVENUE_EXCLUDED_STATUSES = ["CANCELLED", "PAYMENT_FAILED", "PENDING", "PAYMENT_PENDING"] as const;
+
+const colomboSlotsForPeriod = (period: Period, now: Date) => {
+  if (period === "daily") return colomboDailySlots(now);
+  if (period === "weekly") return colomboWeekDays(now);
+  if (period === "monthly") return colomboMonthsOfYear(now);
+  return colomboLastYears(now, 5);
+};
+
 // Add up total revenue and order count for each time slot in the chosen period
 export const getRevenueTrend = async (period: Period) => {
-  const now = new Date();
-
-  if (period === "daily") {
-    // Split today into six 3-hour time slots from 6AM to midnight
-    const slots = [
-      { label: "6AM",  start: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 6,  0), end: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 8,  59, 59) },
-      { label: "9AM",  start: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 9,  0), end: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 11, 59, 59) },
-      { label: "12PM", start: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12, 0), end: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 14, 59, 59) },
-      { label: "3PM",  start: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 15, 0), end: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 17, 59, 59) },
-      { label: "6PM",  start: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 18, 0), end: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 20, 59, 59) },
-      { label: "9PM",  start: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 21, 0), end: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59) },
-    ];
-    // For each slot, sum up the revenue and count the orders (skip cancelled/failed ones)
-    return Promise.all(slots.map(async (s) => {
-      const agg = await prisma.order.aggregate({
-        _sum: { totalAmount: true },
-        _count: { id: true },
-        where: { placedAt: { gte: s.start, lte: s.end }, status: { notIn: ["CANCELLED", "PAYMENT_FAILED", "PENDING", "PAYMENT_PENDING"] } },
-      });
-      return { label: s.label, revenue: agg._sum.totalAmount ?? 0, orders: agg._count.id };
-    }));
-  }
-
-  if (period === "weekly") {
-    // Build an array of the 7 days in the current week starting Monday
-    const weekStart = startOfWeek(now, { weekStartsOn: 1 });
-    const days = Array.from({ length: 7 }, (_, i) => {
-      const d = new Date(weekStart);
-      d.setDate(weekStart.getDate() + i);
-      return d;
+  const slots = colomboSlotsForPeriod(period, new Date());
+  return Promise.all(slots.map(async (s) => {
+    const agg = await prisma.order.aggregate({
+      _sum: { totalAmount: true },
+      _count: { id: true },
+      where: { placedAt: { gte: s.start, lte: s.end }, status: { notIn: [...REVENUE_EXCLUDED_STATUSES] } },
     });
-    // For each day, sum up revenue and order count
-    return Promise.all(days.map(async (day) => {
-      const agg = await prisma.order.aggregate({
-        _sum: { totalAmount: true },
-        _count: { id: true },
-        where: { placedAt: { gte: startOfDay(day), lte: endOfDay(day) }, status: { notIn: ["CANCELLED", "PAYMENT_FAILED", "PENDING", "PAYMENT_PENDING"] } },
-      });
-      return { label: format(day, "EEE"), revenue: agg._sum.totalAmount ?? 0, orders: agg._count.id };
-    }));
-  }
-
-  if (period === "monthly") {
-    // Build an array of all 12 months in the current year
-    const months = Array.from({ length: 12 }, (_, i) => new Date(now.getFullYear(), i, 1));
-    return Promise.all(months.map(async (month) => {
-      const agg = await prisma.order.aggregate({
-        _sum: { totalAmount: true },
-        _count: { id: true },
-        where: { placedAt: { gte: startOfMonth(month), lte: endOfMonth(month) }, status: { notIn: ["CANCELLED", "PAYMENT_FAILED", "PENDING", "PAYMENT_PENDING"] } },
-      });
-      return { label: format(month, "MMM"), revenue: agg._sum.totalAmount ?? 0, orders: agg._count.id };
-    }));
-  }
-
-  // For yearly, build an array of the last 5 years and sum each one up
-  const currentYear = now.getFullYear();
-  return Promise.all(
-    Array.from({ length: 5 }, (_, i) => currentYear - 4 + i).map(async (year) => {
-      const agg = await prisma.order.aggregate({
-        _sum: { totalAmount: true },
-        _count: { id: true },
-        where: { placedAt: { gte: new Date(year, 0, 1), lte: new Date(year, 11, 31, 23, 59, 59) }, status: { notIn: ["CANCELLED", "PAYMENT_FAILED", "PENDING", "PAYMENT_PENDING"] } },
-      });
-      return { label: String(year), revenue: agg._sum.totalAmount ?? 0, orders: agg._count.id };
-    })
-  );
+    return { label: s.label, revenue: agg._sum.totalAmount ?? 0, orders: agg._count.id };
+  }));
 };
 
 // Find which sellers made the most money; show top 5 and lump the rest under "Others"
@@ -227,67 +265,24 @@ export const getPaymentMethodBreakdown = async () => {
 
 // Count successful vs failed payments for each time slot in the chosen period
 export const getTransactionTrend = async (period: Period) => {
-  const now = new Date();
-
-  // Small helper — counts payments of a given status within a date range
   const countPayments = (status: "COMPLETED" | "FAILED", gte: Date, lte: Date) =>
     prisma.payment.count({ where: { status, createdAt: { gte, lte } } });
 
-  if (period === "daily") {
-    const slots = [
-      { label: "6AM",  start: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 6,  0), end: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 8,  59, 59) },
-      { label: "9AM",  start: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 9,  0), end: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 11, 59, 59) },
-      { label: "12PM", start: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12, 0), end: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 14, 59, 59) },
-      { label: "3PM",  start: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 15, 0), end: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 17, 59, 59) },
-      { label: "6PM",  start: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 18, 0), end: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 20, 59, 59) },
-      { label: "9PM",  start: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 21, 0), end: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59) },
-    ];
-    return Promise.all(slots.map(async (s) => ({
-      label: s.label,
-      successful: await countPayments("COMPLETED", s.start, s.end),
-      failed:     await countPayments("FAILED",    s.start, s.end),
-    })));
-  }
-
-  if (period === "weekly") {
-    const weekStart = startOfWeek(now, { weekStartsOn: 1 });
-    const days = Array.from({ length: 7 }, (_, i) => { const d = new Date(weekStart); d.setDate(weekStart.getDate() + i); return d; });
-    return Promise.all(days.map(async (day) => ({
-      label: format(day, "EEE"),
-      successful: await countPayments("COMPLETED", startOfDay(day), endOfDay(day)),
-      failed:     await countPayments("FAILED",    startOfDay(day), endOfDay(day)),
-    })));
-  }
-
-  if (period === "monthly") {
-    const months = Array.from({ length: 12 }, (_, i) => new Date(now.getFullYear(), i, 1));
-    return Promise.all(months.map(async (month) => ({
-      label: format(month, "MMM"),
-      successful: await countPayments("COMPLETED", startOfMonth(month), endOfMonth(month)),
-      failed:     await countPayments("FAILED",    startOfMonth(month), endOfMonth(month)),
-    })));
-  }
-
-  // Yearly — last 5 years
-  const currentYear = now.getFullYear();
-  return Promise.all(
-    Array.from({ length: 5 }, (_, i) => currentYear - 4 + i).map(async (year) => ({
-      label: String(year),
-      successful: await countPayments("COMPLETED", new Date(year, 0, 1), new Date(year, 11, 31, 23, 59, 59)),
-      failed:     await countPayments("FAILED",    new Date(year, 0, 1), new Date(year, 11, 31, 23, 59, 59)),
-    }))
-  );
+  const slots = colomboSlotsForPeriod(period, new Date());
+  return Promise.all(slots.map(async (s) => ({
+    label: s.label,
+    successful: await countPayments("COMPLETED", s.start, s.end),
+    failed:     await countPayments("FAILED",    s.start, s.end),
+  })));
 };
 
 // Calculate average order value (AOV) and refund rate for each time slot in the chosen period
 export const getAovAndRefundTrend = async (period: Period) => {
-  const now = new Date();
-
   // Helper — given a start/end date, calculate the AOV and refund rate for that window
   const computeSlot = async (start: Date, end: Date, label: string) => {
     const [orders, refunds] = await Promise.all([
       prisma.order.findMany({
-        where: { placedAt: { gte: start, lte: end }, status: { notIn: ["CANCELLED", "PAYMENT_FAILED", "PENDING", "PAYMENT_PENDING"] } },
+        where: { placedAt: { gte: start, lte: end }, status: { notIn: [...REVENUE_EXCLUDED_STATUSES] } },
         select: { totalAmount: true },
       }),
       prisma.payment.count({ where: { status: "REFUNDED", updatedAt: { gte: start, lte: end } } }),
@@ -300,36 +295,8 @@ export const getAovAndRefundTrend = async (period: Period) => {
     return { label, aov, refundRate };
   };
 
-  if (period === "daily") {
-    const slots = [
-      { label: "6AM",  start: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 6,  0), end: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 8,  59, 59) },
-      { label: "9AM",  start: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 9,  0), end: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 11, 59, 59) },
-      { label: "12PM", start: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12, 0), end: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 14, 59, 59) },
-      { label: "3PM",  start: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 15, 0), end: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 17, 59, 59) },
-      { label: "6PM",  start: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 18, 0), end: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 20, 59, 59) },
-      { label: "9PM",  start: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 21, 0), end: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59) },
-    ];
-    return Promise.all(slots.map((s) => computeSlot(s.start, s.end, s.label)));
-  }
-
-  if (period === "weekly") {
-    const weekStart = startOfWeek(now, { weekStartsOn: 1 });
-    const days = Array.from({ length: 7 }, (_, i) => { const d = new Date(weekStart); d.setDate(weekStart.getDate() + i); return d; });
-    return Promise.all(days.map((day) => computeSlot(startOfDay(day), endOfDay(day), format(day, "EEE"))));
-  }
-
-  if (period === "monthly") {
-    const months = Array.from({ length: 12 }, (_, i) => new Date(now.getFullYear(), i, 1));
-    return Promise.all(months.map((month) => computeSlot(startOfMonth(month), endOfMonth(month), format(month, "MMM"))));
-  }
-
-  // Yearly — last 5 years
-  const currentYear = now.getFullYear();
-  return Promise.all(
-    Array.from({ length: 5 }, (_, i) => currentYear - 4 + i).map((year) =>
-      computeSlot(new Date(year, 0, 1), new Date(year, 11, 31, 23, 59, 59), String(year))
-    )
-  );
+  const slots = colomboSlotsForPeriod(period, new Date());
+  return Promise.all(slots.map((s) => computeSlot(s.start, s.end, s.label)));
 };
 
 // Run all analytics functions at the same time and return everything in one object
