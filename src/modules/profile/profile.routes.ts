@@ -17,12 +17,16 @@ import {
   setDefaultAddressController,
   getNotificationPrefsController,
   updateNotificationPrefsController,
+  getProfileStatsController,
 } from "./profile.controller.js";
 
 const router = Router();
 
 // Every profile route needs a valid login token
 router.use(protect);
+
+// Any logged-in user can view their role-specific summary stats
+router.get("/stats", getProfileStatsController);
 
 // Any logged-in user can update their name/phone/city
 router.patch("/personal", updatePersonalInfoController);
