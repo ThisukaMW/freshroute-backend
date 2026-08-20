@@ -87,6 +87,9 @@ export const getActiveRoute = async (driverId: string) => {
     totalStops: route._count.stops,
     totalDistance: route.totalDistance,
     estimatedDuration: route.estimatedDuration,
+    // totalDistance/estimatedDuration are stored in meters/seconds; the app displays km/minutes.
+    totalDistanceKm: route.totalDistance / 1000,
+    estimatedDurationMinutes: Math.round(route.estimatedDuration / 60),
     scheduledStart: route.scheduledStart,
     actualStart: route.actualStart,
   };
@@ -167,6 +170,9 @@ export const getRouteWithStops = async (driverId: string) => {
     status: route.status,
     totalDistance: route.totalDistance,
     estimatedDuration: route.estimatedDuration,
+    // totalDistance/estimatedDuration are stored in meters/seconds; the app displays km/minutes.
+    totalDistanceKm: route.totalDistance / 1000,
+    estimatedDurationMinutes: Math.round(route.estimatedDuration / 60),
     actualStart: route.actualStart,
     stops,
   };
