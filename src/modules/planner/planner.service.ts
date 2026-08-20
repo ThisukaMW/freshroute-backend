@@ -236,8 +236,8 @@ const buildNodesForBatch = async (
       nodes.push({
         nodeId: `delivery:${order.id}`,
         kind: "DELIVERY",
-        latitude: order.buyer.latitude,
-        longitude: order.buyer.longitude,
+        latitude: order.deliveryLat,
+        longitude: order.deliveryLng,
         loadDelta: -totalQuantity,
         orderId: order.id,
         pairId: order.id,
@@ -249,8 +249,8 @@ const buildNodesForBatch = async (
       nodes.push({
         nodeId: `delivery:${order.id}`,
         kind: "DELIVERY",
-        latitude: order.buyer.latitude,
-        longitude: order.buyer.longitude,
+        latitude: order.deliveryLat,
+        longitude: order.deliveryLng,
         loadDelta: -totalQuantity,
         orderId: order.id,
         buyerId: order.buyerId,
@@ -380,6 +380,34 @@ const persistPlannedRoute = async (
     },
   });
 
+  // Solved stops only carry lat/lng and IDs — look up real address text
+  // once per unique seller/order so drivers see an actual address instead
+  // of a blank string (Stop.address was previously hardcoded to "").
+  const sellerIds = [...new Set(solvedStops.filter((s) => s.seller_id).map((s) => s.seller_id!))];
+  const orderIds = [...new Set(solvedStops.filter((s) => s.order_id).map((s) => s.order_id!))];
+
+  const [sellersForAddress, ordersForAddress] = await Promise.all([
+    sellerIds.length
+      ? prisma.seller.findMany({ where: { id: { in: sellerIds } }, select: { id: true, businessAddress: true } })
+      : Promise.resolve([]),
+    orderIds.length
+      ? prisma.order.findMany({ where: { id: { in: orderIds } }, select: { id: true, deliveryAddress: true } })
+      : Promise.resolve([]),
+  ]);
+
+  const sellerAddressById = new Map(sellersForAddress.map((s) => [s.id, s.businessAddress]));
+  const orderAddressById = new Map(ordersForAddress.map((o) => [o.id, o.deliveryAddress]));
+
+  const addressForStop = (stop: SequencedPlannedStop): string => {
+    if (stop.kind === "PICKUP" && stop.seller_id) {
+      return sellerAddressById.get(stop.seller_id) ?? "";
+    }
+    if (stop.kind === "DELIVERY" && stop.order_id) {
+      return orderAddressById.get(stop.order_id) ?? "";
+    }
+    return "";
+  };
+
   const seenDeliveryOrderIds = new Set<string>();
 
   for (const stop of solvedStops) {
@@ -401,7 +429,7 @@ const persistPlannedRoute = async (
         routeId: route.id,
         type: stop.kind,
         sequenceOrder: stop.sequence,
-        address: "",
+        address: addressForStop(stop),
         latitude: stop.latitude,
         longitude: stop.longitude,
         sellerId: stop.seller_id ?? null,
