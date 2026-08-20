@@ -121,9 +121,11 @@ export const getAllOrders = async (filters?: { since?: string; until?: string })
   });
 };
 
-// Find a user by email and return only the fields needed for admin login
+// Find a user by email and return only the fields needed for admin login.
+// Only returns ADMIN/FIELD_ADMIN accounts — any other role means "not found"
+// as far as the admin login flow is concerned.
 export const findAdminByEmail = async (email: string) => {
-  return prisma.user.findUnique({
+  const user = await prisma.user.findUnique({
     where: { email },
     select: {
       id: true,
@@ -134,6 +136,12 @@ export const findAdminByEmail = async (email: string) => {
       tokenVersion: true,
     },
   });
+
+  if (!user || (user.role !== "ADMIN" && user.role !== "FIELD_ADMIN")) {
+    return null;
+  }
+
+  return user;
 };
 
 const batchListInclude = {
