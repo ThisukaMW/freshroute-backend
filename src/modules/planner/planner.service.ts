@@ -194,11 +194,17 @@ const buildNodesForBatch = async (
 
   for (const order of batch.orders) {
     const totalQuantity = order.items.reduce((sum, item) => sum + roundDemand(item.quantity), 0);
+    // Industry-standard default: an order's items live at the seller until
+    // physically picked up, so pickup is required unless the caller
+    // explicitly says otherwise. pickupRequiredOrderIds is an exact opt-in
+    // list (only those orders get a pickup stop); readyOrderIds is an
+    // opt-out list for orders already staged at a hub. With neither
+    // supplied — the common case, since nothing in the app currently sets
+    // these — every order correctly requires pickup instead of silently
+    // skipping it.
     const pickupRequired = pickupRequiredOrderIds.size
       ? pickupRequiredOrderIds.has(order.id)
-      : readyOrderIds.size
-        ? !readyOrderIds.has(order.id)
-        : false;
+      : !readyOrderIds.has(order.id);
 
     if (pickupRequired) {
       const quantitiesBySeller = new Map<string, number>();
@@ -430,6 +436,19 @@ const buildFallbackSolution = async (
   matrices: { durations: number[]; distances: number[] },
 ) => {
   const points: PlannerPoint[] = [depot, ...nodes];
+
+  // Only used when the OR-Tools microservice is unreachable, but must still
+  // be correct: a DELIVERY node can't become eligible until every PICKUP
+  // node sharing its pairId (i.e. its order) has already been visited —
+  // otherwise this heuristic can happily route a delivery before its own
+  // pickup just because it's geographically closer.
+  const pendingPickupsByPair = new Map<string, number>();
+  nodes.forEach((node) => {
+    if (node.kind === "PICKUP" && node.pairId) {
+      pendingPickupsByPair.set(node.pairId, (pendingPickupsByPair.get(node.pairId) ?? 0) + 1);
+    }
+  });
+
   const ordered = [0];
   const visited = new Set<number>([0]);
   let current = 0;
@@ -439,6 +458,10 @@ const buildFallbackSolution = async (
     let bestCost = Number.POSITIVE_INFINITY;
     for (let index = 1; index < points.length; index++) {
       if (visited.has(index)) continue;
+      const node = points[index] as PlannerNode;
+      if (node.kind === "DELIVERY" && node.pairId && (pendingPickupsByPair.get(node.pairId) ?? 0) > 0) {
+        continue; // this order's pickup(s) haven't all happened yet
+      }
       const cost = matrices.durations[current * points.length + index];
       if (cost < bestCost) {
         bestCost = cost;
@@ -448,6 +471,10 @@ const buildFallbackSolution = async (
     if (bestIndex === -1) break;
     visited.add(bestIndex);
     ordered.push(bestIndex);
+    const chosenNode = points[bestIndex] as PlannerNode;
+    if (chosenNode.kind === "PICKUP" && chosenNode.pairId) {
+      pendingPickupsByPair.set(chosenNode.pairId, (pendingPickupsByPair.get(chosenNode.pairId) ?? 1) - 1);
+    }
     current = bestIndex;
   }
 
