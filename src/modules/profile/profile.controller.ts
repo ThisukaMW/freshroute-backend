@@ -17,7 +17,8 @@ import {
   deleteAddress,
   setDefaultAddress,
   getNotificationPrefs,
-  updateNotificationPrefs
+  updateNotificationPrefs,
+  getProfileStats
 } from "./profile.service.js";
 
 // ─── Validation helpers ────────────────────────────────────────────
@@ -156,6 +157,18 @@ export const updatePasswordController = async (req: AuthRequest, res: Response) 
 };
 
 /** Check if the seller's account has been approved by an admin. */
+/** Role-specific summary numbers shown on the profile page. */
+export const getProfileStatsController = async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.userId;
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
+    const stats = await getProfileStats(userId, req.role ?? "");
+    res.json({ stats });
+  } catch (err: any) {
+    res.status(500).json({ message: err.message ?? "Failed to get stats" });
+  }
+};
+
 export const getSellerStatusController = async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.userId;

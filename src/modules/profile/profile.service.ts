@@ -1,6 +1,7 @@
 import bcrypt from "bcrypt";
 import prisma from "../../config/database.js";
 import { createNotification } from "../notifications/notification.service.js";
+import { getSellerStats } from "../order/order.service.js";
 
 // This file does the actual database work for all profile updates.
 // It also sends the user a notification after each successful change.
@@ -424,4 +425,58 @@ export const updateNotificationPrefs = async (
   });
 
   return merged;
+};
+
+// GET /api/v1/profile/stats — role-specific summary shown on the profile page.
+export const getProfileStats = async (userId: string, role: string) => {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { createdAt: true },
+  });
+  const memberSince = user?.createdAt?.toISOString();
+
+  const normalizedRole = role.toLowerCase();
+
+  if (normalizedRole === "buyer") {
+    const buyer = await prisma.buyer.findUnique({ where: { userId } });
+    if (!buyer) return { totalOrders: 0, delivered: 0, memberSince };
+
+    const [totalOrders, delivered] = await Promise.all([
+      prisma.order.count({ where: { buyerId: buyer.id } }),
+      prisma.order.count({ where: { buyerId: buyer.id, status: "DELIVERED" } }),
+    ]);
+    return { totalOrders, delivered, memberSince };
+  }
+
+  if (normalizedRole === "seller") {
+    const seller = await prisma.seller.findUnique({ where: { userId } });
+    if (!seller) return { totalProducts: 0, totalOrders: 0, memberSince };
+
+    const [totalProducts, sellerStats] = await Promise.all([
+      prisma.sellerProduct.count({ where: { sellerId: seller.id } }),
+      getSellerStats(seller.id),
+    ]);
+    return {
+      totalProducts,
+      totalOrders: sellerStats.totalOrders,
+      ordersToday: sellerStats.ordersToday,
+      memberSince,
+    };
+  }
+
+  if (normalizedRole === "admin" || normalizedRole === "field_admin") {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    const [totalUsers, activeVendors, ordersToday] = await Promise.all([
+      prisma.user.count({ where: { role: { not: "ADMIN" } } }),
+      prisma.user.count({ where: { role: "SELLER", status: "ACTIVE" } }),
+      prisma.order.count({ where: { placedAt: { gte: today, lt: tomorrow } } }),
+    ]);
+    return { totalUsers, activeVendors, ordersToday, adminSince: memberSince };
+  }
+
+  return { memberSince };
 };
