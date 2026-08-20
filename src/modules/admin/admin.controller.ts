@@ -171,26 +171,31 @@ export const loginAdmin = async (req: Request, res: Response) => {
   try {
     const { email, password } = req.body;
 
+    if (!email || !password) {
+      return res.status(400).json({ message: 'Email and password are required' });
+    }
+
     const admin = await findAdminByEmail(email);
     if (!admin) return res.status(401).json({ message: 'Invalid credentials' });
 
     // Compare the typed password with the stored hashed password
-    const valid = password ? await bcrypt.compare(password, admin.passwordHash) : true;
+    const valid = await bcrypt.compare(password, admin.passwordHash);
     if (!valid) return res.status(401).json({ message: 'Invalid credentials' });
 
     // Create a 7-day token with the admin's id, role, and token version inside it
     const token = jwt.sign(
-      { userId: admin.id, role: 'ADMIN', tokenVersion: admin.tokenVersion },
+      { userId: admin.id, role: admin.role, tokenVersion: admin.tokenVersion },
       process.env.JWT_SECRET!,
       { expiresIn: '7d' }
     );
 
     res.json({
       token,
-      user: { id: admin.id, name: admin.name, email: admin.email, role: 'admin' },
+      user: { id: admin.id, name: admin.name, email: admin.email, role: admin.role.toLowerCase() },
     });
   } catch (err) {
-    res.status(500).json({ message: 'Admin login failed', error: err });
+    console.error('Admin login error:', err);
+    res.status(500).json({ message: 'Admin login failed' });
   }
 };
 
