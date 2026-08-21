@@ -1,4 +1,9 @@
 import prisma from "../../config/database.js";
+import { haversineDistanceKm } from "../../utils/geo.js";
+
+// Matches the planner's own fallback speed assumption (utils/mapbox.js's
+// no-API-key path) — used to turn a live distance into a rough ETA.
+const AVERAGE_SPEED_KMH = 40;
 
 // GET /api/v1/driver/me
 export const getDriverProfile = async (driverId: string) => {
@@ -97,37 +102,49 @@ export const getActiveRoute = async (driverId: string) => {
 
 // GET /api/v1/driver/me/route
 export const getRouteWithStops = async (driverId: string) => {
-  const route = await prisma.route.findFirst({
-    where: {
-      driverId,
-      status: { in: ["ASSIGNED", "STARTED", "IN_PROGRESS"] },
-    },
-    include: {
-      stops: {
-        orderBy: { sequenceOrder: "asc" },
-        include: {
-          buyer: {
-            include: {
-              user: { select: { name: true, phone: true } },
+  const [route, driver] = await Promise.all([
+    prisma.route.findFirst({
+      where: {
+        driverId,
+        status: { in: ["ASSIGNED", "STARTED", "IN_PROGRESS"] },
+      },
+      include: {
+        stops: {
+          orderBy: { sequenceOrder: "asc" },
+          include: {
+            buyer: {
+              include: {
+                user: { select: { name: true, phone: true } },
+              },
             },
-          },
-          seller: {
-            include: {
-              user: { select: { name: true, phone: true } },
+            seller: {
+              include: {
+                user: { select: { name: true, phone: true } },
+              },
             },
-          },
-          order: {
-            select: { orderNumber: true, totalAmount: true, status: true },
+            order: {
+              select: { orderNumber: true, totalAmount: true, status: true },
+            },
           },
         },
       },
-    },
-    orderBy: { scheduledStart: "desc" },
-  });
+      orderBy: { scheduledStart: "desc" },
+    }),
+    prisma.driver.findUnique({
+      where: { id: driverId },
+      select: { currentLat: true, currentLng: true },
+    }),
+  ]);
 
   if (!route) return null;
 
-  const now = new Date();
+  // Distance/ETA per stop is computed live from the driver's last known
+  // position, chained leg-by-leg through the still-pending stops — not
+  // read from the plan's absolute estimatedArrival timestamp, which goes
+  // stale (and gets clamped to 0) once real time passes it. Completed/
+  // failed/skipped stops don't need a live figure, so those stay 0.
+  let originLat = driver?.currentLat ?? null;
+  let originLng = driver?.currentLng ?? null;
 
   const stops = route.stops.map((stop) => {
     const name =
@@ -140,12 +157,20 @@ export const getRouteWithStops = async (driverId: string) => {
         ? (stop.buyer?.user.phone ?? null)
         : (stop.seller?.user.phone ?? null);
 
-    const minutesAway = stop.estimatedArrival
-      ? Math.max(
-          0,
-          Math.round((stop.estimatedArrival.getTime() - now.getTime()) / 60000),
-        )
-      : null;
+    const isPending = stop.status === "PENDING" || stop.status === "IN_PROGRESS";
+
+    let distanceKm = 0;
+    let minutesAway = 0;
+    if (isPending) {
+      if (originLat != null && originLng != null) {
+        distanceKm = Math.round(
+          haversineDistanceKm(originLat, originLng, stop.latitude, stop.longitude) * 10,
+        ) / 10;
+        minutesAway = Math.max(0, Math.round((distanceKm / AVERAGE_SPEED_KMH) * 60));
+      }
+      originLat = stop.latitude;
+      originLng = stop.longitude;
+    }
 
     return {
       id: stop.id,
@@ -160,6 +185,7 @@ export const getRouteWithStops = async (driverId: string) => {
       orderNumber: stop.order?.orderNumber ?? null,
       estimatedArrival: stop.estimatedArrival,
       minutesAway,
+      distanceKm,
       notes: stop.notes,
     };
   });
@@ -180,35 +206,69 @@ export const getRouteWithStops = async (driverId: string) => {
 
 // GET /api/v1/driver/me/orders
 export const getDriverOrders = async (driverId: string) => {
-  // Get all orders from delivery stops in this driver's routes
-  const stops = await prisma.stop.findMany({
-    where: {
-      type: "DELIVERY",
-      route: { driverId },
-      order: { isNot: null },
-    },
-    include: {
-      order: {
-        include: {
-          items: { select: { id: true } },
+  const [stops, driver] = await Promise.all([
+    // Get all orders from delivery stops in this driver's routes
+    prisma.stop.findMany({
+      where: {
+        type: "DELIVERY",
+        route: { driverId },
+        order: { isNot: null },
+      },
+      include: {
+        order: {
+          include: {
+            items: { select: { id: true } },
+          },
+        },
+        buyer: {
+          include: {
+            user: { select: { name: true, phone: true } },
+          },
         },
       },
-    },
-    orderBy: { createdAt: "desc" },
-  });
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.driver.findUnique({
+      where: { id: driverId },
+      select: { currentLat: true, currentLng: true },
+    }),
+  ]);
 
   return stops
     .filter((s) => s.order)
-    .map((stop) => ({
-      id: stop.order!.id,
-      orderNumber: stop.order!.orderNumber,
-      status: stop.order!.status,
-      totalAmount: stop.order!.totalAmount,
-      itemCount: stop.order!.items.length,
-      deliveryAddress: stop.order!.deliveryAddress,
-      placedAt: stop.order!.placedAt,
-      actualDelivery: stop.order!.actualDelivery,
-    }));
+    .map((stop) => {
+      const isPending = stop.status === "PENDING" || stop.status === "IN_PROGRESS";
+      let distanceKm = 0;
+      let etaMinutes = 0;
+      if (isPending && driver?.currentLat != null && driver?.currentLng != null) {
+        distanceKm = Math.round(
+          haversineDistanceKm(driver.currentLat, driver.currentLng, stop.latitude, stop.longitude) * 10,
+        ) / 10;
+        etaMinutes = Math.max(0, Math.round((distanceKm / AVERAGE_SPEED_KMH) * 60));
+      }
+
+      return {
+        id: stop.order!.id,
+        orderId: stop.order!.orderNumber,
+        orderNumber: stop.order!.orderNumber,
+        status: stop.order!.status,
+        totalAmount: stop.order!.totalAmount,
+        itemCount: stop.order!.items.length,
+        name: stop.buyer?.user.name ?? "Customer",
+        phone: stop.buyer?.user.phone ?? null,
+        address: stop.order!.deliveryAddress,
+        deliveryAddress: stop.order!.deliveryAddress,
+        latitude: stop.latitude,
+        longitude: stop.longitude,
+        placedAt: stop.order!.placedAt,
+        actualDelivery: stop.order!.actualDelivery,
+        stopId: stop.id,
+        sequence: stop.sequenceOrder,
+        type: stop.type,
+        distanceKm,
+        minutesAway: etaMinutes,
+      };
+    });
 };
 
 // PATCH /api/v1/driver/me/stops/:stopId/complete
