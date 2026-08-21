@@ -122,9 +122,6 @@ export const getRouteWithStops = async (driverId: string) => {
                 user: { select: { name: true, phone: true } },
               },
             },
-            order: {
-              select: { orderNumber: true, totalAmount: true, status: true },
-            },
           },
         },
       },
@@ -137,6 +134,22 @@ export const getRouteWithStops = async (driverId: string) => {
   ]);
 
   if (!route) return null;
+
+  // Stop.order (the Prisma relation) resolves via Order.stopId, a separate
+  // column nothing ever populates — always null. The planner's real link is
+  // the plain Stop.orderId scalar, so order numbers are looked up by id
+  // directly instead of via `include`.
+  const stopOrderIds = route.stops.map((s) => s.orderId).filter((id): id is string => id != null);
+  const orderNumberByOrderId = new Map(
+    stopOrderIds.length
+      ? (
+          await prisma.order.findMany({
+            where: { id: { in: stopOrderIds } },
+            select: { id: true, orderNumber: true },
+          })
+        ).map((o) => [o.id, o.orderNumber])
+      : [],
+  );
 
   // Distance/ETA per stop is computed live from the driver's last known
   // position, chained leg-by-leg through the still-pending stops — not
@@ -182,7 +195,7 @@ export const getRouteWithStops = async (driverId: string) => {
       address: stop.address,
       latitude: stop.latitude,
       longitude: stop.longitude,
-      orderNumber: stop.order?.orderNumber ?? null,
+      orderNumber: (stop.orderId ? orderNumberByOrderId.get(stop.orderId) : null) ?? null,
       estimatedArrival: stop.estimatedArrival,
       minutesAway,
       distanceKm,
@@ -206,20 +219,19 @@ export const getRouteWithStops = async (driverId: string) => {
 
 // GET /api/v1/driver/me/orders
 export const getDriverOrders = async (driverId: string) => {
+  // Stop.order (the Prisma relation) resolves via Order.stopId, a separate
+  // column nothing ever populates — it's always null, so filtering or
+  // including through it silently excludes every real delivery. The actual
+  // link the planner sets is the plain Stop.orderId scalar, so orders have
+  // to be filtered/fetched by that id directly instead of via `include`.
   const [stops, driver] = await Promise.all([
-    // Get all orders from delivery stops in this driver's routes
     prisma.stop.findMany({
       where: {
         type: "DELIVERY",
         route: { driverId },
-        order: { isNot: null },
+        orderId: { not: null },
       },
       include: {
-        order: {
-          include: {
-            items: { select: { id: true } },
-          },
-        },
         buyer: {
           include: {
             user: { select: { name: true, phone: true } },
@@ -234,9 +246,18 @@ export const getDriverOrders = async (driverId: string) => {
     }),
   ]);
 
+  const orderIds = stops.map((s) => s.orderId).filter((id): id is string => id != null);
+  const orders = await prisma.order.findMany({
+    where: { id: { in: orderIds } },
+    include: { items: { select: { id: true } } },
+  });
+  const orderById = new Map(orders.map((o) => [o.id, o]));
+
   return stops
-    .filter((s) => s.order)
     .map((stop) => {
+      const order = stop.orderId ? orderById.get(stop.orderId) : undefined;
+      if (!order) return null;
+
       const isPending = stop.status === "PENDING" || stop.status === "IN_PROGRESS";
       let distanceKm = 0;
       let etaMinutes = 0;
@@ -248,27 +269,28 @@ export const getDriverOrders = async (driverId: string) => {
       }
 
       return {
-        id: stop.order!.id,
-        orderId: stop.order!.orderNumber,
-        orderNumber: stop.order!.orderNumber,
-        status: stop.order!.status,
-        totalAmount: stop.order!.totalAmount,
-        itemCount: stop.order!.items.length,
+        id: order.id,
+        orderId: order.orderNumber,
+        orderNumber: order.orderNumber,
+        status: order.status,
+        totalAmount: order.totalAmount,
+        itemCount: order.items.length,
         name: stop.buyer?.user.name ?? "Customer",
         phone: stop.buyer?.user.phone ?? null,
-        address: stop.order!.deliveryAddress,
-        deliveryAddress: stop.order!.deliveryAddress,
+        address: order.deliveryAddress,
+        deliveryAddress: order.deliveryAddress,
         latitude: stop.latitude,
         longitude: stop.longitude,
-        placedAt: stop.order!.placedAt,
-        actualDelivery: stop.order!.actualDelivery,
+        placedAt: order.placedAt,
+        actualDelivery: order.actualDelivery,
         stopId: stop.id,
         sequence: stop.sequenceOrder,
         type: stop.type,
         distanceKm,
         minutesAway: etaMinutes,
       };
-    });
+    })
+    .filter((row): row is NonNullable<typeof row> => row !== null);
 };
 
 // PATCH /api/v1/driver/me/stops/:stopId/complete
@@ -389,29 +411,37 @@ export const getStopItems = async (driverId: string, stopId: string) => {
     where: { id: stopId },
     include: {
       route: { select: { driverId: true } },
-      order: {
-        include: {
-          items: {
-            include: {
-              product: {
-                select: { name: true, category: true, unit: true, imageUrl: true },
-              },
-            },
-          },
-        },
-      },
     },
   });
 
   if (!stop) throw new Error("Stop not found");
   if (stop.route.driverId !== driverId) throw new Error("Unauthorized");
 
-  if (!stop.order) return { items: [] };
+  // Stop.order (the Prisma relation) resolves via Order.stopId, a
+  // separate, never-populated column — it's always null. The real link
+  // the planner actually sets is the plain Stop.orderId scalar, so the
+  // order has to be fetched by id directly instead of via `include`.
+  if (!stop.orderId) return { items: [] };
+
+  const order = await prisma.order.findUnique({
+    where: { id: stop.orderId },
+    include: {
+      items: {
+        include: {
+          product: {
+            select: { name: true, category: true, unit: true, imageUrl: true },
+          },
+        },
+      },
+    },
+  });
+
+  if (!order) return { items: [] };
 
   return {
-    orderId: stop.order.orderNumber,
-    totalAmount: stop.order.totalAmount,
-    items: stop.order.items.map((item) => ({
+    orderId: order.orderNumber,
+    totalAmount: order.totalAmount,
+    items: order.items.map((item) => ({
       id: item.id,
       name: item.product.name,
       category: item.product.category,
